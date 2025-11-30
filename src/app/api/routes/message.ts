@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { validateMessageRequest } from "../middleware/validation.ts";
-import { logger } from "../../core/logger/logger.ts";
+import { logger } from "../../../core/logger/logger.ts";
 import { ERROR_CODES, errorResponse, successResponse } from "../utils/response.ts";
 
 /**

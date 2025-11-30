@@ -1,7 +1,11 @@
 import { logger } from "../../logger/logger.ts";
+import { ConversationSession } from "../../session/conversation-session.ts";
+import { SessionManager } from "../../session/session-manager.ts";
 import { AgentConfig } from "./config.ts";
 
 export class Agent {
+
+    private readonly sessionManager!: SessionManager;
 
     private currentDefaultSessionId: string = 'default';
     private currentActiveSessionId: string = 'default'; // will be set property in constructor
@@ -33,5 +37,13 @@ export class Agent {
         const timestamp = Date.now();
         const random = Math.random().toString(36).substring(2, 8);
         return `session-${timestamp}-${random}`;
+    }
+
+    /**
+     * Load (switcg to) a specific session
+     */
+    public async loadSession(sessionId: string): Promise<ConversationSession> {
+        this.ensureStarted();
+        let session = await this.sessionManager.getSession(sessionId);
     }
 }

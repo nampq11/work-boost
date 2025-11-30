@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { v4 as uuidv4 } from "jsr:@std/uuid";
-import { logger } from "../../core/logger/logger.ts";
+import { logger } from "../../../core/logger/logger.ts";
 
 // Extend Express Request interface to include requestId
 declare global {
