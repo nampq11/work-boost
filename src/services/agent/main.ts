@@ -1,28 +1,23 @@
-import { GenerativeModel, GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 import { SYSTEM_PROMPT, HUMAN_PROMPT, dailyWorkSchema } from "./prompt/prompt.ts";
 import { AgentResponse, DailyWorkReport, TaskItem } from "../../entity/agent.ts";
 import { Task } from "../../entity/task.ts";
 
 export class Agent {
     static instance: Agent;
-    private llm: GenerativeModel;
+    private ai: GoogleGenAI;
 
-    private constructor(llm: GenerativeModel) {
-        this.llm = llm;
+    private constructor(ai: GoogleGenAI) {
+        this.ai = ai;
     }
 
     static async init(apiKey: string): Promise<Agent> {
         if (this.instance) return this.instance;
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const llm = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: dailyWorkSchema
-            }
-        })
-        this.instance = new Agent(llm);
+        const genAI = new GoogleGenAI({
+            apiKey,
+        });
+        this.instance = new Agent(genAI);
         return this.instance;
     }
 
@@ -36,7 +31,8 @@ export class Agent {
                 console.log('Content: ', content);
             }        
 
-            const response = await this.llm.generateContent({
+            const response = await this.ai.models.generateContent({
+                model: "gemini-2.5-flash",
                 contents: [
                     {
                         role: "model",
@@ -47,13 +43,23 @@ export class Agent {
                         parts: [{ text: HUMAN_PROMPT.replace("{USER_INPUT}", content) }]
                     }
                 ],
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: dailyWorkSchema,
+                }
             });
 
             if (verbose) {
-                console.log('Response: ', response.response.text());
+                console.log('Response: ', response.text);
             }
-            
-            const parsedResponse = this.parseResponse(response.response.text());
+            if (!response.text) {
+                return {
+                    success: false,
+                    error: 'No response from AI model'
+                }
+            }
+
+            const parsedResponse = this.parseResponse(response.text);
 
             console.log('parse response: ', parsedResponse);
 
