@@ -1,6 +1,7 @@
 import * as http from "node:http";
 import express, { Application, NextFunction, Request, Response } from "express";
 import { logger } from "../../core/logger/logger.ts";
+import  process from "node:process";
 import {
   errorLoggingMiddleware,
   requestIdMiddleware,

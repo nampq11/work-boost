@@ -1,15 +1,30 @@
 {
-    "compilerOptions": {
-        "module": "ESNext",
-        "moduleResolution": "Bundler",
-        "target": "ES2022",
-        "jsx": "react",
-        "strictNullChecks": true,
-        "strictFunctionTypes": true,
-        "sourceMap": true,
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "jsx": "react",
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "allowSyntheticDefaultImports": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@app/*": ["src/app/*"],
+      "@core/*": ["src/core/*"],
+      "src/core/logger/index.js": ["src/core/logger/index.ts"]
     },
-    "exclude": [
-        "node_modules",
-        "**/node_modules/*"
-    ]
+    "strict": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "allowImportingTsExtensions": false,
+    "noEmit": false
+  },
+  "exclude": [
+    "node_modules",
+    "**/node_modules/*"
+  ]
 }

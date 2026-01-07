@@ -1,86 +1,53 @@
-#!/usr/bin/env node
-
-// Fix EventTarge memory leak by setting max listeners early
-import { EventEmitter } from "node:events";
-EventEmitter.defaultMaxListeners = 20;
-
-// Increase AbortSignal max listeners to prevent memory leaks warnings
-if (typeof globalThis !== 'undefined' && globalThis.EventTarget) {
-    const originalAddEventListener = globalThis.EventTarget.prototype.addEventListener;
-    const listenerCounts = new WeakMap();
-
-    globalThis.EventTarget.prototype.addEventListener = function (type, listener, options) {
-        if (type === 'abort' && this.constructor.name === 'AbortSignal') {
-            const currentCount = listenerCounts.get(this) || 0;
-            if (currentCount >= 15) {
-                console.warn(`AbortSignal has ${currentCount} listeners, potential memory leak`);
-            }
-            listenerCounts.set(this, currentCount + 1);
-        }
-        return originalAddEventListener.call(this, type, listener, options);
-    };
-}
-
-import { env } from "../core/env.ts";
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
+import { Command } from "commander";
 import { logger } from "../core/logger/logger.ts";
-import { ApiServer } from "./api/server.ts";
+import process from "node:process";
 
+const program = new Command();
 
-// Helper function to resolve .env file path
-function resolveEnvPath(): string {
-    // Try current working directory first
-    if (existsSync('.env')) {
-        return '.env';
-    }
+program
+  .name("work-boost")
+  .description(
+    "A productivity tool designed to help you manage and track your daily work tasks efficiently.",
+  )
+  .version("0.0.0")
+  .argument(
+    "[prompt...]",
+    "Natural-language prompt to run once. If not passed, work-boost will start in interactive mode",
+  )
+  .option(
+    "--mode <mode>",
+    "The application mode for work-boost agent - cli | api",
+    "cli",
+  );
 
-    // Try relative to project root (where package.jso is located)
-    const currentFileUrl = import.meta.url;
-    const currentFilePath = fileURLToPath(currentFileUrl);
-    const projectRoot = path.resolve(path.dirname(currentFilePath), '../..');
-    const envPath = path.resolve(projectRoot, '.env');
+program
+  .description(
+    "Work Boost CLI allows you to interact with Work Boost Agent.\n" +
+      "Run work-boost in interactive mode with `work-boost`\n\n" +
+      "Available Modes:\n" +
+      " - cli: Interactive command-line interface (default)\n" +
+      " - api: REST API server mode with Websocket support\n",
+  )
+  .action(async (prompt: string[] = []) => {
+    const headlessInput = prompt.join(" ") || undefined;
 
-    return envPath;
-}
+    // Parse CLI options first
+    const opts = program.opts();
 
-async function startApiMode(options: any): Promise<void> {
-    const port = parseInt(options.port) || 3001;
-    const host = options.host || 'localhost';
-    const apiPrefix = process.env.WORKBOOST_API_PREFIX !== undefined 
-        ? process.env.WORKBOOST_API_PREFIX === '""'
-            ? ''
-            : process.env.WORKBOOST_API_PREFIX
-        : options.apiPrefix;
-
-    logger.info(`Starting API server on http://${host}:${port}${apiPrefix}`, undefined, 'green');
-    
-    const apiServer = new ApiServer({
-        port,
-        host,
-        corsOrigins: ['http://localhost:3000', 'http://localhost:3001'],
-        rateLimitMaxRequests: 100,
-        rateLimitWindowMs: 15 * 60 * 1000,
-        enableWebSocket: false,
-        apiPrefix,
-    });
-
-    try {
-        await apiServer.start();
-        logger.info(`API server is running and ready to accept requests`, undefined, 'green');
-    } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+    // Dispatch based on --mode
+    switch (opts.mode) {
+      case "cli":
+        console.log("Starting Work Boost in CLI mode...");
+        break;
+      case "api":
+        console.log("Starting Work Boost in API mode...");
+        break;
+      default: {
+        const errorMsg = `Unknown mode '${opts.mode}'. Use cli, api`;
+        logger.error(errorMsg);
         process.exit(1);
+      }
     }
-}
+  });
 
-startApiMode({
-    port: 3001,
-    host: 'localhost',
-    apiPrefix: '/api',
-}).catch(error => {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error('Failed to start API server:', { error: errorMsg });
-    process.exit(1);
-});
+program.parseAsync(process.argv);

@@ -86,7 +86,10 @@ const consoleFormat = winston.format.printf(
 
     // Apply custom color if specified
     if (color && chalk[color as ChalkColor]) {
-      formattedMessage = (chalk[color as ChalkColor] as (text: string) => string)(message as string);
+      formattedMessage =
+        (chalk[color as ChalkColor] as (text: string) => string)(
+          message as string,
+        );
     }
 
     return `${chalk.dim(timestamp)} ${
