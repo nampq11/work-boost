@@ -3,7 +3,9 @@
     "dev": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron --watch src/main.ts",
     "test": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron $1",
     "start": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/api/server.ts",
-    "start-api": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/index.ts"
+    "start-api": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/index.ts",
+    "test-cli": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/index.ts",
+    "install": "deno install --global -f -c deno.json --allow-all -n work-boost src/app/index.ts"
   },
   "imports": {
     "@google/genai": "npm:@google/genai@^1.22.0",
@@ -13,6 +15,7 @@
     "@types/express": "npm:@types/express@^4.17.25",
     "boxen": "npm:boxen@^8.0.1",
     "chalk": "npm:chalk@^5.6.2",
+    "commander": "npm:commander@^14.0.2",
     "cors": "npm:cors@^2.8.5",
     "express": "npm:express@^5.1.0",
     "express-rate-limit": "npm:express-rate-limit@^8.2.1",
