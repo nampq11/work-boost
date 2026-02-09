@@ -39,79 +39,79 @@ export const HUMAN_PROMPT: string = `
     Convert the following work description into a properly formatted daily work report:
 
     {USER_INPUT}
-`
+`;
 
 enum SchemaType {
-    ARRAY = "array",
-    OBJECT = "object",
-    STRING = "string",
-    BOOLEAN = "boolean"
-  }
+  ARRAY = 'array',
+  OBJECT = 'object',
+  STRING = 'string',
+  BOOLEAN = 'boolean',
+}
 
 export const dailyWorkSchema = {
-    description: "Daily work report structure",
-    type: SchemaType.OBJECT,
-    properties: {
-      completed: {
-        description: "Tasks completed from previous day",
-        type: SchemaType.ARRAY,
-        items: {
-          type: SchemaType.OBJECT,
-          properties: {
-            project: {
-              type: SchemaType.STRING,
-              description: "Project code (e.g., 'B2: squirrel_11')",
-              nullable: false,
-            },
-            task: {
-              type: SchemaType.STRING,
-              description: "Task description",
-              nullable: false,
-            }
+  description: 'Daily work report structure',
+  type: SchemaType.OBJECT,
+  properties: {
+    completed: {
+      description: 'Tasks completed from previous day',
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          project: {
+            type: SchemaType.STRING,
+            description: "Project code (e.g., 'B2: squirrel_11')",
+            nullable: false,
           },
-          required: ["project", "task"]
-        }
+          task: {
+            type: SchemaType.STRING,
+            description: 'Task description',
+            nullable: false,
+          },
+        },
+        required: ['project', 'task'],
       },
-      incomplete: {
-        description: "Planned but incomplete tasks from previous day",
-        type: SchemaType.ARRAY,
-        items: {
-          type: SchemaType.OBJECT,
-          properties: {
-            project: {
-              type: SchemaType.STRING,
-              description: "Project code",
-              nullable: false,
-            },
-            task: {
-              type: SchemaType.STRING,
-              description: "Task description",
-              nullable: false,
-            }
-          },
-          required: ["project", "task"]
-        }
-      },
-      planned: {
-        description: "Tasks planned for today",
-        type: SchemaType.ARRAY,
-        items: {
-          type: SchemaType.OBJECT,
-          properties: {
-            project: {
-              type: SchemaType.STRING,
-              description: "Project code",
-              nullable: false,
-            },
-            task: {
-              type: SchemaType.STRING,
-              description: "Task description",
-              nullable: false,
-            }
-          },
-          required: ["project", "task"]
-        }
-      }
     },
-    required: ["completed", "incomplete", "planned"]
-  };
+    incomplete: {
+      description: 'Planned but incomplete tasks from previous day',
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          project: {
+            type: SchemaType.STRING,
+            description: 'Project code',
+            nullable: false,
+          },
+          task: {
+            type: SchemaType.STRING,
+            description: 'Task description',
+            nullable: false,
+          },
+        },
+        required: ['project', 'task'],
+      },
+    },
+    planned: {
+      description: 'Tasks planned for today',
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          project: {
+            type: SchemaType.STRING,
+            description: 'Project code',
+            nullable: false,
+          },
+          task: {
+            type: SchemaType.STRING,
+            description: 'Task description',
+            nullable: false,
+          },
+        },
+        required: ['project', 'task'],
+      },
+    },
+  },
+  required: ['completed', 'incomplete', 'planned'],
+};

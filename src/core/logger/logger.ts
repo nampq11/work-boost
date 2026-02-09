@@ -1,9 +1,9 @@
-import { env } from "../env.ts";
-import winston from "winston";
-import chalk from "chalk";
-import fs from "node:fs";
-import path from "node:path";
-import boxen from "boxen";
+import fs from 'node:fs';
+import path from 'node:path';
+import boxen from 'boxen';
+import chalk from 'chalk';
+import winston from 'winston';
+import { env } from '../env.ts';
 
 // ===== 1.Foundation Layer: Winston Configuration =====
 const logLevels = {
@@ -18,26 +18,15 @@ const logLevels = {
 
 // ===== 2. Security Layer: Data Redaction =====
 
-const SENTITIVE_KEYS = [
-  "apiKey",
-  "password",
-  "secret",
-  "token",
-  "auth",
-  "key",
-  "credential",
-];
-const MASK_REGEX = new RegExp(
-  `(${SENTITIVE_KEYS.join("|")})("']?\\s*[:=]\\s*)(["'])?.*?\\3`,
-  "gi",
-);
+const SENTITIVE_KEYS = ['apiKey', 'password', 'secret', 'token', 'auth', 'key', 'credential'];
+const MASK_REGEX = new RegExp(`(${SENTITIVE_KEYS.join('|')})("']?\\s*[:=]\\s*)(["'])?.*?\\3`, 'gi');
 
 const redactSensitiveData = (message: string) => {
   const shouldRedact = env.REDACT_SECRETS !== false;
   if (!shouldRedact) return message;
 
   return message.replace(MASK_REGEX, (_match, key, separator, quote) => {
-    const quoteMark = quote || "";
+    const quoteMark = quote || '';
     return `${key}${separator}${quoteMark}***REDACTED***${quoteMark}`;
   });
 };
@@ -45,21 +34,21 @@ const redactSensitiveData = (message: string) => {
 // ===== 3. Visual Formatting Layer =====
 
 type ChalkColor =
-  | "red"
-  | "green"
-  | "yellow"
-  | "blue"
-  | "magenta"
-  | "cyan"
-  | "white"
-  | "gray"
-  | "redBright"
-  | "greenBright"
-  | "yellowBright"
-  | "blueBright"
-  | "magentaBright"
-  | "cyanBright"
-  | "whiteBright";
+  | 'red'
+  | 'green'
+  | 'yellow'
+  | 'blue'
+  | 'magenta'
+  | 'cyan'
+  | 'white'
+  | 'gray'
+  | 'redBright'
+  | 'greenBright'
+  | 'yellowBright'
+  | 'blueBright'
+  | 'magentaBright'
+  | 'cyanBright'
+  | 'whiteBright';
 
 const levelColorMap: Record<string, (text: string) => string> = {
   error: chalk.red,
@@ -73,27 +62,23 @@ const levelColorMap: Record<string, (text: string) => string> = {
 
 // Create custom format for masking
 const maskFormat = winston.format((info) => {
-  if (typeof info.message === "string") {
+  if (typeof info.message === 'string') {
     info.message = redactSensitiveData(info.message);
   }
   return info;
 });
 
-const consoleFormat = winston.format.printf(
-  ({ level, message, timestamp, color }) => {
-    const colorize = levelColorMap[level] || chalk.white;
-    let formattedMessage = message;
+const consoleFormat = winston.format.printf(({ level, message, timestamp, color }) => {
+  const colorize = levelColorMap[level] || chalk.white;
+  let formattedMessage = message;
 
-    // Apply custom color if specified
-    if (color && chalk[color as ChalkColor]) {
-      formattedMessage = (chalk[color as ChalkColor] as (text: string) => string)(message as string);
-    }
+  // Apply custom color if specified
+  if (color && chalk[color as ChalkColor]) {
+    formattedMessage = (chalk[color as ChalkColor] as (text: string) => string)(message as string);
+  }
 
-    return `${chalk.dim(timestamp)} ${
-      colorize(level.toUpperCase())
-    }: ${formattedMessage}`;
-  },
-);
+  return `${chalk.dim(timestamp)} ${colorize(level.toUpperCase())}: ${formattedMessage}`;
+});
 
 // File formatting (no colors)
 const fileFormat = winston.format.printf(({ level, message, timestamp }) => {
@@ -107,7 +92,7 @@ const getDefaultLogLevel = (): string => {
   if (envLevel && Object.keys(logLevels).includes(envLevel.toLowerCase())) {
     return envLevel.toLowerCase();
   }
-  return "info";
+  return 'info';
 };
 
 // ===== 5. Logger Interface =====
@@ -147,7 +132,7 @@ export class Logger {
       level: level,
       format: winston.format.combine(
         errorFormat(),
-        winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         maskFormat(),
       ),
       transports: this.createTransports(options.file),
@@ -156,13 +141,13 @@ export class Logger {
 
     // add colors to winston
     winston.addColors({
-      error: "red",
-      warn: "yellow",
-      info: "blue",
-      http: "cyan",
-      verbose: "magenta",
-      debug: "gray",
-      silly: "gray.dim",
+      error: 'red',
+      warn: 'yellow',
+      info: 'blue',
+      http: 'cyan',
+      verbose: 'magenta',
+      debug: 'gray',
+      silly: 'gray.dim',
     });
   }
 
@@ -176,7 +161,7 @@ export class Logger {
         new winston.transports.File({
           filename: filePath,
           format: winston.format.combine(
-            winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
             maskFormat(),
             fileFormat,
           ),
@@ -187,7 +172,7 @@ export class Logger {
       transports.push(
         new winston.transports.Console({
           format: winston.format.combine(
-            winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
             maskFormat(),
             consoleFormat,
           ),
@@ -231,24 +216,21 @@ export class Logger {
   displayAIResponse(response: Record<string, unknown>): void {
     if (this.isSilent) return;
 
-    const content = typeof response === "string"
-      ? response
-      : response?.content || JSON.stringify(response, null, 2);
+    const content =
+      typeof response === 'string'
+        ? response
+        : response?.content || JSON.stringify(response, null, 2);
 
     console.log(
       boxen(chalk.white(content), {
         padding: 1,
-        borderColor: "yellow",
-        title: "AI Response",
-        titleAlignment: "center",
+        borderColor: 'yellow',
+        title: 'AI Response',
+        titleAlignment: 'center',
       }),
     );
   }
-  displayBox(
-    title: string,
-    content: string,
-    borderColor: ChalkColor = "white",
-  ): void {
+  displayBox(title: string, content: string, borderColor: ChalkColor = 'white'): void {
     if (this.isSilent) return;
 
     console.log(
@@ -256,7 +238,7 @@ export class Logger {
         padding: 1,
         borderColor: borderColor,
         title: title,
-        titleAlignment: "center",
+        titleAlignment: 'center',
       }),
     );
   }
@@ -271,9 +253,7 @@ export class Logger {
       }
     } else {
       this.error(
-        `Invalid log level: ${level}. Valid levels: ${
-          Object.keys(logLevels).join(", ")
-        }.`,
+        `Invalid log level: ${level}. Valid levels: ${Object.keys(logLevels).join(', ')}.`,
       );
     }
   }
@@ -300,7 +280,7 @@ export class Logger {
         new winston.transports.File({
           filename: filePath,
           format: winston.format.combine(
-            winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
             maskFormat(),
             fileFormat,
           ),
@@ -320,7 +300,7 @@ export class Logger {
       this.logger.add(
         new winston.transports.Console({
           format: winston.format.combine(
-            winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
             maskFormat(),
             consoleFormat,
           ),

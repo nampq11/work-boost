@@ -1,6 +1,6 @@
-import { NextFunction, Request, Response } from "express";
-import { v4 as uuidv4 } from "jsr:@std/uuid";
-import { logger } from "../../../core/logger/logger.ts";
+import { v4 as uuidv4 } from 'jsr:@std/uuid';
+import { NextFunction, Request, Response } from 'express';
+import { logger } from '../../../core/logger/logger.ts';
 
 // Extend Express Request interface to include requestId
 declare global {
@@ -15,16 +15,12 @@ declare global {
 /**
  * Request ID middleware - adds unique request ID to each request
  */
-export function requestIdMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
+export function requestIdMiddleware(req: Request, res: Response, next: NextFunction): void {
   req.requestId = crypto.randomUUID();
   req.startTime = Date.now();
 
   // Add request ID to response headers
-  res.setHeader("X-Request-ID", req.requestId);
+  res.setHeader('X-Request-ID', req.requestId);
 
   next();
 }
@@ -32,13 +28,9 @@ export function requestIdMiddleware(
 /**
  * Request logging middleware - logs incoming requests and response
  */
-export function requestLoggingMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
+export function requestLoggingMiddleware(req: Request, res: Response, next: NextFunction): void {
   const { method, url, ip, headers } = req;
-  const userAgent = headers["user-agent"] || "Unknown";
+  const userAgent = headers['user-agent'] || 'Unknown';
 
   // Log incoming request
   logger.info(`API Response`, {
@@ -47,7 +39,7 @@ export function requestLoggingMiddleware(
     url,
     ip,
     userAgent,
-    contentType: headers["content-type"],
+    contentType: headers['content-type'],
   });
 
   // Override res.end to log response
@@ -63,7 +55,7 @@ export function requestLoggingMiddleware(
       url,
       statusCode,
       duration: `${duration}ms`,
-      responseSize: res.get("content-length") || "unknown",
+      responseSize: res.get('content-length') || 'unknown',
     });
 
     // Call original end method
@@ -82,13 +74,13 @@ export function errorLoggingMiddleware(
   res: Response,
   next: NextFunction,
 ): void {
-  logger.error("API Error", {
+  logger.error('API Error', {
     requestId: req.requestId,
     method: req.method,
     url: req.url,
     error: err.message,
     stack: err.stack,
-    userAgent: req.headers["user-agent"],
+    userAgent: req.headers['user-agent'],
     statusCode: res.statusCode,
   });
 

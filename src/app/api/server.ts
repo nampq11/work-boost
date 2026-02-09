@@ -1,20 +1,16 @@
-import * as http from "node:http";
-import express, { Application, NextFunction, Request, Response } from "express";
-import { logger } from "../../core/logger/logger.ts";
+import * as http from 'node:http';
+import cors from 'cors';
+import express, { Application, NextFunction, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import { logger } from '../../core/logger/logger.ts';
 import {
   errorLoggingMiddleware,
   requestIdMiddleware,
   requestLoggingMiddleware,
-} from "./middleware/logging.ts";
-import {
-  ERROR_CODES,
-  errorResponse,
-  successResponse,
-} from "./utils/response.ts";
-import helmet from "helmet";
-import cors from "cors";
-import rateLimit from "express-rate-limit";
-import { createMessageRouters } from "./routes/message.ts";
+} from './middleware/logging.ts';
+import { createMessageRouters } from './routes/message.ts';
+import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
 
 export interface ApiServerConfig {
   port: number;
@@ -53,15 +49,15 @@ export class ApiServer {
   }
 
   private validateAndNormalizeApiPrefix(prefix?: string): string {
-    if (prefix === undefined) return "/api";
+    if (prefix === undefined) return '/api';
 
-    if (prefix === "") return "";
+    if (prefix === '') return '';
 
-    if (typeof prefix !== "string") {
-      throw new Error("API prefix must be a string");
+    if (typeof prefix !== 'string') {
+      throw new Error('API prefix must be a string');
     }
 
-    if (prefix.startsWith("/") && prefix !== "/") {
+    if (prefix.startsWith('/') && prefix !== '/') {
       prefix = prefix.slice(0, -1);
     }
     logger.info(`[API Server] Using API prefix: ${prefix} || '(None)'`);
@@ -69,13 +65,13 @@ export class ApiServer {
   }
 
   private buildAPIRouter(route: string): string {
-    if (!this.apiPrefix || this.apiPrefix === "") return route;
+    if (!this.apiPrefix || this.apiPrefix === '') return route;
 
     return `${this.apiPrefix}${route}`;
   }
 
   private buildFullPath(req: Request, path: string): string {
-    const contextPath = (req as any).contextPath || "";
+    const contextPath = (req as any).contextPath || '';
     const fullPath = contextPath + this.buildAPIRouter(path);
 
     logger.info(`[API Server] Built full path:`, {
@@ -89,24 +85,24 @@ export class ApiServer {
 
   private setupMiddleware(): void {
     // Enable trust proxy for reverse proxy support
-    this.app.set("trust proxy", true);
+    this.app.set('trust proxy', true);
 
     // Parse X-Forwarded-Prefix for context path support
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       // Get the prefix from the X-Forwarded-Prefix header or enviroment variable
-      const forwardedPrefix = req.headers["x-forwarded-prefix"] as string;
+      const forwardedPrefix = req.headers['x-forwarded-prefix'] as string;
       const envPrefix = process.env.PROXY_CONTEXT_PATH;
-      const contextPath = forwardedPrefix || envPrefix || "";
+      const contextPath = forwardedPrefix || envPrefix || '';
 
       // Store context path on request for later use
       (req as any).contextPath = contextPath;
 
-      logger.debug("[API Server] Request context", {
+      logger.debug('[API Server] Request context', {
         originalUrl: req.originalUrl,
         contextPath,
         forwardedPrefix,
-        forwardedProto: req.headers["x-forwarded-proto"],
-        forwardedHost: req.headers["x-forwarded-host"],
+        forwardedProto: req.headers['x-forwarded-proto'],
+        forwardedHost: req.headers['x-forwarded-host'],
       });
 
       next();
@@ -124,8 +120,7 @@ export class ApiServer {
     this.app.use(
       cors({
         origin: (origin: any, callback: any) => {
-          const allowedOrigins = this.config.corsOrigins ||
-            ["http://localhost:3000"];
+          const allowedOrigins = this.config.corsOrigins || ['http://localhost:3000'];
 
           // Allow requests with no origin (e.g., mobile apps, curl, Postman)
           if (!origin) {
@@ -141,12 +136,12 @@ export class ApiServer {
 
           // Additional lenient check for development environments only
           // Allow localhost and 127.0.0.1 with any port in development
-          if (process.env.NODE_ENV !== "production") {
+          if (process.env.NODE_ENV !== 'production') {
             const originUrl = new URL(origin);
             if (
-              originUrl.hostname === "localhost" ||
-              originUrl.hostname === "127.0.0.1" ||
-              originUrl.hostname === "::1"
+              originUrl.hostname === 'localhost' ||
+              originUrl.hostname === '127.0.0.1' ||
+              originUrl.hostname === '::1'
             ) {
               callback(null, true);
               return;
@@ -156,13 +151,8 @@ export class ApiServer {
           // Reject all other origins
           callback(new Error(`Not allowed by CORS`));
         },
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allowedHeaders: [
-          "Content-Type",
-          "Authorization",
-          "X-Request-ID",
-          "X-Session-ID",
-        ],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Session-ID'],
         credentials: true,
       }),
     );
@@ -187,7 +177,7 @@ export class ApiServer {
     }
 
     // Body parsing middleware
-    this.app.use(express.json({ limit: "10mb" })); // support for image data
+    this.app.use(express.json({ limit: '10mb' })); // support for image data
     this.app.use(express.urlencoded({ extended: true }));
 
     // Custom middleware
@@ -197,12 +187,12 @@ export class ApiServer {
 
   private setupRoutes(): void {
     // Health check endpoint
-    this.app.get("/health", (_req: Request, res: Response) => {
+    this.app.get('/health', (_req: Request, res: Response) => {
       const healthData: any = {
-        status: "healthy",
+        status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        version: process.env.VERSION || "unknown",
+        version: process.env.VERSION || 'unknown',
       };
 
       // TODO: Add Websocket health if enabled
@@ -218,7 +208,7 @@ export class ApiServer {
 
     // Chrome DevTools compatibility endpoint (prevents 404 errors in console)
     this.app.get(
-      "/.well-known/appspecific/com.chrome.devtools.json",
+      '/.well-known/appspecific/com.chrome.devtools.json',
       (req: Request, res: Response) => {
         res.status(204).end(); // No content - indicates no DevTools integration available
       },
@@ -302,35 +292,33 @@ export class ApiServer {
     this.app.use(errorLoggingMiddleware);
 
     // Global error handler
-    this.app.use(
-      (err: Error, req: Request, res: Response, next: NextFunction) => {
-        // If response already sent, delegate to default error handler
-        if (res.headersSent) {
-          return next(err);
-        }
+    this.app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+      // If response already sent, delegate to default error handler
+      if (res.headersSent) {
+        return next(err);
+      }
 
-        // Determine error type and status code
-        let statusCode = 500;
-        let errorCode: string = ERROR_CODES.INTERNAL_ERROR;
+      // Determine error type and status code
+      let statusCode = 500;
+      let errorCode: string = ERROR_CODES.INTERNAL_ERROR;
 
-        if (err.name === "ValidationError") {
-          statusCode = 400;
-          errorCode = ERROR_CODES.VALIDATION_ERROR;
-        } else if (err.name === "UnauthorizedError") {
-          statusCode = 401;
-          errorCode = ERROR_CODES.UNAUTHORIZED;
-        }
+      if (err.name === 'ValidationError') {
+        statusCode = 400;
+        errorCode = ERROR_CODES.VALIDATION_ERROR;
+      } else if (err.name === 'UnauthorizedError') {
+        statusCode = 401;
+        errorCode = ERROR_CODES.UNAUTHORIZED;
+      }
 
-        errorResponse(
-          res,
-          errorCode,
-          err.message || "An unexpected error occurred",
-          statusCode,
-          process.env.NODE_ENV === "development" ? err.stack : undefined,
-          req.requestId,
-        );
-      },
-    );
+      errorResponse(
+        res,
+        errorCode,
+        err.message || 'An unexpected error occurred',
+        statusCode,
+        process.env.NODE_ENV === 'development' ? err.stack : undefined,
+        req.requestId,
+      );
+    });
   }
 
   public async start(): Promise<void> {
@@ -342,41 +330,37 @@ export class ApiServer {
         // Create HTTP server from Express app
         this.httpServer = http.createServer(this.app);
 
-        this.httpServer.listen(
-          this.config.port,
-          this.config.host || "localhost",
-          () => {
-            logger.info(
-              `API Server started on ${
-                this.config.host || "localhost"
-              }:${this.config.port}${this.apiPrefix}`,
-              undefined,
-              "green",
-            );
-            resolve();
-          },
-        );
+        this.httpServer.listen(this.config.port, this.config.host || 'localhost', () => {
+          logger.info(
+            `API Server started on ${
+              this.config.host || 'localhost'
+            }:${this.config.port}${this.apiPrefix}`,
+            undefined,
+            'green',
+          );
+          resolve();
+        });
 
-        this.httpServer.on("error", (err) => {
-          const errorMsg = err.message || err.toString() || "Unknown error";
-          logger.error("Failed to start API server:", { error: errorMsg });
-          logger.error("Error details: ", { error: err });
+        this.httpServer.on('error', (err) => {
+          const errorMsg = err.message || err.toString() || 'Unknown error';
+          logger.error('Failed to start API server:', { error: errorMsg });
+          logger.error('Error details: ', { error: err });
           reject(err);
         });
 
         // Graceful shutdown
-        process.on("SIGTERM", () => {
+        process.on('SIGTERM', () => {
           logger.info(`SIGTERM received, shutting down API server gracefully`);
           this.httpServer?.close(() => {
-            logger.info("API server stopped");
+            logger.info('API server stopped');
             process.exit(0);
           });
         });
 
-        process.on("SIGINT", () => {
-          logger.info("SIGINT received, shutting down API server gracefully");
+        process.on('SIGINT', () => {
+          logger.info('SIGINT received, shutting down API server gracefully');
           this.httpServer?.close(() => {
-            logger.info("API server stopped");
+            logger.info('API server stopped');
             process.exit(0);
           });
         });
