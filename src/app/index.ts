@@ -1,12 +1,13 @@
 import { Command } from "commander";
 import { logger } from "../core/logger/logger.ts";
-import { registerAgentCommand } from "./cli/cli.ts";
+import { registerAgentCommand, registerMainAgentCommand } from "./cli/cli.ts";
 import process from "node:process";
 
 const program = new Command();
 
 // Register sub-commands
 registerAgentCommand(program);
+registerMainAgentCommand(program);
 
 program
   .name("work-boost")
