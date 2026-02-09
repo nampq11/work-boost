@@ -1,0 +1,26 @@
+{
+  "$schema": "https://oxc.rs/docs/guide/usage/linter/configuration.json",
+  "categories": {
+    "correctness": "warn",
+    "suspicious": "warn",
+    "pedantic": "off",
+    "perf": "warn",
+    "style": "warn",
+    "restriction": "off"
+  },
+  "plugins": ["typescript"],
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "typescript/no-unsafe-assignment": "warn",
+    "typescript/no-unsafe-member-access": "warn",
+    "typescript/no-unsafe-call": "warn",
+    "typescript/no-unsafe-return": "warn",
+    "no-unused-vars": "warn",
+    "no-console": "off",
+    "suspicious/no-explicit-any": "warn"
+  },
+  "ignore": ["node_modules/", ".deno/"],
+  "env": {
+    "deno": true
+  }
+}

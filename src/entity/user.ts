@@ -1,5 +1,5 @@
 export type User = {
-    id: string;
-    username: string;
-    subscribed: boolean;
+  id: string;
+  username: string;
+  subscribed: boolean;
 };
