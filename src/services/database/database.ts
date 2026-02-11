@@ -45,11 +45,12 @@ export class Database {
   }
 
   async storeDailyWorkMessage(message: Message): Promise<void> {
-    // set the primary key
-    await this.kv.set(['messages', message.id], message);
-
-    // set the secondary key
-    await this.kv.set(['messagesByUserId', message.userId], message);
+    // Store with primary key and user index for efficient lookups
+    await this.kv
+      .atomic()
+      .set(['messages', message.id], message)
+      .set(['messages_by_user', message.userId, message.id], message)
+      .commit();
   }
 
   async getDailyWork(userId: string, date: Date): Promise<Message | undefined> {
@@ -71,7 +72,22 @@ export class Database {
   }
 
   async upsertSubscription(subscription: Subscription): Promise<void> {
-    await this.kv.set(['subscriptions', subscription.userId], subscription);
+    const isActive = subscription.enabled.length > 0;
+
+    // Use atomic operation to update primary data and all indexes
+    const atomic = this.kv
+      .atomic()
+      .set(['subscriptions', subscription.userId], subscription)
+      .set(['subscriptions_by_user', subscription.userId], subscription);
+
+    // Maintain active subscriptions index
+    if (isActive) {
+      atomic.set(['active_subscriptions', subscription.userId], subscription);
+    } else {
+      atomic.delete(['active_subscriptions', subscription.userId]);
+    }
+
+    await atomic.commit();
   }
 
   async setPlatformChatId(
@@ -94,26 +110,28 @@ export class Database {
     }
   }
 
+  /**
+   * Get all active subscriptions using the index for O(1) lookups
+   */
   async getAllActiveSubscriptions(): Promise<Subscription[]> {
     const subscriptions: Subscription[] = [];
-    const entries = this.kv.list({ prefix: ['subscriptions'] });
+    // Use the active_subscriptions index instead of scanning all subscriptions
+    const entries = this.kv.list({ prefix: ['active_subscriptions'] });
     for await (const entry of entries) {
-      const sub = entry.value as Subscription;
-      if (sub.enabled.length > 0) {
-        subscriptions.push(sub);
-      }
+      subscriptions.push(entry.value as Subscription);
     }
     return subscriptions;
   }
 
+  /**
+   * Get messages by user using indexed lookups
+   */
   async getMessagesByUserId(userId: string): Promise<Message[]> {
     const messages: Message[] = [];
-    const entries = this.kv.list({ prefix: ['messages'] });
+    // Use the user-specific message index instead of scanning all messages
+    const entries = this.kv.list({ prefix: ['messages_by_user', userId] });
     for await (const entry of entries) {
-      const msg = entry.value as Message;
-      if (msg.userId === userId) {
-        messages.push(msg);
-      }
+      messages.push(entry.value as Message);
     }
     return messages.sort((a, b) => a.date.getTime() - b.date.getTime());
   }

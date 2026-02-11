@@ -1,5 +1,6 @@
 import { Agent } from './services/agent/main.ts';
 import { Database } from './services/database/database.ts';
+import { runMigrationIfNeeded } from './services/database/migrate-slack-users.ts';
 import { Slack } from './services/slack/slack.ts';
 import { TelegramService } from './services/telegram/telegram.ts';
 
@@ -14,6 +15,9 @@ export async function boostrap() {
   const telegram = new TelegramService(db, agent);
 
   console.log('Database connected');
+
+  // Run migration if needed (for existing Slack users)
+  await runMigrationIfNeeded(db);
 
   Deno.serve({ port: 2002 }, async (req: Request) => {
     console.log('Method: ', req.method);

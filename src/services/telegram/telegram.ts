@@ -6,6 +6,33 @@ import type { BotService, BotUpdate, Platform, SendOptions } from '../../core/bo
 import type { Agent, Database } from '../_index.ts';
 import * as handlers from './handlers/index.ts';
 import { mainMenuKeyboard } from './keyboards.ts';
+import { createSanitizationMiddleware } from './sanitizer.ts';
+
+/**
+ * Redact sensitive data from objects before logging
+ */
+function redactSensitiveData(obj: Record<string, unknown>): Record<string, unknown> {
+  const sensitiveKeys = ['token', 'password', 'secret', 'apiKey', 'botToken', 'error'];
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    const keyLower = key.toLowerCase();
+    const shouldRedact = sensitiveKeys.some((sensitive) =>
+      keyLower.includes(sensitive.toLowerCase()),
+    );
+
+    if (shouldRedact && typeof value === 'string' && value.length > 0) {
+      result[key] = '[REDACTED]';
+    } else if (shouldRedact && typeof value === 'object' && value !== null) {
+      // Recursively redact nested objects
+      result[key] = redactSensitiveData(value as Record<string, unknown>);
+    } else {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
 
 export class TelegramService implements BotService {
   readonly platform: Platform = 'telegram';
@@ -30,6 +57,9 @@ export class TelegramService implements BotService {
   }
 
   private setupMiddleware(): void {
+    // Input sanitization - must be first, before rate limiting
+    this.bot.use(createSanitizationMiddleware());
+
     // Auto-retry for rate limits and server errors
     this.bot.api.config.use(
       autoRetry({
@@ -87,11 +117,16 @@ export class TelegramService implements BotService {
       const ctx = err.ctx;
       const e = err.error;
 
-      console.error('Telegram bot error:', {
-        error: e,
-        userId: ctx.from?.id,
-        chatId: ctx.chat?.id,
-      });
+      // Sanitize error before logging (redact sensitive data)
+      console.error(
+        'Telegram bot error:',
+        redactSensitiveData({
+          errorMessage: e instanceof Error ? e.message : String(e),
+          errorCode: e instanceof GrammyError ? e.error_code : undefined,
+          userId: ctx.from?.id,
+          chatId: ctx.chat?.id,
+        }),
+      );
 
       if (e instanceof GrammyError) {
         if (e.error_code === 403) {
@@ -110,20 +145,42 @@ export class TelegramService implements BotService {
         parse_mode: options?.parseMode === 'None' ? undefined : options?.parseMode || 'HTML',
       });
     } catch (error) {
-      console.error('Failed to send Telegram message:', { error, chatId });
+      console.error(
+        'Failed to send Telegram message:',
+        redactSensitiveData({
+          errorMessage: error instanceof Error ? error.message : String(error),
+          chatId,
+        }),
+      );
       throw error;
     }
   }
 
   async validateWebhook(request: Request): Promise<boolean> {
+    // In production, webhook secret is required
+    const isProduction = Deno.env.get('DENO_ENV') === 'production';
+    if (isProduction && !this.webhookSecret) {
+      throw new Error('TELEGRAM_WEBHOOK_SECRET must be configured in production');
+    }
+
     // Check secret token header if configured
     if (this.webhookSecret) {
-      const receivedToken = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
-      if (receivedToken !== this.webhookSecret) {
+      const receivedToken = request.headers.get('x-telegram-bot-api-secret-token');
+
+      // Early return if missing or wrong length
+      if (!receivedToken || receivedToken.length !== this.webhookSecret.length) {
         return false;
       }
+
+      // Use timing-safe comparison to prevent timing attacks
+      const receivedBytes = new TextEncoder().encode(receivedToken);
+      const expectedBytes = new TextEncoder().encode(this.webhookSecret);
+
+      return await crypto.subtle.timingSafeEqual(receivedBytes, expectedBytes);
     }
-    return true;
+
+    // Allow requests in development without secret (for local testing)
+    return !isProduction;
   }
 
   async parseUpdate(request: Request): Promise<BotUpdate> {
