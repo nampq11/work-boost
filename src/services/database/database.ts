@@ -1,5 +1,7 @@
+import { Subscription } from '../../entity/subscription.ts';
 import { Message } from '../../entity/task.ts';
 import { User } from '../../entity/user.ts';
+import { IndexKeys, PrimaryKeys } from './indexes.ts';
 
 export class Database {
   private static instance: Database;
@@ -44,11 +46,12 @@ export class Database {
   }
 
   async storeDailyWorkMessage(message: Message): Promise<void> {
-    // set the primary key
-    await this.kv.set(['messages', message.id], message);
-
-    // set the secondary key
-    await this.kv.set(['messagesByUserId', message.userId], message);
+    // Store with primary key and user index for efficient lookups
+    await this.kv
+      .atomic()
+      .set(PrimaryKeys.message(message.id), message)
+      .set(IndexKeys.messageByUser(message.userId, message.id), message)
+      .commit();
   }
 
   async getDailyWork(userId: string, date: Date): Promise<Message | undefined> {
@@ -59,6 +62,113 @@ export class Database {
       if (message.value?.date.getDate() === date.getDate()) {
         return message.value as Message;
       }
+    }
+  }
+
+  // Subscription methods for multi-platform support
+
+  async getSubscriptionByUserId(userId: string): Promise<Subscription | null> {
+    const result = await this.kv.get(PrimaryKeys.subscription(userId));
+    return result.value as Subscription | null;
+  }
+
+  async upsertSubscription(subscription: Subscription): Promise<void> {
+    const isActive = subscription.enabled.length > 0;
+
+    // Use atomic operation to update primary data and all indexes
+    const atomic = this.kv
+      .atomic()
+      .set(PrimaryKeys.subscription(subscription.userId), subscription)
+      .set(IndexKeys.subscriptionByUser(subscription.userId), subscription);
+
+    // Maintain active subscriptions index
+    if (isActive) {
+      atomic.set(IndexKeys.activeSubscription(subscription.userId), subscription);
+    } else {
+      atomic.delete(IndexKeys.activeSubscription(subscription.userId));
+    }
+
+    await atomic.commit();
+  }
+
+  async setPlatformChatId(
+    userId: string,
+    platform: 'slack' | 'telegram',
+    chatId: string,
+  ): Promise<void> {
+    const existing = await this.getSubscriptionByUserId(userId);
+    if (existing) {
+      existing.platforms[platform] = chatId;
+      await this.upsertSubscription(existing);
+    }
+  }
+
+  async disablePlatform(userId: string, platform: 'slack' | 'telegram'): Promise<void> {
+    const existing = await this.getSubscriptionByUserId(userId);
+    if (existing) {
+      existing.enabled = existing.enabled.filter((p) => p !== platform);
+      await this.upsertSubscription(existing);
+    }
+  }
+
+  /**
+   * Get all active subscriptions using the index for O(1) lookups
+   */
+  async getAllActiveSubscriptions(): Promise<Subscription[]> {
+    const subscriptions: Subscription[] = [];
+    // Use the active_subscriptions index instead of scanning all subscriptions
+    const prefix = IndexKeys.activeSubscription('NO_USER').slice(0, -1); // Remove placeholder
+    const entries = this.kv.list({ prefix });
+    for await (const entry of entries) {
+      subscriptions.push(entry.value as Subscription);
+    }
+    return subscriptions;
+  }
+
+  /**
+   * Get messages by user using indexed lookups, sorted by date (oldest first)
+   */
+  async getMessagesByUserId(userId: string): Promise<Message[]> {
+    const messages: Message[] = [];
+    // Use the user-specific message index instead of scanning all messages
+    const entries = this.kv.list({ prefix: IndexKeys.messagesByUserPrefix(userId) });
+    for await (const entry of entries) {
+      messages.push(entry.value as Message);
+    }
+    return messages.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  /**
+   * Get messages since a specific date for a user
+   */
+  async getMessagesByUserIdSince(userId: string, since: Date): Promise<Message[]> {
+    const messages = await this.getMessagesByUserId(userId);
+    return messages.filter((m) => m.date >= since);
+  }
+
+  /**
+   * Get messages from today for a user
+   */
+  async getTodayMessagesByUserId(userId: string): Promise<Message[]> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return this.getMessagesByUserIdSince(userId, today);
+  }
+
+  /**
+   * Get messages from last N days for a user
+   */
+  async getRecentMessagesByUserId(userId: string, days = 1): Promise<Message[]> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    return this.getMessagesByUserIdSince(userId, cutoff);
+  }
+
+  async updateLastSentAt(userId: string, timestamp: Date): Promise<void> {
+    const existing = await this.getSubscriptionByUserId(userId);
+    if (existing) {
+      existing.lastSentAt = timestamp;
+      await this.upsertSubscription(existing);
     }
   }
 }
