@@ -9,6 +9,23 @@ import { mainMenuKeyboard } from './keyboards.ts';
 import { createSanitizationMiddleware } from './sanitizer.ts';
 
 /**
+ * Timing-safe string comparison to prevent timing attacks.
+ * Deno doesn't have crypto.subtle.timingSafeEqual, so we implement our own.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+
+  return result === 0;
+}
+
+/**
  * Redact sensitive data from objects before logging
  */
 function redactSensitiveData(obj: Record<string, unknown>): Record<string, unknown> {
@@ -207,10 +224,8 @@ export class TelegramService implements BotService {
       }
 
       // Use timing-safe comparison to prevent timing attacks
-      const receivedBytes = new TextEncoder().encode(receivedToken);
-      const expectedBytes = new TextEncoder().encode(this.webhookSecret);
-
-      return await crypto.subtle.timingSafeEqual(receivedBytes, expectedBytes);
+      // Note: crypto.subtle.timingSafeEqual is not available in Deno
+      return timingSafeEqual(receivedToken, this.webhookSecret);
     }
 
     // Allow requests in development without secret (for local testing)
