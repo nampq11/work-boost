@@ -11,6 +11,8 @@
     "npm:@biomejs/biome@*": "1.9.4",
     "npm:@biomejs/biome@^1.9.4": "1.9.4",
     "npm:@google/genai@^1.22.0": "1.22.0",
+    "npm:@grammyjs/auto-retry@2": "2.0.2_grammy@1.40.0",
+    "npm:@grammyjs/ratelimiter@^1.2.1": "1.2.1",
     "npm:@types/express@^4.17.25": "4.17.25",
     "npm:@types/node@*": "24.2.0",
     "npm:boxen@^8.0.1": "8.0.1",
@@ -19,6 +21,7 @@
     "npm:express-rate-limit@^8.2.1": "8.2.1_express@5.1.0",
     "npm:express-validator@^7.3.1": "7.3.1",
     "npm:express@^5.1.0": "5.1.0",
+    "npm:grammy@^1.21.1": "1.40.0",
     "npm:helmet@^8.1.0": "8.1.0",
     "npm:oxlint@*": "0.11.1",
     "npm:oxlint@0.11": "0.11.1",
@@ -126,6 +129,19 @@
         "google-auth-library",
         "ws"
       ]
+    },
+    "@grammyjs/auto-retry@2.0.2_grammy@1.40.0": {
+      "integrity": "sha512-b4A4p5jlYDiQtW0c0FXYe11WMkYoiW+5rvOaDMCOk1h7Pu2SDl7B7gmFF8cthWCx2+M2nWLOsBxAgbBG4kKWYg==",
+      "dependencies": [
+        "debug",
+        "grammy"
+      ]
+    },
+    "@grammyjs/ratelimiter@1.2.1": {
+      "integrity": "sha512-4bmVUBCBnIb2epbDiBLCvvnVjaYg7kDCPR1Ptt6gqoxm5vlD8BjainYv+yjF6221hu2KUv8QAckumDI+6xyGsQ=="
+    },
+    "@grammyjs/types@3.24.0": {
+      "integrity": "sha512-qQIEs4lN5WqUdr4aT8MeU6UFpMbGYAvcvYSW1A4OO1PABGJQHz/KLON6qvpf+5RxaNDQBxiY2k2otIhg/AG7RQ=="
     },
     "@oxlint/darwin-arm64@0.11.1": {
       "integrity": "sha512-S+cHn49fT+qSJXhQ3Z4EG/5ENp2dAUbS2sMNkhgkLqlO8aYl0TR9R7omU3vpU/beu8ePnV+mdVlJYGjsPIMGtg==",
@@ -240,6 +256,12 @@
     },
     "@types/triple-beam@1.3.5": {
       "integrity": "sha512-6WaYesThRMCl19iryMYP7/x2OVgCtbIVflDGFpWnb9irXI3UjYE4AzmYuiUKY1AJstGijoY+MgUszMgRxIYTYw=="
+    },
+    "abort-controller@3.0.0": {
+      "integrity": "sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==",
+      "dependencies": [
+        "event-target-shim"
+      ]
     },
     "accepts@2.0.0": {
       "integrity": "sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==",
@@ -431,6 +453,9 @@
     "etag@1.8.1": {
       "integrity": "sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg=="
     },
+    "event-target-shim@5.0.1": {
+      "integrity": "sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ=="
+    },
     "express-rate-limit@8.2.1_express@5.1.0": {
       "integrity": "sha512-PCZEIEIxqwhzw4KF0n7QF4QqruVTcF73O5kFKUnGOyjbCCgizBBiFaYpd/fnBLUMPw/BWw9OsiN7GgrNYr7j6g==",
       "dependencies": [
@@ -565,6 +590,15 @@
     },
     "gopd@1.2.0": {
       "integrity": "sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg=="
+    },
+    "grammy@1.40.0": {
+      "integrity": "sha512-ssuE7fc1AwqlUxHr931OCVW3fU+oFDjHZGgvIedPKXfTdjXvzP19xifvVGCnPtYVUig1Kz+gwxe4A9M5WdkT4Q==",
+      "dependencies": [
+        "@grammyjs/types",
+        "abort-controller",
+        "debug",
+        "node-fetch"
+      ]
     },
     "gtoken@7.1.0": {
       "integrity": "sha512-pCcEwRi+TKpMlxAQObHDQ56KawURgyAf6jtIY046fJ5tIv3zDe/LEIubckAO8fj6JnAxLdmWkUfNyulQ2iKdEw==",
@@ -1004,9 +1038,13 @@
     "dependencies": [
       "jsr:@std/assert@1",
       "jsr:@std/dotenv@~0.225.5",
+      "jsr:@std/fs@^1.0.22",
+      "jsr:@std/path@^1.1.4",
       "jsr:@std/uuid@^1.0.9",
       "npm:@biomejs/biome@^1.9.4",
       "npm:@google/genai@^1.22.0",
+      "npm:@grammyjs/auto-retry@2",
+      "npm:@grammyjs/ratelimiter@^1.2.1",
       "npm:@types/express@^4.17.25",
       "npm:boxen@^8.0.1",
       "npm:chalk@^5.6.2",
@@ -1014,6 +1052,7 @@
       "npm:express-rate-limit@^8.2.1",
       "npm:express-validator@^7.3.1",
       "npm:express@^5.1.0",
+      "npm:grammy@^1.21.1",
       "npm:helmet@^8.1.0",
       "npm:oxlint@0.11",
       "npm:winston@^3.18.3",

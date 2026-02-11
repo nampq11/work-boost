@@ -1,3 +1,4 @@
+import { Subscription } from '../../entity/subscription.ts';
 import { Message } from '../../entity/task.ts';
 import { User } from '../../entity/user.ts';
 
@@ -59,6 +60,69 @@ export class Database {
       if (message.value?.date.getDate() === date.getDate()) {
         return message.value as Message;
       }
+    }
+  }
+
+  // Subscription methods for multi-platform support
+
+  async getSubscriptionByUserId(userId: string): Promise<Subscription | null> {
+    const result = await this.kv.get(['subscriptions', userId]);
+    return result.value as Subscription | null;
+  }
+
+  async upsertSubscription(subscription: Subscription): Promise<void> {
+    await this.kv.set(['subscriptions', subscription.userId], subscription);
+  }
+
+  async setPlatformChatId(
+    userId: string,
+    platform: 'slack' | 'telegram',
+    chatId: string,
+  ): Promise<void> {
+    const existing = await this.getSubscriptionByUserId(userId);
+    if (existing) {
+      existing.platforms[platform] = chatId;
+      await this.upsertSubscription(existing);
+    }
+  }
+
+  async disablePlatform(userId: string, platform: 'slack' | 'telegram'): Promise<void> {
+    const existing = await this.getSubscriptionByUserId(userId);
+    if (existing) {
+      existing.enabled = existing.enabled.filter((p) => p !== platform);
+      await this.upsertSubscription(existing);
+    }
+  }
+
+  async getAllActiveSubscriptions(): Promise<Subscription[]> {
+    const subscriptions: Subscription[] = [];
+    const entries = this.kv.list({ prefix: ['subscriptions'] });
+    for await (const entry of entries) {
+      const sub = entry.value as Subscription;
+      if (sub.enabled.length > 0) {
+        subscriptions.push(sub);
+      }
+    }
+    return subscriptions;
+  }
+
+  async getMessagesByUserId(userId: string): Promise<Message[]> {
+    const messages: Message[] = [];
+    const entries = this.kv.list({ prefix: ['messages'] });
+    for await (const entry of entries) {
+      const msg = entry.value as Message;
+      if (msg.userId === userId) {
+        messages.push(msg);
+      }
+    }
+    return messages.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  async updateLastSentAt(userId: string, timestamp: Date): Promise<void> {
+    const existing = await this.getSubscriptionByUserId(userId);
+    if (existing) {
+      existing.lastSentAt = timestamp;
+      await this.upsertSubscription(existing);
     }
   }
 }

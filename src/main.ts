@@ -1,7 +1,7 @@
-import { AgentResponse } from './entity/agent.ts';
 import { Agent } from './services/agent/main.ts';
 import { Database } from './services/database/database.ts';
 import { Slack } from './services/slack/slack.ts';
+import { TelegramService } from './services/telegram/telegram.ts';
 
 function handle_test() {
   console.log('Handling test request');
@@ -11,6 +11,7 @@ export async function boostrap() {
   const db = await Database.init();
   const agent = await Agent.init(Deno.env.get('GOOGLE_API_KEY') || '');
   const slack = new Slack();
+  const telegram = new TelegramService(db, agent);
 
   console.log('Database connected');
 
@@ -25,6 +26,7 @@ export async function boostrap() {
       handle_test();
     }
 
+    // Slack webhooks (legacy routes)
     if (url.pathname == '/subscribe' && req.method === 'POST') {
       const body = await req.text();
       const params = new URLSearchParams(body);
@@ -130,7 +132,7 @@ export async function boostrap() {
           },
         ];
         // send to slack
-        slack.sendMessage(blocks);
+        await slack.sendMessageToChannel(blocks);
       }
       return new Response(
         JSON.stringify({
@@ -144,6 +146,14 @@ export async function boostrap() {
           },
         },
       );
+    }
+
+    // Telegram webhook
+    if (url.pathname.startsWith('/telegram')) {
+      if (!(await telegram.validateWebhook(req))) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      return await telegram.handleWebhook(req);
     }
 
     return new Response('Hello, world', {

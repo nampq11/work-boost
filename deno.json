@@ -29,7 +29,10 @@
     "express-validator": "npm:express-validator@^7.3.1",
     "helmet": "npm:helmet@^8.1.0",
     "winston": "npm:winston@^3.18.3",
-    "zod": "npm:zod@^4.1.12"
+    "zod": "npm:zod@^4.1.12",
+    "grammy": "npm:grammy@^1.21.1",
+    "@grammyjs/auto-retry": "npm:@grammyjs/auto-retry@^2.0.0",
+    "@grammyjs/ratelimiter": "npm:@grammyjs/ratelimiter@^1.2.1"
   },
   "nodeModulesDir": "auto",
   "fmt": {
