@@ -44,5 +44,20 @@
   },
   "lint": {
     "exclude": ["node_modules/", ".deno/"]
+  },
+  "deploy": {
+    "exclude": [
+      "node_modules/",
+      ".deno/",
+      "docs/",
+      ".vscode/",
+      ".worktrees/"
+    ],
+    "include": [
+      "src/",
+      "deno.json",
+      "deno.lock"
+    ],
+    "entrypoint": "src/main.ts"
   }
 }

@@ -19,7 +19,7 @@ export async function bootstrap() {
   // Run migration if needed (for existing Slack users)
   await runMigrationIfNeeded(db);
 
-  Deno.serve({ port: 2002 }, async (req: Request) => {
+  Deno.serve(async (req: Request) => {
     console.log('Method: ', req.method);
 
     const url = new URL(req.url);
