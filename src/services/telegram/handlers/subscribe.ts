@@ -10,8 +10,14 @@ interface SubscribeHandlerDeps {
 
 /**
  * Handle /subscribe command or subscribe button
+ * Works for both commands and callback queries
  */
 export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps): Promise<void> {
+  // Answer callback query if this is a button press (required to remove loading state)
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery();
+  }
+
   const chatId = ctx.chat?.id?.toString();
   const fromId = ctx.from?.id.toString();
 
@@ -25,7 +31,8 @@ export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps):
   const isSubscribed = existing?.enabled.includes('telegram');
 
   if (isSubscribed) {
-    await ctx.reply('You are already subscribed to daily summaries! 😊', {
+    const replyFn = ctx.callbackQuery ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
+    await replyFn('You are already subscribed to daily summaries! 😊', {
       reply_markup: mainMenuKeyboard(),
     });
     return;
@@ -43,19 +50,20 @@ export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps):
   // Update platform chat ID
   await deps.db.setPlatformChatId(fromId, 'telegram', chatId);
 
-  await ctx.reply(
+  const replyFn = ctx.callbackQuery ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
+  await replyFn(
     "Oke rồi, mình sẽ thông báo cho bạn mỗi sáng! 😊\n\nYou'll receive daily work summaries.",
     { reply_markup: mainMenuKeyboard() },
   );
 }
 
 /**
- * Handle callback query for subscribe action
+ * @deprecated Use handleSubscribe directly - it now handles both commands and callbacks
+ * Kept for backwards compatibility
  */
 export async function handleSubscribeCallback(
   ctx: Context,
   deps: SubscribeHandlerDeps,
 ): Promise<void> {
-  await ctx.answerCallbackQuery();
   await handleSubscribe(ctx, deps);
 }

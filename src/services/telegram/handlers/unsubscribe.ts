@@ -10,6 +10,11 @@ interface UnsubscribeHandlerDeps {
  * Handle /unsubscribe command - show confirmation
  */
 export async function handleUnsubscribe(ctx: Context, deps: UnsubscribeHandlerDeps): Promise<void> {
+  // Answer callback query if this is a button press
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery();
+  }
+
   const fromId = ctx.from?.id.toString();
 
   if (!fromId) {
@@ -45,6 +50,11 @@ export async function handleUnsubscribeConfirm(
   ctx: Context,
   deps: UnsubscribeHandlerDeps,
 ): Promise<void> {
+  // Answer callback query if this is a button press
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery();
+  }
+
   const fromId = ctx.from?.id.toString();
 
   if (!fromId) {
@@ -70,12 +80,12 @@ export async function handleUnsubscribeConfirm(
 }
 
 /**
- * Handle callback query for unsubscribe action
+ * @deprecated Use handleUnsubscribe directly - it now handles both commands and callbacks
+ * Kept for backwards compatibility
  */
 export async function handleUnsubscribeCallback(
   ctx: Context,
   deps: UnsubscribeHandlerDeps,
 ): Promise<void> {
-  await ctx.answerCallbackQuery();
   await handleUnsubscribe(ctx, deps);
 }

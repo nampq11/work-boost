@@ -5,6 +5,11 @@ import { mainMenuKeyboard } from '../keyboards.ts';
  * Handle /help command - show help text
  */
 export async function handleHelp(ctx: Context): Promise<void> {
+  // Answer callback query if this is a button press
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery();
+  }
+
   const helpMessage =
     `<b>Work Boost Help</b>\n\n` +
     `<b>Commands:</b>\n` +
@@ -29,9 +34,9 @@ export async function handleHelp(ctx: Context): Promise<void> {
 }
 
 /**
- * Handle callback query for help action
+ * @deprecated Use handleHelp directly - it now handles both commands and callbacks
+ * Kept for backwards compatibility
  */
 export async function handleHelpCallback(ctx: Context): Promise<void> {
-  await ctx.answerCallbackQuery();
   await handleHelp(ctx);
 }

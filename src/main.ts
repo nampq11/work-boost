@@ -8,7 +8,7 @@ function handle_test() {
   console.log('Handling test request');
 }
 
-export async function boostrap() {
+export async function bootstrap() {
   const db = await Database.init();
   const agent = await Agent.init(Deno.env.get('GOOGLE_API_KEY') || '');
   const slack = new Slack();
@@ -168,4 +168,4 @@ export async function boostrap() {
     });
   });
 }
-boostrap();
+bootstrap();

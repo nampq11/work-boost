@@ -17,6 +17,7 @@ import type { Platform } from '../../core/bot/bot-service.ts';
 import type { Subscription } from '../../entity/subscription.ts';
 import type { User } from '../../entity/user.ts';
 import type { Database } from './database.ts';
+import { IndexKeys } from './indexes.ts';
 
 export interface OldUser {
   id: string;
@@ -66,7 +67,7 @@ export async function migrateSlackUsersToSubscriptions(db: Database): Promise<vo
     await db.upsertSubscription(subscription);
 
     // Keep old record for rollback, mark as migrated
-    await db['kv'].set(['users', oldUser.id, '_migrated'], true);
+    await db['kv'].set(IndexKeys.userMigrated(oldUser.id), true);
 
     migrated++;
   }
@@ -76,7 +77,7 @@ export async function migrateSlackUsersToSubscriptions(db: Database): Promise<vo
   );
 
   // Set migration flag
-  await db['kv'].set(['migration', 'slack_to_subscription_v1'], true, {
+  await db['kv'].set(IndexKeys.migration('slack_to_subscription_v1'), true, {
     expireIn: 365 * 24 * 60 * 60 * 1000, // Cache for 1 year
   });
 }
@@ -93,7 +94,7 @@ export async function rollbackMigration(db: Database): Promise<void> {
   for (const sub of subscriptions) {
     if (sub.platforms.slack) {
       await db['kv'].delete(['subscriptions', sub.userId]);
-      await db['kv'].delete(['users', sub.platforms.slack, '_migrated']);
+      await db['kv'].delete(IndexKeys.userMigrated(sub.platforms.slack));
       rolledBack++;
     }
   }
@@ -101,14 +102,14 @@ export async function rollbackMigration(db: Database): Promise<void> {
   console.log(`Rolled back ${rolledBack} subscriptions`);
 
   // Remove migration flag
-  await db['kv'].delete(['migration', 'slack_to_subscription_v1']);
+  await db['kv'].delete(IndexKeys.migration('slack_to_subscription_v1'));
 }
 
 /**
  * Check if migration has been run
  */
 export async function hasMigrationRun(db: Database): Promise<boolean> {
-  const result = await db['kv'].get(['migration', 'slack_to_subscription_v1']);
+  const result = await db['kv'].get(IndexKeys.migration('slack_to_subscription_v1'));
   return result.value !== null;
 }
 

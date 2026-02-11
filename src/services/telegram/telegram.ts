@@ -1,5 +1,5 @@
 import { autoRetry } from '@grammyjs/auto-retry';
-import { limit } from '@grammyjs/ratelimiter';
+import { type RateLimiter, limit } from '@grammyjs/ratelimiter';
 import { Bot, GrammyError } from 'grammy';
 import { webhookCallback } from 'grammy';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../../core/bot/bot-service.ts';
@@ -34,12 +34,26 @@ function redactSensitiveData(obj: Record<string, unknown>): Record<string, unkno
   return result;
 }
 
+/**
+ * Get rate limit from environment or use default
+ */
+function getRateLimit(type: 'interactive' | 'bulk'): number {
+  if (type === 'interactive') {
+    const limit = Deno.env.get('TELEGRAM_RATE_LIMIT_INTERACTIVE');
+    return limit ? parseInt(limit, 10) : 3;
+  } else {
+    const limit = Deno.env.get('TELEGRAM_RATE_LIMIT_BULK');
+    return limit ? parseInt(limit, 10) : 25;
+  }
+}
+
 export class TelegramService implements BotService {
   readonly platform: Platform = 'telegram';
   private bot: Bot;
   private db: Database;
   private agent: Agent;
   private webhookSecret: string;
+  private bulkLimiter: RateLimiter;
 
   constructor(db: Database, agent: Agent) {
     const token = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -51,6 +65,16 @@ export class TelegramService implements BotService {
     this.db = db;
     this.agent = agent;
     this.bot = new Bot(token);
+
+    // Create separate rate limiter for bulk operations (higher limit)
+    this.bulkLimiter = limit({
+      timeFrame: 1000,
+      limit: getRateLimit('bulk'),
+      onLimitExceeded: async () => {
+        // Silently wait for bulk operations
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      },
+    });
 
     this.setupMiddleware();
     this.setupHandlers();
@@ -68,11 +92,11 @@ export class TelegramService implements BotService {
       }),
     );
 
-    // Rate limiting per user
+    // Rate limiting per user (interactive commands only)
     this.bot.use(
       limit({
         timeFrame: 2000,
-        limit: 3,
+        limit: getRateLimit('interactive'),
         onLimitExceeded: async (ctx) => {
           await ctx.reply('Please slow down! Try again in a few seconds.');
         },
@@ -154,6 +178,16 @@ export class TelegramService implements BotService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Send a bulk message (for daily summaries) with higher rate limit
+   * This bypasses the bot's rate limiting middleware and uses the bulk limiter instead
+   */
+  async sendBulkMessage(chatId: string, content: string): Promise<void> {
+    await this.bulkLimiter.control(() =>
+      this.bot.api.sendMessage(chatId, content, { parse_mode: 'HTML' }),
+    );
   }
 
   async validateWebhook(request: Request): Promise<boolean> {

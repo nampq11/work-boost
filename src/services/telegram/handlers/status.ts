@@ -10,6 +10,11 @@ interface StatusHandlerDeps {
  * Handle /status command - show subscription status
  */
 export async function handleStatus(ctx: Context, deps: StatusHandlerDeps): Promise<void> {
+  // Answer callback query if this is a button press
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery();
+  }
+
   const fromId = ctx.from?.id.toString();
 
   if (!fromId) {
@@ -46,9 +51,9 @@ export async function handleStatus(ctx: Context, deps: StatusHandlerDeps): Promi
 }
 
 /**
- * Handle callback query for status action
+ * @deprecated Use handleStatus directly - it now handles both commands and callbacks
+ * Kept for backwards compatibility
  */
 export async function handleStatusCallback(ctx: Context, deps: StatusHandlerDeps): Promise<void> {
-  await ctx.answerCallbackQuery();
   await handleStatus(ctx, deps);
 }
