@@ -135,7 +135,7 @@ export async function startDailyScheduler(deps: SchedulerDeps): Promise<void> {
   const slackFormatter = new SlackFormatter();
   const telegramFormatter = new TelegramFormatter();
 
-  Deno.cron(schedule, {
+  Deno.cron('daily-summary', schedule, {
     fn: async () => {
       const startTime = Date.now();
       console.log('Starting daily summary job at', new Date().toISOString());

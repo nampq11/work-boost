@@ -13,10 +13,13 @@ export class Slack implements BotService {
 
   async sendMessage(chatId: string, content: string, options?: SendOptions): Promise<void> {
     const url = `${this.baseUrl}/api/chat.postMessage`;
+
+    // Use keyboard as blocks if provided (for rich formatting)
+    const blocks = options?.keyboard;
     const payload = JSON.stringify({
       channel: chatId,
-      text: content,
-      blocks: options?.keyboard ? this.buildBlocks(content) : undefined,
+      text: blocks ? undefined : content, // Only include text if no blocks
+      blocks: blocks ?? undefined,
     });
 
     const requestOptions = {
@@ -46,21 +49,67 @@ export class Slack implements BotService {
   // Legacy method for compatibility with existing code
   async sendMessageToChannel(blocks: object): Promise<void> {
     const channelID = Deno.env.get('SLACK_CHANNEL_ID') || '';
-    await this.sendMessage(channelID, '', { keyboard: blocks as any });
+    // Pass blocks directly as the keyboard option
+    await this.sendMessage(channelID, '', { keyboard: blocks });
   }
 
   async validateWebhook(request: Request): Promise<boolean> {
-    // Basic validation - check for Slack headers
-    const timestamp = request.headers.get('X-Slack-Request-Timestamp');
-    const signature = request.headers.get('X-Slack-Signature');
+    const timestampHeader = request.headers.get('X-Slack-Request-Timestamp');
+    const signatureHeader = request.headers.get('X-Slack-Signature');
 
-    if (!timestamp || !signature) {
+    // Require headers and signing secret
+    if (!timestampHeader || !signatureHeader || !this.signingSecret) {
       return false;
     }
 
-    // TODO: Implement proper signature verification
-    // For now, just check that headers exist
-    return true;
+    const timestamp = Number(timestampHeader);
+    if (!Number.isFinite(timestamp)) {
+      return false;
+    }
+
+    // Reject requests that are too old to mitigate replay attacks (5 minutes)
+    const FIVE_MINUTES_IN_SECONDS = 60 * 5;
+    const now = Math.floor(Date.now() / 1000);
+    if (Math.abs(now - timestamp) > FIVE_MINUTES_IN_SECONDS) {
+      return false;
+    }
+
+    // Clone the request to read the body without consuming it
+    const body = await request.clone().text();
+
+    const version = 'v0';
+    const baseString = `${version}:${timestampHeader}:${body}`;
+
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(this.signingSecret);
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+
+    const signatureBuffer = await crypto.suble.sign('HMAC', cryptoKey, encoder.encode(baseString));
+
+    const hexSignature = Array.from(new Uint8Array(signatureBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const expectedSignature = `${version}=${hexSignature}`;
+
+    // Constant-time comparison to avoid timing attacks
+    if (signatureHeader.length !== expectedSignature.length) {
+      return false;
+    }
+
+    let diff = 0;
+    for (let i = 0; i < signatureHeader.length; i++) {
+      diff |= signatureHeader.charCodeAt(i) ^ expectedSignature.charCodeAt(i);
+    }
+
+    return diff === 0;
   }
 
   async parseUpdate(request: Request): Promise<BotUpdate> {
@@ -68,15 +117,13 @@ export class Slack implements BotService {
     const params = new URLSearchParams(body);
 
     const action = (params.get('command')?.replace('/', '') as BotUpdate['action']) || 'message';
-    const userId = params.get('user_id') || '';
-    const text = params.get('text') || '';
 
     return {
       platform: 'slack',
-      userId,
-      chatId: params.get('channel_id') || userId,
+      userId: params.get('user_id') || '',
+      chatId: params.get('channel_id') || params.get('user_id') || '',
       action,
-      data: { text, params: Object.fromEntries(params) },
+      data: { text: params.get('text') || '', params: Object.fromEntries(params) },
     };
   }
 
@@ -118,17 +165,5 @@ export class Slack implements BotService {
 
     // Default response
     return new Response('OK', { status: 200 });
-  }
-
-  private buildBlocks(content: string): object {
-    return [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: content,
-        },
-      },
-    ];
   }
 }

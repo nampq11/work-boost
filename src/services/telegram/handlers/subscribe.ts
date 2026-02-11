@@ -5,7 +5,7 @@ import { mainMenuKeyboard } from '../keyboards.ts';
 
 interface SubscribeHandlerDeps {
   db: Database;
-  subscription: Subscription;
+  agent: Agent;
 }
 
 /**

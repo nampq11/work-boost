@@ -8,8 +8,9 @@ export class SlackFormatter {
       if (tasks.length === 0) return '  •  N/A';
       return tasks
         .map((t) => {
-          if (t.task !== 'string') {
-            return `  •  ${t.project}: ${t.task}`;
+          const task = t.task.trim();
+          if (task.length > 0) {
+            return `  •  ${t.project}: ${task}`;
           }
           return `  •  ${t.project}`;
         })

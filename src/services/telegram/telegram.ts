@@ -105,14 +105,14 @@ export class TelegramService implements BotService {
   }
 
   private setupHandlers(): void {
-    const deps = { db: this.db, agent: this.agent, subscription: {} as any };
+    const deps = { db: this.db, agent: this.agent };
 
     // Command handlers
     this.bot.command('start', (ctx) => handlers.handleStart(ctx));
     this.bot.command('subscribe', (ctx) => handlers.handleSubscribe(ctx, deps));
     this.bot.command('unsubscribe', (ctx) => handlers.handleUnsubscribe(ctx, deps));
     this.bot.command('status', (ctx) => handlers.handleStatus(ctx, deps));
-    this.bot.command('help', () => handlers.handleHelp());
+    this.bot.command('help', (ctx) => handlers.handleHelp(ctx));
 
     // Message handler (must be last - catches all text messages)
     this.bot.on('message:text', (ctx) => handlers.handleMessage(ctx, deps));
@@ -128,7 +128,7 @@ export class TelegramService implements BotService {
       handlers.handleUnsubscribeConfirm(ctx, deps),
     );
     this.bot.callbackQuery('action:status', (ctx) => handlers.handleStatusCallback(ctx, deps));
-    this.bot.callbackQuery('action:help', () => handlers.handleHelpCallback());
+    this.bot.callbackQuery('action:help', (ctx) => handlers.handleHelpCallback(ctx));
     this.bot.callbackQuery('action:cancel', async (ctx) => {
       await ctx.answerCallbackQuery();
       await ctx.editMessageText('Cancelled.', {
