@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-env
 
-import { join, relative } from '@std/path';
 import { ensureDir } from '@std/fs';
+import { join, relative } from '@std/path';
 
 const DOCS_DIR = join(Deno.cwd(), 'docs');
 
@@ -24,11 +24,12 @@ function compactStrings(values) {
     if (value === null || value === undefined) {
       continue;
     }
-    const normalized = typeof value === 'string'
-      ? value.trim()
-      : typeof value === 'number' || typeof value === 'boolean'
-      ? String(value).trim()
-      : null;
+    const normalized =
+      typeof value === 'string'
+        ? value.trim()
+        : typeof value === 'number' || typeof value === 'boolean'
+          ? String(value).trim()
+          : null;
 
     if (normalized?.length > 0) {
       result.push(normalized);
@@ -53,7 +54,7 @@ async function walkMarkdownFiles(dir, base = dir) {
       if (EXCLUDED_DIRS.has(entry.name)) {
         continue;
       }
-      files.push(...await walkMarkdownFiles(fullPath, base));
+      files.push(...(await walkMarkdownFiles(fullPath, base)));
     } else if (entry.isFile && entry.name.endsWith('.md')) {
       files.push(relative(base, fullPath));
     }

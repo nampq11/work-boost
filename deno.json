@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "dev": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron --watch src/main.ts",
+    "dev": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron --watch src/app/index.ts",
     "test": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron $1",
     "start": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/api/server.ts",
     "start-api": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/index.ts",
@@ -46,18 +46,8 @@
     "exclude": ["node_modules/", ".deno/"]
   },
   "deploy": {
-    "exclude": [
-      "node_modules/",
-      ".deno/",
-      "docs/",
-      ".vscode/",
-      ".worktrees/"
-    ],
-    "include": [
-      "src/",
-      "deno.json",
-      "deno.lock"
-    ],
-    "entrypoint": "src/main.ts"
+    "exclude": ["node_modules/", ".deno/", "docs/", ".vscode/", ".worktrees/"],
+    "include": ["src/", "deno.json", "deno.lock"],
+    "entrypoint": "src/app/index.ts"
   }
 }

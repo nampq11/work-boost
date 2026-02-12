@@ -4,13 +4,22 @@ import express, { Application, NextFunction, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { logger } from '../../core/logger/logger.ts';
+import type { Agent, Database } from '../../services/_index.ts';
+import type { Slack } from '../../services/slack/slack.ts';
+import type { TelegramService } from '../../services/telegram/telegram.ts';
 import {
   errorLoggingMiddleware,
   requestIdMiddleware,
   requestLoggingMiddleware,
 } from './middleware/logging.ts';
-import { createMessageRouters } from './routes/message.ts';
-import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
+import { slackWebhookValidation } from './middleware/slack-validation.ts';
+import {
+  attachSlackDeps,
+  handleSlackMessages,
+  handleSlackSubscribe,
+  handleSlackUnsubscribe,
+} from './routes/slack.ts';
+import { ERROR_CODES, errorResponse } from './utils/response.ts';
 
 export interface ApiServerConfig {
   port: number;
@@ -20,12 +29,22 @@ export interface ApiServerConfig {
   rateLimitMaxRequests?: number;
   enableWebSocket?: boolean;
   apiPrefix?: string;
+  slack?: Slack;
+  telegram?: TelegramService;
+  db?: Database;
+  agent?: Agent;
 }
 
 export class ApiServer {
   private app: Application;
   private config: ApiServerConfig;
   private apiPrefix: string;
+
+  // Bot services
+  private slack?: Slack;
+  private telegram?: TelegramService;
+  private db?: Database;
+  private agent?: Agent;
 
   // WebSocket components
   private httpServer: http.Server;
@@ -38,11 +57,18 @@ export class ApiServer {
   constructor(config: ApiServerConfig) {
     this.config = config;
 
+    // Store bot services
+    this.slack = config.slack;
+    this.telegram = config.telegram;
+    this.db = config.db;
+    this.agent = config.agent;
+
     this.apiPrefix = this.validateAndNormalizeApiPrefix(config.apiPrefix);
 
     this.app = express();
     this.setupMiddleware();
     this.setupRoutes();
+    this.setupBotRoutes();
     this.setupErrorHandling();
 
     // Note: MCP setup is now handled in start() method to properly handle async operations
@@ -60,21 +86,22 @@ export class ApiServer {
     if (prefix.startsWith('/') && prefix !== '/') {
       prefix = prefix.slice(0, -1);
     }
-    logger.info(`[API Server] Using API prefix: ${prefix} || '(None)'`);
+
+    logger.info('[API Server] Using API prefix: ' + (prefix || '(None)'));
     return prefix;
   }
 
   private buildAPIRouter(route: string): string {
     if (!this.apiPrefix || this.apiPrefix === '') return route;
 
-    return `${this.apiPrefix}${route}`;
+    return this.apiPrefix + route;
   }
 
   private buildFullPath(req: Request, path: string): string {
     const contextPath = (req as any).contextPath || '';
     const fullPath = contextPath + this.buildAPIRouter(path);
 
-    logger.info(`[API Server] Built full path:`, {
+    logger.info('[API Server] Built full path:', {
       path,
       contextPath,
       apiPrefix: this.apiPrefix,
@@ -89,7 +116,7 @@ export class ApiServer {
 
     // Parse X-Forwarded-Prefix for context path support
     this.app.use((req: Request, res: Response, next: NextFunction) => {
-      // Get the prefix from the X-Forwarded-Prefix header or enviroment variable
+      // Get prefix from X-Forwarded-Prefix header or enviroment variable
       const forwardedPrefix = req.headers['x-forwarded-prefix'] as string;
       const envPrefix = process.env.PROXY_CONTEXT_PATH;
       const contextPath = forwardedPrefix || envPrefix || '';
@@ -128,7 +155,7 @@ export class ApiServer {
             return;
           }
 
-          // Check if origin is in the allowed list
+          // Check if origin is in allowed list
           if (allowedOrigins.includes(origin)) {
             callback(null, true);
             return;
@@ -165,7 +192,7 @@ export class ApiServer {
         sucess: false,
         error: {
           code: ERROR_CODES.RATE_LIMIT_EXCEEDED,
-          message: `Too many request from this IP, please try again later.`,
+          message: 'Too many request from this IP, please try again later.',
         },
       },
       standardHeaders: true,
@@ -173,7 +200,7 @@ export class ApiServer {
     });
     // Apply rate limiting to API routes if prefix is configured
     if (this.apiPrefix) {
-      this.app.use(`${this.apiPrefix}`, limiter);
+      this.app.use(this.apiPrefix, limiter);
     }
 
     // Body parsing middleware
@@ -187,13 +214,24 @@ export class ApiServer {
 
   private setupRoutes(): void {
     // Health check endpoint
-    this.app.get('/health', (_req: Request, res: Response) => {
+    this.app.get('/health', async (_req: Request, res: Response) => {
       const healthData: any = {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         version: process.env.VERSION || 'unknown',
       };
+
+      // Check database health if available
+      if (this.db) {
+        try {
+          // Simple health check - try to get a value
+          await this.db.kv?.get(['health']);
+          healthData.database = 'connected';
+        } catch {
+          healthData.database = 'error';
+        }
+      }
 
       // TODO: Add Websocket health if enabled
 
@@ -218,12 +256,12 @@ export class ApiServer {
     // this.app.post(this.buildAPIRouter('/reset'), async (req: Request, res: Response) => {
     //     try {
     //         const { sessionId } = req.body;
-
+    //
     //         logger.info('Processing global reset request', {
     //             requestId: req.requestId,
     //             sessionId: sessionId || 'all',
     //         });
-
+    //
     //         if (sessionId) {
     //             // Reset specific session
     //             const success = await this.agent.removeSession(sessionId);
@@ -244,7 +282,7 @@ export class ApiServer {
     //                 await this.agent.removeSession(id);
     //             }
     //         }
-
+    //
     //         successResponse(
     //             res,
     //             {
@@ -260,17 +298,90 @@ export class ApiServer {
     //             requestId: req.requestId,
     //             error: errorMsg,
     //         });
-
+    //
     //         errorResponse(
     //             res,
     //             ERROR_CODES.INTERNAL_ERROR,
     //             `Reset failed: ${errorMsg}`,
     //             500,
-    //             process.env.NODE_ENV === 'development' ? error: undefined,
+    //             process.env.NODE_ENV === 'development' ? error : undefined,
     //             req.requestId
     //         );
     //     }
     // });
+  }
+
+  private setupBotRoutes(): void {
+    if (!this.slack || !this.telegram) {
+      logger.warn('Bot services not configured, skipping bot routes');
+      return;
+    }
+
+    logger.info('Bot routes registered', {
+      slackRoutes: !!this.slack,
+      telegramRoutes: !!this.telegram,
+    });
+
+    // Test endpoint
+    this.app.get('/test', (req: Request, res: Response) => {
+      logger.info('Handling test request', { requestId: (req as any).requestId });
+      res.status(200).send('OK');
+    });
+
+    // Attach Slack dependencies to routes
+    const slackDepsMiddleware = attachSlackDeps({
+      db: this.db!,
+      agent: this.agent!,
+      slack: this.slack!,
+    });
+
+    // Get signing secret for validation
+    const slackSigningSecret = process.env.SLACK_SIGNING_SECRET || '';
+
+    // Telegram webhook - use native Express mode
+    if (this.telegram) {
+      this.app.post('/telegram/webhook', async (req: any, res: any) => {
+        // Manual validation before webhookCallback
+        if (!(await this.telegram.validateWebhook(req))) {
+          return res.status(401).send('Unauthorized');
+        }
+        // grammY Express mode handles Express (req, res) directly
+        return await this.telegram.handleWebhookExpress(req, res);
+      });
+    }
+
+    // Slack legacy routes with validation middleware
+    // IMPORTANT: express.raw() MUST be applied BEFORE validation middleware
+    const expressRaw = () => ({ type: 'application/json', limit: '1mb' });
+
+    if (this.slack) {
+      // /subscribe - Subscribe user to daily summaries
+      this.app.post(
+        '/subscribe',
+        expressRaw,
+        slackWebhookValidation(slackSigningSecret),
+        slackDepsMiddleware,
+        handleSlackSubscribe,
+      );
+
+      // /unsubscribe - Unsubscribe user from daily summaries
+      this.app.post(
+        '/unsubscribe',
+        expressRaw,
+        slackWebhookValidation(slackSigningSecret),
+        slackDepsMiddleware,
+        handleSlackUnsubscribe,
+      );
+
+      // /messages - Record daily work message and get AI response
+      this.app.post(
+        '/messages',
+        expressRaw,
+        slackWebhookValidation(slackSigningSecret),
+        slackDepsMiddleware,
+        handleSlackMessages,
+      );
+    }
   }
 
   private setup404Handler(): void {
@@ -282,7 +393,7 @@ export class ApiServer {
         `Route ${req.method} ${req.originalUrl} not found`,
         404,
         undefined,
-        req.requestId,
+        (req as any).requestId,
       );
     });
   }
@@ -316,13 +427,13 @@ export class ApiServer {
         err.message || 'An unexpected error occurred',
         statusCode,
         process.env.NODE_ENV === 'development' ? err.stack : undefined,
-        req.requestId,
+        (req as any).requestId,
       );
     });
   }
 
   public async start(): Promise<void> {
-    // Set up  404 handler AFTER all routes are registered
+    // Set up 404 handler AFTER all routes are registered
     this.setup404Handler();
 
     return new Promise((resolve, reject) => {
@@ -332,9 +443,7 @@ export class ApiServer {
 
         this.httpServer.listen(this.config.port, this.config.host || 'localhost', () => {
           logger.info(
-            `API Server started on ${
-              this.config.host || 'localhost'
-            }:${this.config.port}${this.apiPrefix}`,
+            `API Server started on ${this.config.host || 'localhost'}:${this.config.port}${this.apiPrefix}`,
             undefined,
             'green',
           );
@@ -350,7 +459,7 @@ export class ApiServer {
 
         // Graceful shutdown
         process.on('SIGTERM', () => {
-          logger.info(`SIGTERM received, shutting down API server gracefully`);
+          logger.info('SIGTERM received, shutting down API server gracefully');
           this.httpServer?.close(() => {
             logger.info('API server stopped');
             process.exit(0);

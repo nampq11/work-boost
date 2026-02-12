@@ -5,10 +5,10 @@ import { IndexKeys, PrimaryKeys } from './indexes.ts';
 
 export class Database {
   private static instance: Database;
-  private kv: Deno.Kv;
+  private _kv: Deno.Kv;
 
   private constructor(kv: Deno.Kv) {
-    this.kv = kv;
+    this._kv = kv;
   }
 
   static async init(): Promise<Database> {
@@ -17,6 +17,10 @@ export class Database {
     const kv = await Deno.openKv();
     this.instance = new Database(kv);
     return this.instance;
+  }
+
+  get kv(): Deno.Kv {
+    return this._kv;
   }
 
   async store(user: User): Promise<void> {

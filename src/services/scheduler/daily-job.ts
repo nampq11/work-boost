@@ -135,31 +135,27 @@ export async function startDailyScheduler(deps: SchedulerDeps): Promise<void> {
   const slackFormatter = new SlackFormatter();
   const telegramFormatter = new TelegramFormatter();
 
-  Deno.cron('daily-summary', schedule, {
-    fn: async () => {
-      const startTime = Date.now();
-      console.log('Starting daily summary job at', new Date().toISOString());
+  Deno.cron('daily-summary', schedule, async () => {
+    const startTime = Date.now();
+    console.log('Starting daily summary job at', new Date().toISOString());
 
-      const subscriptions = await deps.db.getAllActiveSubscriptions();
-      console.log(`Found ${subscriptions.length} active subscriptions (batch size: ${batchSize})`);
+    const subscriptions = await deps.db.getAllActiveSubscriptions();
+    console.log(`Found ${subscriptions.length} active subscriptions (batch size: ${batchSize})`);
 
-      // Process subscriptions in parallel batches
-      const results = await batchProcess(subscriptions, batchSize, (sub) =>
-        processSubscription(sub, deps, slackFormatter, telegramFormatter),
-      );
+    // Process subscriptions in parallel batches
+    const results = await batchProcess(subscriptions, batchSize, (sub) =>
+      processSubscription(sub, deps, slackFormatter, telegramFormatter),
+    );
 
-      // Log summary
-      const successCount = results.filter((r) => r.success).length;
-      const noMessagesCount = results.filter(
-        (r) => !r.success && r.reason === 'no_messages',
-      ).length;
-      const errorCount = results.filter((r) => !r.success && r.reason !== 'no_messages').length;
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    // Log summary
+    const successCount = results.filter((r) => r.success).length;
+    const noMessagesCount = results.filter((r) => !r.success && r.reason === 'no_messages').length;
+    const errorCount = results.filter((r) => !r.success && r.reason !== 'no_messages').length;
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
-      console.log(
-        `Daily summary completed in ${elapsed}s: ${successCount} successful, ${noMessagesCount} no messages, ${errorCount} errors`,
-      );
-    },
+    console.log(
+      `Daily summary completed in ${elapsed}s: ${successCount} successful, ${noMessagesCount} no messages, ${errorCount} errors`,
+    );
   });
 
   console.log(`Daily scheduler started with schedule: ${schedule}, batch size: ${batchSize}`);

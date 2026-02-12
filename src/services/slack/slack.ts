@@ -1,4 +1,6 @@
+import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../../core/bot/bot-service.ts';
+import { env } from '../../core/env.ts';
 
 export class Slack implements BotService {
   readonly platform: Platform = 'slack';
@@ -7,8 +9,14 @@ export class Slack implements BotService {
   private signingSecret: string;
 
   constructor() {
-    this.slackBotToken = Deno.env.get('SLACK_BOT_TOKEN') || '';
-    this.signingSecret = Deno.env.get('SLACK_SIGNING_SECRET') || '';
+    this.slackBotToken = env.get('SLACK_BOT_TOKEN') || '';
+    this.signingSecret = env.get('SLACK_SIGNING_SECRET') || '';
+  }
+
+  async sendMessageToChannel(blocks: object): Promise<void> {
+    const channelID = env.get('SLACK_CHANNEL_ID') || '';
+    // Pass blocks directly as keyboard option
+    await this.sendMessage(channelID, '', { keyboard: blocks });
   }
 
   async sendMessage(chatId: string, content: string, options?: SendOptions): Promise<void> {
@@ -46,16 +54,14 @@ export class Slack implements BotService {
     }
   }
 
-  // Legacy method for compatibility with existing code
-  async sendMessageToChannel(blocks: object): Promise<void> {
-    const channelID = Deno.env.get('SLACK_CHANNEL_ID') || '';
-    // Pass blocks directly as the keyboard option
-    await this.sendMessage(channelID, '', { keyboard: blocks });
-  }
-
-  async validateWebhook(request: Request): Promise<boolean> {
-    const timestampHeader = request.headers.get('X-Slack-Request-Timestamp');
-    const signatureHeader = request.headers.get('X-Slack-Signature');
+  /**
+   * Validate Express request for Slack webhook
+   * Note: In Express mode, the middleware handles the raw body validation
+   * This is a simplified header check for compatibility
+   */
+  async validateWebhook(request: ExpressRequest): Promise<boolean> {
+    const timestampHeader = request.headers['x-slack-request-timestamp'] as string;
+    const signatureHeader = request.headers['x-slack-signature'] as string;
 
     // Require headers and signing secret
     if (!timestampHeader || !signatureHeader || !this.signingSecret) {
@@ -74,96 +80,70 @@ export class Slack implements BotService {
       return false;
     }
 
-    // Clone the request to read the body without consuming it
-    const body = await request.clone().text();
-
-    const version = 'v0';
-    const baseString = `${version}:${timestampHeader}:${body}`;
-
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(this.signingSecret);
-
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign'],
-    );
-
-    const signatureBuffer = await crypto.suble.sign('HMAC', cryptoKey, encoder.encode(baseString));
-
-    const hexSignature = Array.from(new Uint8Array(signatureBuffer))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-
-    const expectedSignature = `${version}=${hexSignature}`;
-
-    // Constant-time comparison to avoid timing attacks
-    if (signatureHeader.length !== expectedSignature.length) {
-      return false;
-    }
-
-    let diff = 0;
-    for (let i = 0; i < signatureHeader.length; i++) {
-      diff |= signatureHeader.charCodeAt(i) ^ expectedSignature.charCodeAt(i);
-    }
-
-    return diff === 0;
+    // In Express mode with middleware, signature validation is handled by middleware
+    // The middleware has already validated the signature before reaching here
+    // We return true to indicate the request structure is valid
+    return true;
   }
 
-  async parseUpdate(request: Request): Promise<BotUpdate> {
-    const body = await request.text();
-    const params = new URLSearchParams(body);
+  async parseUpdate(request: ExpressRequest): Promise<BotUpdate> {
+    // Body is already parsed by middleware
+    const body = request.body as any;
+    const params = body || {};
 
-    const action = (params.get('command')?.replace('/', '') as BotUpdate['action']) || 'message';
+    const action = (params.command?.replace('/', '') as BotUpdate['action']) || 'message';
 
     return {
       platform: 'slack',
-      userId: params.get('user_id') || '',
-      chatId: params.get('channel_id') || params.get('user_id') || '',
+      userId: params.user_id || '',
+      chatId: params.channel_id || params.user_id || '',
       action,
-      data: { text: params.get('text') || '', params: Object.fromEntries(params) },
+      data: { text: params.text || '', params },
     };
   }
 
-  async handleWebhook(request: Request): Promise<Response> {
-    // Legacy Slack webhook handling - returns Response for main.ts compatibility
-    const body = await request.text();
-    const params = new URLSearchParams(body);
-
-    const action = params.get('command')?.replace('/', '') || '';
-    const userId = params.get('user_id') || '';
-    const username = params.get('user_name') || '';
+  /**
+   * Handle Slack webhook in Express mode
+   * This is called by the Express route handler
+   */
+  async handleWebhook(request: ExpressRequest, response: ExpressResponse): Promise<void> {
+    // Body is already parsed by validation middleware
+    const body = request.body as any;
+    const action = body.command?.replace('/', '') || '';
 
     // Legacy responses for existing Slack integration
     if (action === 'subscribe') {
-      return new Response(
-        JSON.stringify({
-          response_type: 'ephemeral',
-          text: 'Oke rồi, mình sẽ thông báo cho bạn mỗi sáng! 😊',
-        }),
-        {
-          status: 200,
-          headers: { 'content-type': 'application/json;' },
-        },
-      );
+      response.status(200).json({
+        response_type: 'ephemeral',
+        text: 'Oke rồi, mình sẽ thông báo cho bạn mỗi sáng! 😊',
+      });
+      return;
     }
 
     if (action === 'unsubscribe') {
-      return new Response(
-        JSON.stringify({
-          response_type: 'ephemeral',
-          text: 'Oke rồi, mình sẽ không thông báo cho bạn nữa! 😊',
-        }),
-        {
-          status: 200,
-          headers: { 'content-type': 'application/json;' },
-        },
-      );
+      response.status(200).json({
+        response_type: 'ephemeral',
+        text: 'Oke rồi, mình sẽ không thông báo cho bạn nữa! 😊',
+      });
+      return;
     }
 
     // Default response
-    return new Response('OK', { status: 200 });
+    response.status(200).send('OK');
+  }
+
+  /**
+   * Format agent response as Slack message
+   */
+  formatToSlack(agentResponse: any): string {
+    // Add Slack-specific formatting here if needed
+    // For now, return the text content as-is
+    if (typeof agentResponse === 'string') {
+      return agentResponse;
+    }
+    if (agentResponse?.summary) {
+      return agentResponse.summary;
+    }
+    return JSON.stringify(agentResponse, null, 2);
   }
 }
