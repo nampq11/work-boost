@@ -1,3 +1,5 @@
+import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
+
 export type Platform = 'slack' | 'telegram';
 
 export interface BotUpdate {
@@ -14,14 +16,11 @@ export interface BotService {
   // Send a formatted message to a user
   sendMessage(chatId: string, content: string, options?: SendOptions): Promise<void>;
 
-  // Validate incoming webhook request
-  validateWebhook(request: Request): Promise<boolean>;
+  // Validate incoming webhook request (Express Request)
+  validateWebhook(request: ExpressRequest): Promise<boolean>;
 
-  // Parse webhook into normalized update
-  parseUpdate(request: Request): Promise<BotUpdate>;
-
-  // Handle webhook and return response
-  handleWebhook(request: Request): Promise<Response>;
+  // Handle webhook and send response (Express Request/Response)
+  handleWebhook(request: ExpressRequest, response: ExpressResponse): Promise<void>;
 }
 
 export interface SendOptions {

@@ -1,8 +1,10 @@
 import { autoRetry } from '@grammyjs/auto-retry';
 import { type RateLimiter, limit } from '@grammyjs/ratelimiter';
+import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import { Bot, GrammyError } from 'grammy';
 import { webhookCallback } from 'grammy';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../../core/bot/bot-service.ts';
+import { env } from '../../core/env.ts';
 import type { Agent, Database } from '../_index.ts';
 import * as handlers from './handlers/index.ts';
 import { mainMenuKeyboard } from './keyboards.ts';
@@ -56,10 +58,10 @@ function redactSensitiveData(obj: Record<string, unknown>): Record<string, unkno
  */
 function getRateLimit(type: 'interactive' | 'bulk'): number {
   if (type === 'interactive') {
-    const limit = Deno.env.get('TELEGRAM_RATE_LIMIT_INTERACTIVE');
+    const limit = env.get('TELEGRAM_RATE_LIMIT_INTERACTIVE');
     return limit ? parseInt(limit, 10) : 3;
   } else {
-    const limit = Deno.env.get('TELEGRAM_RATE_LIMIT_BULK');
+    const limit = env.get('TELEGRAM_RATE_LIMIT_BULK');
     return limit ? parseInt(limit, 10) : 25;
   }
 }
@@ -73,12 +75,12 @@ export class TelegramService implements BotService {
   private bulkLimiter: RateLimiter;
 
   constructor(db: Database, agent: Agent) {
-    const token = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    const token = env.get('TELEGRAM_BOT_TOKEN');
     if (!token) {
       throw new Error('TELEGRAM_BOT_TOKEN is required');
     }
 
-    this.webhookSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') || '';
+    this.webhookSecret = env.get('TELEGRAM_WEBHOOK_SECRET') || '';
     this.db = db;
     this.agent = agent;
     this.bot = new Bot(token);
@@ -207,16 +209,16 @@ export class TelegramService implements BotService {
     );
   }
 
-  async validateWebhook(request: Request): Promise<boolean> {
+  async validateWebhook(request: ExpressRequest): Promise<boolean> {
     // In production, webhook secret is required
-    const isProduction = Deno.env.get('DENO_ENV') === 'production';
+    const isProduction = env.get('DENO_ENV') === 'production';
     if (isProduction && !this.webhookSecret) {
       throw new Error('TELEGRAM_WEBHOOK_SECRET must be configured in production');
     }
 
     // Check secret token header if configured
     if (this.webhookSecret) {
-      const receivedToken = request.headers.get('x-telegram-bot-api-secret-token');
+      const receivedToken = request.headers['x-telegram-bot-api-secret-token'] as string;
 
       // Early return if missing or wrong length
       if (!receivedToken || receivedToken.length !== this.webhookSecret.length) {
@@ -232,8 +234,8 @@ export class TelegramService implements BotService {
     return !isProduction;
   }
 
-  async parseUpdate(request: Request): Promise<BotUpdate> {
-    const body = await request.json();
+  async parseUpdate(request: ExpressRequest): Promise<BotUpdate> {
+    const body = request.body as any;
     // Telegram updates are complex, return minimal info
     return {
       platform: 'telegram',
@@ -247,6 +249,19 @@ export class TelegramService implements BotService {
     };
   }
 
+  /**
+   * Handle webhook using Express mode (grammy's native Express support)
+   * This is the new method for Express integration
+   */
+  async handleWebhookExpress(_req: ExpressRequest, res: ExpressResponse): Promise<void> {
+    const handleUpdate = webhookCallback(this.bot, 'express');
+    // grammY's Express mode directly handles Express (req, res)
+    return await handleUpdate(_req, res);
+  }
+
+  /**
+   * Legacy method for std/http mode (kept for reference during migration)
+   */
   async handleWebhook(request: Request): Promise<Response> {
     const handleUpdate = webhookCallback(this.bot, 'std/http');
     return handleUpdate(request);

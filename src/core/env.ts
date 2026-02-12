@@ -26,20 +26,49 @@ const envSchema = z.object({
 
 type EnvSchema = z.infer<typeof envSchema>;
 
-export const env: EnvSchema = new Proxy({} as EnvSchema, {
-  get(target, prop: string): any {
+/**
+ * Get environment variable by key
+ * This function works correctly with TypeScript and Deno
+ */
+function getEnvValue(key: string): string | undefined {
+  return Deno.env.get(key);
+}
+
+/**
+ * Environment object that supports both property access and function call syntax
+ * - env.GOOGLE_API_KEY (property access)
+ * - env.get('GOOGLE_API_KEY') (function call)
+ */
+const envHandlers = {
+  get(key: string): string | undefined {
+    return getEnvValue(key);
+  },
+};
+
+const envProxy = new Proxy(envHandlers, {
+  get(_target, prop: string | symbol): any {
+    if (prop === 'get' && typeof prop === 'string') {
+      return envHandlers.get;
+    }
+    if (typeof prop !== 'string') {
+      return undefined;
+    }
+    // Handle property access like env.GOOGLE_API_KEY
     switch (prop) {
       case 'DENO_ENV':
         return Deno.env.get('DENO_ENV') || 'developement';
       case 'LOG_LEVEL':
         return Deno.env.get('LOG_LEVEL') || 'info';
       case 'REDACT_SECRETS':
-        return Deno.env.get('REDACT_SECRETS') || true;
+        const redactValue = Deno.env.get('REDACT_SECRETS');
+        return redactValue === undefined ? true : redactValue === 'false';
       default:
         return Deno.env.get(prop);
     }
   },
 });
+
+export const env = envProxy as EnvSchema & { get(key: string): string | undefined };
 
 export const validateEnv = () => {
   const envToValidate = {
