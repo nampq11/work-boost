@@ -1,6 +1,6 @@
-import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../../core/bot/bot-service.ts';
 import { env } from '../../core/env.ts';
+import { logger } from '../../core/logger/logger.ts';
 
 export class Slack implements BotService {
   readonly platform: Platform = 'slack';
@@ -47,21 +47,21 @@ export class Slack implements BotService {
         throw new Error(`HTTP error status: ${response.status}`);
       }
       const responseJson = await response.json();
-      console.log('Slack message sent:', responseJson);
+      logger.debug('Slack message sent', { response: responseJson });
     } catch (error) {
-      console.error('Failed to send Slack message:', error);
+      logger.error('Failed to send Slack message', { error });
       throw error;
     }
   }
 
   /**
-   * Validate Express request for Slack webhook
-   * Note: In Express mode, the middleware handles the raw body validation
-   * This is a simplified header check for compatibility
+   * Validate native Request for Slack webhook
+   * Uses header checks for timestamp freshness.
+   * Full HMAC signature validation is handled by the slack-validation middleware.
    */
-  async validateWebhook(request: ExpressRequest): Promise<boolean> {
-    const timestampHeader = request.headers['x-slack-request-timestamp'] as string;
-    const signatureHeader = request.headers['x-slack-signature'] as string;
+  async validateWebhook(request: Request): Promise<boolean> {
+    const timestampHeader = request.headers.get('x-slack-request-timestamp');
+    const signatureHeader = request.headers.get('x-slack-signature');
 
     // Require headers and signing secret
     if (!timestampHeader || !signatureHeader || !this.signingSecret) {
@@ -80,16 +80,12 @@ export class Slack implements BotService {
       return false;
     }
 
-    // In Express mode with middleware, signature validation is handled by middleware
-    // The middleware has already validated the signature before reaching here
-    // We return true to indicate the request structure is valid
     return true;
   }
 
-  async parseUpdate(request: ExpressRequest): Promise<BotUpdate> {
-    // Body is already parsed by middleware
-    const body = request.body as any;
-    const params = body || {};
+  async parseUpdate(request: Request): Promise<BotUpdate> {
+    const bodyText = await request.text();
+    const params = Object.fromEntries(new URLSearchParams(bodyText).entries());
 
     const action = (params.command?.replace('/', '') as BotUpdate['action']) || 'message';
 
@@ -103,33 +99,48 @@ export class Slack implements BotService {
   }
 
   /**
-   * Handle Slack webhook in Express mode
-   * This is called by the Express route handler
+   * Handle Slack webhook — returns a native Response
    */
-  async handleWebhook(request: ExpressRequest, response: ExpressResponse): Promise<void> {
-    // Body is already parsed by validation middleware
-    const body = request.body as any;
+  async handleWebhook(request: Request): Promise<Response> {
+    const bodyText = await request.text();
+    let body: Record<string, string>;
+
+    try {
+      // Try URL-encoded form data first (Slack's default)
+      body = Object.fromEntries(new URLSearchParams(bodyText).entries());
+    } catch {
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        return new Response('Invalid request body', { status: 400 });
+      }
+    }
+
     const action = body.command?.replace('/', '') || '';
 
     // Legacy responses for existing Slack integration
     if (action === 'subscribe') {
-      response.status(200).json({
-        response_type: 'ephemeral',
-        text: 'Oke rồi, mình sẽ thông báo cho bạn mỗi sáng! 😊',
-      });
-      return;
+      return new Response(
+        JSON.stringify({
+          response_type: 'ephemeral',
+          text: 'Oke rồi, mình sẽ thông báo cho bạn mỗi sáng! 😊',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
     }
 
     if (action === 'unsubscribe') {
-      response.status(200).json({
-        response_type: 'ephemeral',
-        text: 'Oke rồi, mình sẽ không thông báo cho bạn nữa! 😊',
-      });
-      return;
+      return new Response(
+        JSON.stringify({
+          response_type: 'ephemeral',
+          text: 'Oke rồi, mình sẽ không thông báo cho bạn nữa! 😊',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
     }
 
     // Default response
-    response.status(200).send('OK');
+    return new Response('OK', { status: 200 });
   }
 
   /**
@@ -137,7 +148,6 @@ export class Slack implements BotService {
    */
   formatToSlack(agentResponse: any): string {
     // Add Slack-specific formatting here if needed
-    // For now, return the text content as-is
     if (typeof agentResponse === 'string') {
       return agentResponse;
     }
