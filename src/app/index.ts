@@ -126,7 +126,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
 if (import.meta.main) {
   startApiMode({
     port: 3001,
-    host: 'localhost',
+    host: '0.0.0.0',
     apiPrefix: '/api',
   }).catch((error) => {
     const errorMsg = error instanceof Error ? error.message : String(error);

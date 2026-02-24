@@ -223,7 +223,7 @@ export function createServer(config: ApiServerConfig) {
       // ==============================================================
       // Health Check
       // ==============================================================
-      if (pathname === '/health' && method === 'GET') {
+      if (pathname === '/ ' && method === 'GET') {
         const healthData: any = {
           status: 'healthy',
           timestamp: new Date().toISOString(),
@@ -398,7 +398,7 @@ export function createServer(config: ApiServerConfig) {
 
   return {
     start(): void {
-      const host = config.host || 'localhost';
+      const host = config.host || '0.0.0.0';
       const port = config.port;
 
       Deno.serve(
