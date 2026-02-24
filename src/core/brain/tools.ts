@@ -8,9 +8,9 @@
  * > Give the model capabilities and let it reason.
  */
 
-import type { BotService, KeyboardButton } from '../../core/bot/bot-service.ts';
-import type { Slack } from '../../services/slack/slack.ts';
-import type { TelegramService } from '../../services/telegram/telegram.ts';
+import type { BotService, KeyboardButton } from '../bot/bot-service.ts';
+import type { Slack } from '../services/slack/slack.ts';
+import type { TelegramService } from '../services/telegram/telegram.ts';
 import { logger } from '../logger/logger.ts';
 import type { SendMessageParams, Tool, ToolPlatform } from './types.ts';
 import { SCHEMAS, validateToolParams } from './validation.ts';

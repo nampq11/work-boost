@@ -1,88 +1,85 @@
-import { v4 as uuidv4 } from 'jsr:@std/uuid';
-import { NextFunction, Request, Response } from 'express';
 import { logger } from '../../../core/logger/logger.ts';
 
-// Extend Express Request interface to include requestId
-declare global {
-  namespace Express {
-    interface Request {
-      requestId: string;
-      startTime: number;
-    }
-  }
+/**
+ * Request context for logging
+ */
+export interface RequestContext {
+  requestId: string;
+  startTime: number;
 }
 
 /**
- * Request ID middleware - adds unique request ID to each request
+ * Create a request context with a unique ID and start time
  */
-export function requestIdMiddleware(req: Request, res: Response, next: NextFunction): void {
-  req.requestId = crypto.randomUUID();
-  req.startTime = Date.now();
-
-  // Add request ID to response headers
-  res.setHeader('X-Request-ID', req.requestId);
-
-  next();
-}
-
-/**
- * Request logging middleware - logs incoming requests and response
- */
-export function requestLoggingMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const { method, url, ip, headers } = req;
-  const userAgent = headers['user-agent'] || 'Unknown';
-
-  // Log incoming request
-  logger.info(`API Response`, {
-    requestId: req.requestId,
-    method,
-    url,
-    ip,
-    userAgent,
-    contentType: headers['content-type'],
-  });
-
-  // Override res.end to log response
-  const originalEnd = res.end;
-  res.end = function (chunk?: any, encoding?: any): any {
-    const duration = Date.now() - req.startTime;
-    const { statusCode } = res;
-
-    // Log response
-    logger.info(`API response`, {
-      requestId: req.requestId,
-      method,
-      url,
-      statusCode,
-      duration: `${duration}ms`,
-      responseSize: res.get('content-length') || 'unknown',
-    });
-
-    // Call original end method
-    return originalEnd.call(this, chunk, encoding);
+export function createRequestContext(): RequestContext {
+  return {
+    requestId: crypto.randomUUID(),
+    startTime: Date.now(),
   };
-
-  next();
 }
 
 /**
- * Error logging middleware - logs errors with request context
+ * Log an incoming request
  */
-export function errorLoggingMiddleware(
-  err: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  logger.error('API Error', {
-    requestId: req.requestId,
+export function logRequest(req: Request, ctx: RequestContext): void {
+  const url = new URL(req.url);
+  logger.info(`API Request`, {
+    requestId: ctx.requestId,
     method: req.method,
-    url: req.url,
-    error: err.message,
-    stack: err.stack,
-    userAgent: req.headers['user-agent'],
-    statusCode: res.statusCode,
+    url: url.pathname,
+    userAgent: req.headers.get('user-agent') || 'Unknown',
+    contentType: req.headers.get('content-type'),
   });
+}
 
-  next(err);
+/**
+ * Log a response after handling
+ */
+export function logResponse(req: Request, response: Response, ctx: RequestContext): void {
+  const url = new URL(req.url);
+  const duration = Date.now() - ctx.startTime;
+
+  logger.info(`API Response`, {
+    requestId: ctx.requestId,
+    method: req.method,
+    url: url.pathname,
+    statusCode: response.status,
+    duration: `${duration}ms`,
+  });
+}
+
+/**
+ * Log an error during request handling
+ */
+export function logError(req: Request, error: unknown, ctx: RequestContext): void {
+  const url = new URL(req.url);
+  logger.error('API Error', {
+    requestId: ctx.requestId,
+    method: req.method,
+    url: url.pathname,
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    userAgent: req.headers.get('user-agent'),
+  });
+}
+
+/**
+ * Wrapper that adds logging, request ID, and error handling around a request handler
+ */
+export function withLogging(
+  handler: (req: Request, ctx: RequestContext) => Promise<Response>,
+): (req: Request) => Promise<Response> {
+  return async (req: Request): Promise<Response> => {
+    const ctx = createRequestContext();
+    logRequest(req, ctx);
+
+    try {
+      const response = await handler(req, ctx);
+      logResponse(req, response, ctx);
+      return response;
+    } catch (error) {
+      logError(req, error, ctx);
+      throw error;
+    }
+  };
 }

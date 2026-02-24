@@ -4,7 +4,7 @@
  * Prompts for parsing natural language debt entries into structured data.
  */
 
-import { DebtDirection, ParsedDebtEntry } from '../../../entity/debt.ts';
+import { DebtDirection, ParsedDebtEntry } from '../../entity/debt.ts';
 
 enum SchemaType {
   ARRAY = 'array',

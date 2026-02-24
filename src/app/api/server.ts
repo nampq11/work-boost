@@ -1,25 +1,27 @@
-import * as http from 'node:http';
-import cors from 'cors';
-import express, { Application, NextFunction, Request, Response } from 'express';
-import rateLimit from 'express-rate-limit';
-import helmet from 'helmet';
 import { logger } from '../../core/logger/logger.ts';
-import type { Agent, Database } from '../../services/_index.ts';
-import type { Slack } from '../../services/slack/slack.ts';
-import type { TelegramService } from '../../services/telegram/telegram.ts';
+import type { Agent, Database } from '../../core/services/_index.ts';
+import type { Slack } from '../../core/services/slack/slack.ts';
+import type { TelegramService } from '../../core/services/telegram/telegram.ts';
 import {
-  errorLoggingMiddleware,
-  requestIdMiddleware,
-  requestLoggingMiddleware,
+  type RequestContext,
+  createRequestContext,
+  logError,
+  logRequest,
+  logResponse,
 } from './middleware/logging.ts';
-import { slackWebhookValidation } from './middleware/slack-validation.ts';
+import { validateSlackWebhook } from './middleware/slack-validation.ts';
+import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
 import {
-  attachSlackDeps,
+  type SlackDeps,
   handleSlackMessages,
   handleSlackSubscribe,
   handleSlackUnsubscribe,
 } from './routes/slack.ts';
-import { ERROR_CODES, errorResponse } from './utils/response.ts';
+import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
+
+// ============================================================================
+// Configuration
+// ============================================================================
 
 export interface ApiServerConfig {
   port: number;
@@ -35,451 +37,384 @@ export interface ApiServerConfig {
   agent?: Agent;
 }
 
-export class ApiServer {
-  private app: Application;
-  private config: ApiServerConfig;
-  private apiPrefix: string;
+// ============================================================================
+// CORS Helpers
+// ============================================================================
 
-  // Bot services
-  private slack?: Slack;
-  private telegram?: TelegramService;
-  private db?: Database;
-  private agent?: Agent;
+function addCorsHeaders(request: Request, response: Response, corsOrigins?: string[]): Response {
+  const origin = request.headers.get('origin');
+  const headers = new Headers(response.headers);
 
-  // WebSocket components
-  private httpServer: http.Server;
-  private wss?: WebSocket;
-  //   private wsConnectionManager?: WebSocketConnectionManager;
-  //   private wsMessageRouter?: WebSocketMessage
-  //   private wsEventSubscriber?: WebSocketEventSubscriber;
-  //   private heartbeatInterval?: NodeJS.Timeout;
-
-  constructor(config: ApiServerConfig) {
-    this.config = config;
-
-    // Store bot services
-    this.slack = config.slack;
-    this.telegram = config.telegram;
-    this.db = config.db;
-    this.agent = config.agent;
-
-    this.apiPrefix = this.validateAndNormalizeApiPrefix(config.apiPrefix);
-
-    this.app = express();
-    this.setupMiddleware();
-    this.setupRoutes();
-    this.setupBotRoutes();
-    this.setupErrorHandling();
-
-    // Note: MCP setup is now handled in start() method to properly handle async operations
-  }
-
-  private validateAndNormalizeApiPrefix(prefix?: string): string {
-    if (prefix === undefined) return '/api';
-
-    if (prefix === '') return '';
-
-    if (typeof prefix !== 'string') {
-      throw new Error('API prefix must be a string');
-    }
-
-    if (prefix.startsWith('/') && prefix !== '/') {
-      prefix = prefix.slice(0, -1);
-    }
-
-    logger.info('[API Server] Using API prefix: ' + (prefix || '(None)'));
-    return prefix;
-  }
-
-  private buildAPIRouter(route: string): string {
-    if (!this.apiPrefix || this.apiPrefix === '') return route;
-
-    return this.apiPrefix + route;
-  }
-
-  private buildFullPath(req: Request, path: string): string {
-    const contextPath = (req as any).contextPath || '';
-    const fullPath = contextPath + this.buildAPIRouter(path);
-
-    logger.info('[API Server] Built full path:', {
-      path,
-      contextPath,
-      apiPrefix: this.apiPrefix,
-      fullPath,
-    });
-    return fullPath;
-  }
-
-  private setupMiddleware(): void {
-    // Enable trust proxy for reverse proxy support
-    this.app.set('trust proxy', true);
-
-    // Parse X-Forwarded-Prefix for context path support
-    this.app.use((req: Request, res: Response, next: NextFunction) => {
-      // Get prefix from X-Forwarded-Prefix header or enviroment variable
-      const forwardedPrefix = req.headers['x-forwarded-prefix'] as string;
-      const envPrefix = process.env.PROXY_CONTEXT_PATH;
-      const contextPath = forwardedPrefix || envPrefix || '';
-
-      // Store context path on request for later use
-      (req as any).contextPath = contextPath;
-
-      logger.debug('[API Server] Request context', {
-        originalUrl: req.originalUrl,
-        contextPath,
-        forwardedPrefix,
-        forwardedProto: req.headers['x-forwarded-proto'],
-        forwardedHost: req.headers['x-forwarded-host'],
-      });
-
-      next();
-    });
-
-    // Security middleware
-    this.app.use(
-      helmet({
-        contentSecurityPolicy: false, // Disable CSP for API
-        crossOriginEmbedderPolicy: false,
-      }),
-    );
-
-    // CORS configuration - enhanced for reverse proxy support
-    this.app.use(
-      cors({
-        origin: (origin: any, callback: any) => {
-          const allowedOrigins = this.config.corsOrigins || ['http://localhost:3000'];
-
-          // Allow requests with no origin (e.g., mobile apps, curl, Postman)
-          if (!origin) {
-            callback(null, true);
-            return;
-          }
-
-          // Check if origin is in allowed list
-          if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-            return;
-          }
-
-          // Additional lenient check for development environments only
-          // Allow localhost and 127.0.0.1 with any port in development
-          if (process.env.NODE_ENV !== 'production') {
-            const originUrl = new URL(origin);
-            if (
-              originUrl.hostname === 'localhost' ||
-              originUrl.hostname === '127.0.0.1' ||
-              originUrl.hostname === '::1'
-            ) {
-              callback(null, true);
-              return;
-            }
-          }
-
-          // Reject all other origins
-          callback(new Error(`Not allowed by CORS`));
-        },
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Session-ID'],
-        credentials: true,
-      }),
-    );
-
-    // Rate limiting
-    const limiter = rateLimit({
-      windowMs: this.config.rateLimitWindowMs || 15 * 60 * 1000, // 15 minutes
-      max: this.config.rateLimitMaxRequests || 100, // limit each IP to 100 requests per windowMs
-      message: {
-        sucess: false,
-        error: {
-          code: ERROR_CODES.RATE_LIMIT_EXCEEDED,
-          message: 'Too many request from this IP, please try again later.',
-        },
-      },
-      standardHeaders: true,
-      legacyHeaders: false,
-    });
-    // Apply rate limiting to API routes if prefix is configured
-    if (this.apiPrefix) {
-      this.app.use(this.apiPrefix, limiter);
-    }
-
-    // Body parsing middleware
-    this.app.use(express.json({ limit: '10mb' })); // support for image data
-    this.app.use(express.urlencoded({ extended: true }));
-
-    // Custom middleware
-    this.app.use(requestIdMiddleware);
-    this.app.use(requestLoggingMiddleware);
-  }
-
-  private setupRoutes(): void {
-    // Health check endpoint
-    this.app.get('/health', async (_req: Request, res: Response) => {
-      const healthData: any = {
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        version: process.env.VERSION || 'unknown',
-      };
-
-      // Check database health if available
-      if (this.db) {
-        try {
-          // Simple health check - try to get a value
-          await this.db.kv?.get(['health']);
-          healthData.database = 'connected';
-        } catch {
-          healthData.database = 'error';
+  // Check allowed origins
+  let allowOrigin = '*';
+  if (origin) {
+    const allowed = corsOrigins || ['http://localhost:3000'];
+    if (allowed.includes(origin)) {
+      allowOrigin = origin;
+    } else {
+      // Allow localhost in development
+      try {
+        const originUrl = new URL(origin);
+        if (
+          originUrl.hostname === 'localhost' ||
+          originUrl.hostname === '127.0.0.1' ||
+          originUrl.hostname === '::1'
+        ) {
+          allowOrigin = origin;
         }
+      } catch {
+        // Invalid origin URL, use default
+      }
+    }
+  }
+
+  headers.set('Access-Control-Allow-Origin', allowOrigin);
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Request-ID, X-Session-ID',
+  );
+  headers.set('Access-Control-Allow-Credentials', 'true');
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function handleOptionsRequest(request: Request, corsOrigins?: string[]): Response | null {
+  if (request.method === 'OPTIONS') {
+    const response = new Response(null, { status: 204 });
+    return addCorsHeaders(request, response, corsOrigins);
+  }
+  return null;
+}
+
+// ============================================================================
+// Security Headers (replaces helmet)
+// ============================================================================
+
+function addSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('X-XSS-Protection', '0');
+  headers.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  headers.set('X-Download-Options', 'noopen');
+  headers.set('X-DNS-Prefetch-Control', 'off');
+  headers.set('X-Permitted-Cross-Domain-Policies', 'none');
+  headers.set('Referrer-Policy', 'no-referrer');
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+// ============================================================================
+// Rate Limiting (in-memory token bucket per IP)
+// ============================================================================
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+function createRateLimiter(windowMs: number, maxRequests: number) {
+  const entries = new Map<string, RateLimitEntry>();
+
+  // Periodic cleanup of expired entries
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of entries) {
+      if (now > entry.resetAt) {
+        entries.delete(key);
+      }
+    }
+  }, windowMs);
+
+  return function checkRateLimit(request: Request): Response | null {
+    // Extract client IP from headers or connection info
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      'unknown';
+
+    const now = Date.now();
+    let entry = entries.get(ip);
+
+    if (!entry || now > entry.resetAt) {
+      entry = { count: 0, resetAt: now + windowMs };
+      entries.set(ip, entry);
+    }
+
+    entry.count++;
+
+    if (entry.count > maxRequests) {
+      return errorResponse(
+        ERROR_CODES.RATE_LIMIT_EXCEEDED,
+        'Too many requests from this IP, please try again later.',
+        429,
+      );
+    }
+
+    return null;
+  };
+}
+
+// ============================================================================
+// Server
+// ============================================================================
+
+function validateAndNormalizeApiPrefix(prefix?: string): string {
+  if (prefix === undefined) return '/api';
+  if (prefix === '') return '';
+  if (typeof prefix !== 'string') throw new Error('API prefix must be a string');
+
+  // Remove trailing slash
+  if (prefix.endsWith('/') && prefix !== '/') {
+    prefix = prefix.slice(0, -1);
+  }
+
+  logger.info('[API Server] Using API prefix: ' + (prefix || '(None)'));
+  return prefix;
+}
+
+export function createServer(config: ApiServerConfig) {
+  const apiPrefix = validateAndNormalizeApiPrefix(config.apiPrefix);
+  const corsOrigins = config.corsOrigins;
+  const slackSigningSecret = Deno.env.get('SLACK_SIGNING_SECRET') || '';
+
+  // Rate limiter for API routes
+  const checkRateLimit = createRateLimiter(
+    config.rateLimitWindowMs || 15 * 60 * 1000,
+    config.rateLimitMaxRequests || 100,
+  );
+
+  // Build Slack deps if available
+  const slackDeps: SlackDeps | undefined =
+    config.db && config.agent && config.slack
+      ? { db: config.db, agent: config.agent, slack: config.slack }
+      : undefined;
+
+  function buildApiPath(route: string): string {
+    if (!apiPrefix || apiPrefix === '') return route;
+    return apiPrefix + route;
+  }
+
+  async function handleRequest(req: Request): Promise<Response> {
+    const ctx: RequestContext = createRequestContext();
+    logRequest(req, ctx);
+
+    try {
+      // Handle CORS preflight
+      const corsResponse = handleOptionsRequest(req, corsOrigins);
+      if (corsResponse) return corsResponse;
+
+      const url = new URL(req.url);
+      const pathname = url.pathname;
+      const method = req.method;
+
+      logger.debug(`[${ctx.requestId}] ${method} ${pathname}`);
+
+      // ==============================================================
+      // Health Check
+      // ==============================================================
+      if (pathname === '/health' && method === 'GET') {
+        const healthData: any = {
+          status: 'healthy',
+          timestamp: new Date().toISOString(),
+          version: Deno.env.get('VERSION') || 'unknown',
+        };
+
+        // Check database health if available
+        if (config.db) {
+          try {
+            await config.db.kv?.get(['health']);
+            healthData.database = 'connected';
+          } catch {
+            healthData.database = 'error';
+          }
+        }
+
+        const response = successResponse(healthData);
+        logResponse(req, response, ctx);
+        return addSecurityHeaders(response);
       }
 
-      // TODO: Add Websocket health if enabled
+      // ==============================================================
+      // Chrome DevTools compatibility
+      // ==============================================================
+      if (pathname === '/.well-known/appspecific/com.chrome.devtools.json' && method === 'GET') {
+        return new Response(null, { status: 204 });
+      }
 
-      res.json(healthData);
-    });
+      // ==============================================================
+      // Test endpoint
+      // ==============================================================
+      if (pathname === '/test' && method === 'GET') {
+        return new Response('OK', { status: 200 });
+      }
 
-    // TODO: WebSocket stats endpoint
-
-    // API routes
-
-    // TODO: Legacy endpoint for MCP server connection
-
-    // Chrome DevTools compatibility endpoint (prevents 404 errors in console)
-    this.app.get(
-      '/.well-known/appspecific/com.chrome.devtools.json',
-      (req: Request, res: Response) => {
-        res.status(204).end(); // No content - indicates no DevTools integration available
-      },
-    );
-
-    // Global reset endpoint
-    // this.app.post(this.buildAPIRouter('/reset'), async (req: Request, res: Response) => {
-    //     try {
-    //         const { sessionId } = req.body;
-    //
-    //         logger.info('Processing global reset request', {
-    //             requestId: req.requestId,
-    //             sessionId: sessionId || 'all',
-    //         });
-    //
-    //         if (sessionId) {
-    //             // Reset specific session
-    //             const success = await this.agent.removeSession(sessionId);
-    //             if (!success) {
-    //                 return errorResponse(
-    //                     res,
-    //                     ERROR_CODES.SESSION_NOT_FOUND,
-    //                     `Session ${sessionId} not found`,
-    //                     404,
-    //                     undefined,
-    //                     req.requestId
-    //                 );
-    //             }
-    //         } else {
-    //             // Reset all sessions
-    //             const sessionIds = await this.agent.listSessions();
-    //             for (const id of sessionIds) {
-    //                 await this.agent.removeSession(id);
-    //             }
-    //         }
-    //
-    //         successResponse(
-    //             res,
-    //             {
-    //                 message: sessionId ? `Session ${sessionId} reset`: 'All sessions reset',
-    //                 timestamp: new Date().toISOString(),
-    //             },
-    //             200,
-    //             req.requestId
-    //         );
-    //     } catch (error) {
-    //         const errorMsg = error instanceof Error ? error.message : String(error);
-    //         logger.error('Global reset failed', {
-    //             requestId: req.requestId,
-    //             error: errorMsg,
-    //         });
-    //
-    //         errorResponse(
-    //             res,
-    //             ERROR_CODES.INTERNAL_ERROR,
-    //             `Reset failed: ${errorMsg}`,
-    //             500,
-    //             process.env.NODE_ENV === 'development' ? error : undefined,
-    //             req.requestId
-    //         );
-    //     }
-    // });
-  }
-
-  private setupBotRoutes(): void {
-    if (!this.slack || !this.telegram) {
-      logger.warn('Bot services not configured, skipping bot routes');
-      return;
-    }
-
-    logger.info('Bot routes registered', {
-      slackRoutes: !!this.slack,
-      telegramRoutes: !!this.telegram,
-    });
-
-    // Test endpoint
-    this.app.get('/test', (req: Request, res: Response) => {
-      logger.info('Handling test request', { requestId: (req as any).requestId });
-      res.status(200).send('OK');
-    });
-
-    // Attach Slack dependencies to routes
-    const slackDepsMiddleware = attachSlackDeps({
-      db: this.db!,
-      agent: this.agent!,
-      slack: this.slack!,
-    });
-
-    // Get signing secret for validation
-    const slackSigningSecret = process.env.SLACK_SIGNING_SECRET || '';
-
-    // Telegram webhook - use native Express mode
-    if (this.telegram) {
-      this.app.post('/telegram/webhook', async (req: any, res: any) => {
-        // Manual validation before webhookCallback
-        if (!(await this.telegram.validateWebhook(req))) {
-          return res.status(401).send('Unauthorized');
+      // ==============================================================
+      // API Routes (with rate limiting)
+      // ==============================================================
+      if (pathname.startsWith(buildApiPath('/message'))) {
+        // Apply rate limiting to API routes
+        const rateLimitResponse = checkRateLimit(req);
+        if (rateLimitResponse) {
+          logResponse(req, rateLimitResponse, ctx);
+          return rateLimitResponse;
         }
-        // grammY Express mode handles Express (req, res) directly
-        return await this.telegram.handleWebhookExpress(req, res);
-      });
-    }
 
-    // Slack legacy routes with validation middleware
-    // IMPORTANT: express.raw() MUST be applied BEFORE validation middleware
-    const expressRaw = () => ({ type: 'application/json', limit: '1mb' });
+        if (!config.agent) {
+          const response = errorResponse(ERROR_CODES.INTERNAL_ERROR, 'Agent not configured', 500);
+          logResponse(req, response, ctx);
+          return addCorsHeaders(req, addSecurityHeaders(response), corsOrigins);
+        }
 
-    if (this.slack) {
-      // /subscribe - Subscribe user to daily summaries
-      this.app.post(
-        '/subscribe',
-        expressRaw,
-        slackWebhookValidation(slackSigningSecret),
-        slackDepsMiddleware,
-        handleSlackSubscribe,
-      );
+        let response: Response;
 
-      // /unsubscribe - Unsubscribe user from daily summaries
-      this.app.post(
-        '/unsubscribe',
-        expressRaw,
-        slackWebhookValidation(slackSigningSecret),
-        slackDepsMiddleware,
-        handleSlackUnsubscribe,
-      );
+        if (pathname === buildApiPath('/message') && method === 'POST') {
+          response = await handleMessage(req, config.agent, ctx.requestId);
+        } else if (pathname === buildApiPath('/message/sync') && method === 'POST') {
+          response = await handleMessageSync(req, config.agent, ctx.requestId);
+        } else if (pathname === buildApiPath('/message/reset') && method === 'POST') {
+          response = await handleMessageReset(req, config.agent, ctx.requestId);
+        } else {
+          response = errorResponse(
+            ERROR_CODES.NOT_FOUND,
+            `Route ${method} ${pathname} not found`,
+            404,
+            undefined,
+            ctx.requestId,
+          );
+        }
 
-      // /messages - Record daily work message and get AI response
-      this.app.post(
-        '/messages',
-        expressRaw,
-        slackWebhookValidation(slackSigningSecret),
-        slackDepsMiddleware,
-        handleSlackMessages,
-      );
-    }
-  }
+        logResponse(req, response, ctx);
+        return addCorsHeaders(req, addSecurityHeaders(response), corsOrigins);
+      }
 
-  private setup404Handler(): void {
-    // 404 handler for unknown routes - must me registered AFTER all other routes
-    this.app.use((req: Request, res: Response) => {
-      errorResponse(
-        res,
+      // ==============================================================
+      // Slack Bot Routes (with webhook validation)
+      // ==============================================================
+      if (
+        slackDeps &&
+        (pathname === '/subscribe' || pathname === '/unsubscribe' || pathname === '/messages')
+      ) {
+        if (method !== 'POST') {
+          const response = errorResponse(
+            ERROR_CODES.NOT_FOUND,
+            `Method ${method} not allowed`,
+            405,
+          );
+          logResponse(req, response, ctx);
+          return response;
+        }
+
+        // Validate Slack webhook signature
+        const { error: validationError, bodyString } = await validateSlackWebhook(
+          req,
+          slackSigningSecret,
+          ctx.requestId,
+        );
+        if (validationError) {
+          logResponse(req, validationError, ctx);
+          return validationError;
+        }
+
+        // Parse the validated body
+        let parsedBody: Record<string, string>;
+        try {
+          // Slack sends URL-encoded form data
+          const params = new URLSearchParams(bodyString);
+          parsedBody = Object.fromEntries(params.entries());
+        } catch {
+          try {
+            parsedBody = JSON.parse(bodyString);
+          } catch {
+            const response = new Response('Invalid request body', { status: 400 });
+            logResponse(req, response, ctx);
+            return response;
+          }
+        }
+
+        let response: Response;
+        if (pathname === '/subscribe') {
+          response = await handleSlackSubscribe(parsedBody, slackDeps);
+        } else if (pathname === '/unsubscribe') {
+          response = await handleSlackUnsubscribe(parsedBody, slackDeps);
+        } else {
+          response = await handleSlackMessages(parsedBody, slackDeps);
+        }
+
+        logResponse(req, response, ctx);
+        return response;
+      }
+
+      // ==============================================================
+      // Telegram Webhook
+      // ==============================================================
+      if (pathname.startsWith('/telegram') && config.telegram) {
+        if (!(await config.telegram.validateWebhook(req))) {
+          const response = new Response('Unauthorized', { status: 401 });
+          logResponse(req, response, ctx);
+          return response;
+        }
+        const response = await config.telegram.handleWebhook(req);
+        logResponse(req, response, ctx);
+        return response;
+      }
+
+      // ==============================================================
+      // 404 Not Found
+      // ==============================================================
+      const response = errorResponse(
         ERROR_CODES.NOT_FOUND,
-        `Route ${req.method} ${req.originalUrl} not found`,
+        `Route ${method} ${pathname} not found`,
         404,
         undefined,
-        (req as any).requestId,
+        ctx.requestId,
       );
-    });
-  }
+      logResponse(req, response, ctx);
+      return addSecurityHeaders(response);
+    } catch (error) {
+      logError(req, error, ctx);
 
-  private setupErrorHandling(): void {
-    // Error logging middleware
-    this.app.use(errorLoggingMiddleware);
-
-    // Global error handler
-    this.app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-      // If response already sent, delegate to default error handler
-      if (res.headersSent) {
-        return next(err);
-      }
-
-      // Determine error type and status code
-      let statusCode = 500;
-      let errorCode: string = ERROR_CODES.INTERNAL_ERROR;
-
-      if (err.name === 'ValidationError') {
-        statusCode = 400;
-        errorCode = ERROR_CODES.VALIDATION_ERROR;
-      } else if (err.name === 'UnauthorizedError') {
-        statusCode = 401;
-        errorCode = ERROR_CODES.UNAUTHORIZED;
-      }
-
-      errorResponse(
-        res,
-        errorCode,
-        err.message || 'An unexpected error occurred',
-        statusCode,
-        process.env.NODE_ENV === 'development' ? err.stack : undefined,
-        (req as any).requestId,
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const response = errorResponse(
+        ERROR_CODES.INTERNAL_ERROR,
+        `An unexpected error occurred: ${errorMsg}`,
+        500,
+        undefined,
+        ctx.requestId,
       );
-    });
+      return addSecurityHeaders(response);
+    }
   }
 
-  public async start(): Promise<void> {
-    // Set up 404 handler AFTER all routes are registered
-    this.setup404Handler();
+  return {
+    start(): void {
+      const host = config.host || 'localhost';
+      const port = config.port;
 
-    return new Promise((resolve, reject) => {
-      try {
-        // Create HTTP server from Express app
-        this.httpServer = http.createServer(this.app);
-
-        this.httpServer.listen(this.config.port, this.config.host || 'localhost', () => {
-          logger.info(
-            `API Server started on ${this.config.host || 'localhost'}:${this.config.port}${this.apiPrefix}`,
-            undefined,
-            'green',
-          );
-          resolve();
-        });
-
-        this.httpServer.on('error', (err) => {
-          const errorMsg = err.message || err.toString() || 'Unknown error';
-          logger.error('Failed to start API server:', { error: errorMsg });
-          logger.error('Error details: ', { error: err });
-          reject(err);
-        });
-
-        // Graceful shutdown
-        process.on('SIGTERM', () => {
-          logger.info('SIGTERM received, shutting down API server gracefully');
-          this.httpServer?.close(() => {
-            logger.info('API server stopped');
-            process.exit(0);
-          });
-        });
-
-        process.on('SIGINT', () => {
-          logger.info('SIGINT received, shutting down API server gracefully');
-          this.httpServer?.close(() => {
-            logger.info('API server stopped');
-            process.exit(0);
-          });
-        });
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  public getApp(): Application {
-    return this.app;
-  }
+      Deno.serve(
+        {
+          hostname: host,
+          port,
+          onListen({ hostname, port }) {
+            logger.info(
+              `API Server started on ${hostname}:${port}${apiPrefix}`,
+              undefined,
+              'green',
+            );
+          },
+        },
+        handleRequest,
+      );
+    },
+  };
 }

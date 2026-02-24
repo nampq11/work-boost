@@ -7,8 +7,8 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import type { DailyWorkReport } from '../../entity/agent.ts';
-import type { ParsedDebtEntry } from '../../entity/debt.ts';
+import type { DailyWorkReport } from '../entity/agent.ts';
+import type { ParsedDebtEntry } from '../entity/debt.ts';
 import { logger } from '../logger/logger.ts';
 import { HUMAN_PROMPT, SYSTEM_PROMPT, dailyWorkSchema } from './prompts/daily-work-prompt.ts';
 import {

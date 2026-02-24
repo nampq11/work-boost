@@ -1,4 +1,4 @@
-import { Slack } from '../src/services/slack/slack.ts';
+import { Slack } from '../src/core/services/slack/slack.ts';
 
 async function test_slack() {
   const slack = new Slack();

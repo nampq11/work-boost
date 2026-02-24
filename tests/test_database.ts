@@ -1,5 +1,5 @@
-import { Message } from '../src/entity/task.ts';
-import { Database } from '../src/services/database/database.ts';
+import { Message } from '../src/core/entity/task.ts';
+import { Database } from '../src/core/services/database/database.ts';
 
 async function test_database() {
   const db = await Database.init();

@@ -1,7 +1,62 @@
-import { Request, Response, Router } from 'express';
 import { logger } from '../../../core/logger/logger.ts';
-import { validateMessageRequest } from '../middleware/validation.ts';
 import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
+import { isValidSessionId, sanitizeInput } from '../utils/security.ts';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface MessageRequestBody {
+  message: string;
+  sessionId?: string;
+  images?: string[];
+  imageData?: string;
+  fileData?: unknown;
+}
+
+// ============================================================================
+// Validation
+// ============================================================================
+
+function validateMessageRequest(body: unknown): {
+  valid: boolean;
+  error?: string;
+  data?: MessageRequestBody;
+} {
+  if (!body || typeof body !== 'object') {
+    return { valid: false, error: 'Request body is required' };
+  }
+
+  const data = body as MessageRequestBody;
+
+  if (!data.message || typeof data.message !== 'string') {
+    return { valid: false, error: 'Message is required and must be a string' };
+  }
+
+  if (data.message.length < 1 || data.message.length > 5000) {
+    return {
+      valid: false,
+      error: 'Message must be between 1 and 5000 characters',
+    };
+  }
+
+  if (data.sessionId && !isValidSessionId(data.sessionId)) {
+    return { valid: false, error: 'Invalid session ID format' };
+  }
+
+  if (data.images && !Array.isArray(data.images)) {
+    return { valid: false, error: 'Images must be an array' };
+  }
+
+  // Sanitize message input
+  data.message = sanitizeInput(data.message);
+
+  return { valid: true, data };
+}
+
+// ============================================================================
+// Route Handlers
+// ============================================================================
 
 /**
  * Process message asynchronously without blocking the response
@@ -52,239 +107,230 @@ async function processMessageAsync(
   }
 }
 
-export function createMessageRouters(agent: any): Router {
-  const router = Router();
+/**
+ * POST /message — Process a message asynchronously, returns 202 immediately
+ */
+export async function handleMessage(
+  req: Request,
+  agent: any,
+  requestId: string,
+): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const validation = validateMessageRequest(body);
 
-  /**
-   * POST /api/message
-   * Process a message asynchronously and return 202 status immediately
-   */
-  router.post('/', validateMessageRequest, async (req: Request, res: Response) => {
-    try {
-      const { message, sessionId, images, imageData, fileData, streaming = true } = req.body;
-      logger.info('Processing async message request', {
-        requestId: req.requestId,
-        sessionId: sessionId,
-        hasImages: Boolean(images && images.length > 0),
-        hasImageData: Boolean(imageData),
-        hasFileData: Boolean(fileData),
-        messageLength: message.length,
-        streaming,
-      });
-
-      // Return 202 immediately for async processsing
-      successResponse(
-        res,
-        {
-          message: 'Message accepted for processing',
-          sessionId: sessionId || agent.getCurrentSessionId(),
-          messageId: req.requestId,
-          timestamp: new Date().toISOString(),
-        },
-        202,
-        req.requestId,
-      );
-
-      // Process message asynchronously (no await)
-      processMessageAsync(
-        agent,
-        message,
-        {
-          sessionId,
-          images,
-          imageData,
-          fileData,
-        },
-        req.requestId,
-      );
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error('Async message processing setup failed', {
-        requestId: req.requestId,
-        error: errorMsg,
-      });
-
-      errorResponse(
-        res,
-        ERROR_CODES.INTERNAL_ERROR,
-        `Message processing setup failed: ${errorMsg}`,
-        500,
-        process.env.NODE_ENV === 'development' ? error : undefined,
-        req.requestId,
+    if (!validation.valid) {
+      return errorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        validation.error || 'Validation failed',
+        400,
+        undefined,
+        requestId,
       );
     }
-  });
 
-  /**
-   * POST /api/message-async
-   * Process a message synchronously and return the full response
-   */
-  router.post('/sync', validateMessageRequest, async (req: Request, res: Response) => {
-    try {
-      const { message, sessionId, images } = req.body;
+    const { message, sessionId, images, imageData, fileData } = validation.data!;
 
-      logger.info('Processing message request', {
-        requestId: req.requestId,
-        sessionId: sessionId || 'default',
-        hasImages: Boolean(images && images.length > 0),
-        messageLength: message.length,
-      });
+    logger.info('Processing async message request', {
+      requestId,
+      sessionId,
+      hasImages: Boolean(images && images.length > 0),
+      hasImageData: Boolean(imageData),
+      hasFileData: Boolean(fileData),
+      messageLength: message.length,
+    });
 
-      // If sessionId is provided, ensure that session is loaded
-      if (sessionId) {
+    // Return 202 immediately for async processing
+    const response = successResponse(
+      {
+        message: 'Message accepted for processing',
+        sessionId: sessionId || agent.getCurrentSessionId(),
+        messageId: requestId,
+        timestamp: new Date().toISOString(),
+      },
+      202,
+      requestId,
+    );
+
+    // Process message asynchronously (don't await)
+    processMessageAsync(
+      agent,
+      message,
+      { sessionId, images, imageData, fileData },
+      requestId,
+    ).catch((error) => {
+      logger.error('Async message processing failed', { requestId, error });
+    });
+
+    return response;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('Async message processing setup failed', { requestId, error: errorMsg });
+    return errorResponse(
+      ERROR_CODES.INTERNAL_ERROR,
+      `Message processing setup failed: ${errorMsg}`,
+      500,
+      undefined,
+      requestId,
+    );
+  }
+}
+
+/**
+ * POST /message/sync — Process a message synchronously and return the full response
+ */
+export async function handleMessageSync(
+  req: Request,
+  agent: any,
+  requestId: string,
+): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const validation = validateMessageRequest(body);
+
+    if (!validation.valid) {
+      return errorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        validation.error || 'Validation failed',
+        400,
+        undefined,
+        requestId,
+      );
+    }
+
+    const { message, sessionId, images } = validation.data!;
+
+    logger.info('Processing sync message request', {
+      requestId,
+      sessionId: sessionId || 'default',
+      hasImages: Boolean(images && images.length > 0),
+      messageLength: message.length,
+    });
+
+    // If sessionId is provided, ensure that session is loaded
+    if (sessionId) {
+      try {
+        await agent.loadSession(sessionId);
+      } catch {
         try {
-          const session = await agent.loadSession(sessionId);
-          logger.info(`Loaded session: ${session.sessionId}`, { requestId: req.requestId });
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          logger.warn(`Session ${sessionId} not found, will create new one: ${errorMsg}`, {
-            requestId: req.requestId,
-          });
-
-          // create new session with the provide id
-          try {
-            const newSession = await agent.createSession(sessionId);
-            logger.info(`Created new session: ${newSession.sessionId}`, {
-              requestId: req.requestId,
-            });
-          } catch (createError) {
-            errorResponse(
-              res,
-              ERROR_CODES.SESSION_NOT_FOUND,
-              `Failed to create session: ${createError instanceof Error ? createError.message : String(createError)}`,
-              400,
-              undefined,
-              req.requestId,
-            );
-            return;
-          }
+          await agent.createSession(sessionId);
+        } catch (createError) {
+          return errorResponse(
+            ERROR_CODES.SESSION_NOT_FOUND,
+            `Failed to create session: ${createError instanceof Error ? createError.message : String(createError)}`,
+            400,
+            undefined,
+            requestId,
+          );
         }
       }
+    }
 
-      // Process the message through the agent
-      // Convert images array into single image if provided
-      let imageData: { image: string; mimeType: string } | undefined;
-      if (images && images.length > 0) {
-        // Fow now, use the first image (could be enhanced to handle multiple images)
-        imageData = {
-          image: images[0],
-          mimeType: 'image/jpeg',
-        };
+    // Convert images array into single image if provided
+    let imageData: { image: string; mimeType: string } | undefined;
+    if (images && images.length > 0) {
+      imageData = {
+        image: images[0],
+        mimeType: 'image/jpeg',
+      };
+    }
+
+    const { response, backgroundOperations } = await agent.run(message, imageData, sessionId);
+    await backgroundOperations;
+
+    return successResponse(
+      {
+        response,
+        sessionId: agent.getCurrentSessionId(),
+        timestamp: new Date().toISOString(),
+      },
+      200,
+      requestId,
+    );
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('Message processing failed', { requestId, error: errorMsg });
+    return errorResponse(
+      ERROR_CODES.INTERNAL_ERROR,
+      `Message processing failed: ${errorMsg}`,
+      500,
+      undefined,
+      requestId,
+    );
+  }
+}
+
+/**
+ * POST /message/reset — Reset conversation state for the current or specific session
+ */
+export async function handleMessageReset(
+  req: Request,
+  agent: any,
+  requestId: string,
+): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const { sessionId } = body as { sessionId?: string };
+
+    logger.info('Processing reset request', {
+      requestId,
+      sessionId: sessionId || 'current',
+    });
+
+    if (sessionId) {
+      // Reset specific session
+      const success = await agent.removeSession(sessionId);
+      if (!success) {
+        return errorResponse(
+          ERROR_CODES.SESSION_NOT_FOUND,
+          `Session ${sessionId} not found`,
+          404,
+          undefined,
+          requestId,
+        );
       }
 
-      const { response, backgroundOperations } = await agent.run(message, imageData, sessionId);
-      // In API mode, always wait for background operations to complete before returning the response
-      await backgroundOperations;
+      // Create new session with the same id
+      const newSession = await agent.createSession(sessionId);
 
-      successResponse(
-        res,
+      return successResponse(
         {
-          response,
-          sessionId: agent.getCurrentSessionId(),
+          message: `Session ${sessionId} has been reset`,
+          sessionId: newSession.id,
+        },
+        200,
+        requestId,
+      );
+    } else {
+      // Reset current session
+      const currentSessionId = agent.getCurrentSessionId();
+
+      if (currentSessionId) {
+        await agent.removeSession(currentSessionId);
+      }
+
+      // Create a new session
+      const newSession = await agent.createSession();
+
+      return successResponse(
+        {
+          message: 'Current session has been reset',
+          sessionId: newSession.id,
           timestamp: new Date().toISOString(),
         },
         200,
-        req.requestId,
-      );
-    } catch (error) {
-      const errorMsq = error instanceof Error ? error.message : String(error);
-      logger.error('Message processing failed', {
-        requestId: req.requestId,
-        error: errorMsq,
-        stack: process.env.NODE_ENV === 'development' ? error : undefined,
-      });
-
-      errorResponse(
-        res,
-        ERROR_CODES.INTERNAL_ERROR,
-        `Message processing failed: ${errorMsq}`,
-        500,
-        process.env.NODE_ENV === 'development' ? error : undefined,
-        req.requestId,
+        requestId,
       );
     }
-  });
-
-  /**
-   * POST /api/message/reset
-   * Reset conversation state for the current or specific session
-   */
-  router.post('/reset', async (req: Request, res: Response) => {
-    try {
-      const { sessionId } = req.body;
-
-      logger.info('Processing reset request', {
-        requestId: req.requestId,
-        sessionId: sessionId || 'current',
-      });
-
-      if (sessionId) {
-        // Reset specific session
-        const success = await agent.removeSession(sessionId);
-        if (!success) {
-          errorResponse(
-            res,
-            ERROR_CODES.SESSION_NOT_FOUND,
-            `Session ${sessionId} not found`,
-            404,
-            undefined,
-            req.requestId,
-          );
-          return;
-        }
-
-        // Create new session with the same id
-        const newSession = await agent.createSession(sessionId);
-
-        successResponse(
-          res,
-          {
-            message: `Session ${sessionId} has been reset`,
-            sessionId: newSession.id,
-          },
-          200,
-          req.requestId,
-        );
-      } else {
-        // Reset current session
-        const currentSessionId = agent.getCurrentSessionId();
-
-        if (currentSessionId) {
-          await agent.removeSession(currentSessionId);
-        }
-
-        // Create a new session
-        const newSession = await agent.createSession();
-
-        successResponse(
-          res,
-          {
-            message: 'Current session has been reset',
-            sessionId: newSession.id,
-            timestamp: new Date().toISOString(),
-          },
-          200,
-          req.requestId,
-        );
-      }
-    } catch (error) {
-      const errorMsq = error instanceof Error ? error.message : String(error);
-      logger.error('Reset operation failed', {
-        requestId: req.requestId,
-        error: errorMsq,
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-
-      errorResponse(
-        res,
-        ERROR_CODES.INTERNAL_ERROR,
-        `Reset operation failed: ${errorMsq}`,
-        500,
-        process.env.NODE_ENV === 'development' ? error : undefined,
-        req.requestId,
-      );
-    }
-  });
-
-  return router;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('Reset operation failed', { requestId, error: errorMsg });
+    return errorResponse(
+      ERROR_CODES.INTERNAL_ERROR,
+      `Reset operation failed: ${errorMsg}`,
+      500,
+      undefined,
+      requestId,
+    );
+  }
 }

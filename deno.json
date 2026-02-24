@@ -1,7 +1,8 @@
 {
   "tasks": {
     "dev": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron --watch src/app/index.ts",
-    "test": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron $1",
+    "cli": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/cli/index.ts",
+    "test": "deno test --allow-all --unstable-kv --unstable-cron",
     "start": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/api/server.ts",
     "start-api": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/index.ts",
     "lint": "deno run -A npm:oxlint",
@@ -20,19 +21,14 @@
     "@std/uuid": "jsr:@std/uuid@^1.0.9",
     "@biomejs/biome": "npm:@biomejs/biome@^1.9.4",
     "oxlint": "npm:oxlint@^0.11.0",
-    "@types/express": "npm:@types/express@^4.17.25",
     "boxen": "npm:boxen@^8.0.1",
     "chalk": "npm:chalk@^5.6.2",
-    "cors": "npm:cors@^2.8.5",
-    "express": "npm:express@^5.1.0",
-    "express-rate-limit": "npm:express-rate-limit@^8.2.1",
-    "express-validator": "npm:express-validator@^7.3.1",
-    "helmet": "npm:helmet@^8.1.0",
     "winston": "npm:winston@^3.18.3",
     "zod": "npm:zod@^4.1.12",
     "grammy": "npm:grammy@^1.21.1",
     "@grammyjs/auto-retry": "npm:@grammyjs/auto-retry@^2.0.0",
-    "@grammyjs/ratelimiter": "npm:@grammyjs/ratelimiter@^1.2.1"
+    "@grammyjs/ratelimiter": "npm:@grammyjs/ratelimiter@^1.2.1",
+    "commander": "npm:commander@^12.1.0"
   },
   "nodeModulesDir": "auto",
   "fmt": {

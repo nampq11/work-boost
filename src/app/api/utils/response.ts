@@ -1,5 +1,3 @@
-import { Response } from 'express';
-
 // Standard API response structure
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -17,11 +15,10 @@ export interface ApiResponse<T = any> {
 
 // Success response helper
 export function successResponse<T>(
-  res: Response,
   data: T,
   statusCode: number = 200,
   requestId?: string,
-): void {
+): Response {
   const response: ApiResponse<T> = {
     success: true,
     data,
@@ -31,19 +28,24 @@ export function successResponse<T>(
     },
   };
 
-  res.status(statusCode).json(response);
+  return new Response(JSON.stringify(response), {
+    status: statusCode,
+    headers: {
+      'content-type': 'application/json',
+      ...(requestId && { 'X-Request-ID': requestId }),
+    },
+  });
 }
 
-// CRITICAL FIX: Enhanced error response helper to prevent [object Object] display
+// Enhanced error response helper to prevent [object Object] display
 export function errorResponse(
-  res: Response,
   code: string,
   message: string,
   statusCode: number = 500,
   details?: any,
   requestId?: string,
-): void {
-  // CRITICAL FIX: Sanitize error message and details to ensure they're serializable
+): Response {
+  // Sanitize error message and details to ensure they're serializable
   let sanitizedMessage = message;
   let sanitizedDetails = details;
 
@@ -67,10 +69,8 @@ export function errorResponse(
           ...(details.stack && { stack: details.stack.split('\n').slice(0, 3).join('\n') }),
         };
       } else if (typeof details === 'object') {
-        // Safely stringify the object, handling circular references
         sanitizedDetails = JSON.parse(
-          JSON.stringify(details, (key, value) => {
-            // Handle circular references and functions
+          JSON.stringify(details, (_key, value) => {
             if (typeof value === 'function') return '[Function]';
             if (typeof value === 'symbol') return '[Symbol]';
             if (value instanceof Error) return { message: value.message, name: value.name };
@@ -81,7 +81,6 @@ export function errorResponse(
         sanitizedDetails = String(details);
       }
     } catch {
-      // If serialization fails, convert to string
       sanitizedDetails = { message: String(details), serializationError: true };
     }
   }
@@ -99,7 +98,13 @@ export function errorResponse(
     },
   };
 
-  res.status(statusCode).json(response);
+  return new Response(JSON.stringify(response), {
+    status: statusCode,
+    headers: {
+      'content-type': 'application/json',
+      ...(requestId && { 'X-Request-ID': requestId }),
+    },
+  });
 }
 
 export const ERROR_CODES = {

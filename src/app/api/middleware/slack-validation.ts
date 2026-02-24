@@ -1,8 +1,22 @@
-import crypto from 'node:crypto';
-import type { NextFunction, Request, Response } from 'express';
 import { logger } from '../../../core/logger/logger.ts';
 
 const FIVE_MINUTES_IN_SECONDS = 60 * 5;
+
+/**
+ * Encode string to Uint8Array
+ */
+function encode(str: string): Uint8Array {
+  return new TextEncoder().encode(str);
+}
+
+/**
+ * Convert ArrayBuffer to hex string
+ */
+function bufferToHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 /**
  * Timing-safe string comparison to prevent timing attacks
@@ -21,105 +35,68 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Create Slack webhook validation middleware
- * Validates HMAC signature and timestamp using timing-safe comparison
+ * Validate Slack webhook request signature using Web Crypto API
  *
- * IMPORTANT: This middleware requires express.raw() to be applied BEFORE it
- * to capture raw body for signature verification
+ * Returns a 401 Response if validation fails, or null if validation passes.
+ * The parsed body string is returned via the second element of the tuple.
  *
- * @param signingSecret - Slack signing secret from environment
- * @returns Express middleware function
+ * @param request - The incoming native Request
+ * @param signingSecret - Slack signing secret
+ * @param requestId - Optional request ID for logging
+ * @returns [errorResponse, bodyString] - errorResponse is null if valid
  */
-export function slackWebhookValidation(signingSecret: string) {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const timestamp = req.headers['x-slack-request-timestamp'] as string;
-    const signature = req.headers['x-slack-signature'] as string;
+export async function validateSlackWebhook(
+  request: Request,
+  signingSecret: string,
+  requestId?: string,
+): Promise<{ error: Response | null; bodyString: string }> {
+  const timestamp = request.headers.get('x-slack-request-timestamp');
+  const signature = request.headers.get('x-slack-signature');
 
-    if (!timestamp || !signature || !signingSecret) {
-      logger.warn('Slack webhook rejected: Missing required headers', {
-        requestId: (req as any).requestId,
-      });
-      res.status(401).send('Unauthorized');
-      return;
-    }
+  if (!timestamp || !signature || !signingSecret) {
+    logger.warn('Slack webhook rejected: Missing required headers', { requestId });
+    return { error: new Response('Unauthorized', { status: 401 }), bodyString: '' };
+  }
 
-    const timestampNum = Number(timestamp);
-    if (!Number.isFinite(timestampNum)) {
-      logger.warn('Slack webhook rejected: Invalid timestamp', {
-        requestId: (req as any).requestId,
-      });
-      res.status(401).send('Unauthorized');
-      return;
-    }
+  const timestampNum = Number(timestamp);
+  if (!Number.isFinite(timestampNum)) {
+    logger.warn('Slack webhook rejected: Invalid timestamp', { requestId });
+    return { error: new Response('Unauthorized', { status: 401 }), bodyString: '' };
+  }
 
-    // Reject requests that are too old to mitigate replay attacks (5 minutes)
-    const now = Math.floor(Date.now() / 1000);
-    if (Math.abs(now - timestampNum) > FIVE_MINUTES_IN_SECONDS) {
-      logger.warn('Slack webhook rejected: Timestamp too old', {
-        requestId: (req as any).requestId,
-        timestamp: timestampNum,
-        now,
-      });
-      res.status(401).send('Unauthorized');
-      return;
-    }
+  // Reject requests that are too old to mitigate replay attacks (5 minutes)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestampNum) > FIVE_MINUTES_IN_SECONDS) {
+    logger.warn('Slack webhook rejected: Timestamp too old', {
+      requestId,
+      timestamp: timestampNum,
+      now,
+    });
+    return { error: new Response('Unauthorized', { status: 401 }), bodyString: '' };
+  }
 
-    // Raw body from express.raw()
-    const rawBody = req.body;
-    if (!Buffer.isBuffer(rawBody)) {
-      logger.error('Slack validation middleware: req.body is not a Buffer', {
-        requestId: (req as any).requestId,
-      });
-      res.status(500).send('Server configuration error');
-      return;
-    }
+  // Read the raw body
+  const bodyString = await request.text();
 
-    const bodyString = rawBody.toString('utf-8');
-    const version = 'v0';
-    const baseString = `${version}:${timestamp}:${bodyString}`;
+  const version = 'v0';
+  const baseString = `${version}:${timestamp}:${bodyString}`;
 
-    // Compute HMAC signature
-    const expectedSignature = crypto
-      .createHmac('sha256', signingSecret)
-      .update(baseString)
-      .digest('hex');
+  // Compute HMAC signature using Web Crypto API
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encode(signingSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signatureBuffer = await crypto.subtle.sign('HMAC', key, encode(baseString));
+  const expectedSignature = `${version}=${bufferToHex(signatureBuffer)}`;
 
-    const expectedSignatureHeader = `${version}=${expectedSignature}`;
+  // Constant-time comparison to prevent timing attacks
+  if (!timingSafeEqual(signature, expectedSignature)) {
+    logger.warn('Slack webhook rejected: Invalid signature', { requestId });
+    return { error: new Response('Unauthorized', { status: 401 }), bodyString: '' };
+  }
 
-    // Constant-time comparison to prevent timing attacks
-    if (signature.length !== expectedSignatureHeader.length) {
-      logger.warn('Slack webhook rejected: Signature length mismatch', {
-        requestId: (req as any).requestId,
-      });
-      res.status(401).send('Unauthorized');
-      return;
-    }
-
-    let diff = 0;
-    for (let i = 0; i < signature.length; i++) {
-      diff |= signature.charCodeAt(i) ^ expectedSignatureHeader.charCodeAt(i);
-    }
-
-    if (diff !== 0) {
-      logger.warn('Slack webhook rejected: Invalid signature', {
-        requestId: (req as any).requestId,
-      });
-      res.status(401).send('Unauthorized');
-      return;
-    }
-
-    // Attach parsed body to request for next middleware
-    try {
-      req.body = JSON.parse(bodyString);
-    } catch (err) {
-      logger.error('Failed to parse Slack webhook body', {
-        requestId: (req as any).requestId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      res.status(400).send('Invalid JSON');
-      return;
-    }
-
-    next();
-  };
+  return { error: null, bodyString };
 }
