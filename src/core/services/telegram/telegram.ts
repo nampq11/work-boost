@@ -1,7 +1,8 @@
 import { autoRetry } from '@grammyjs/auto-retry';
-import { type RateLimiter, limit } from '@grammyjs/ratelimiter';
-import { Bot, GrammyError } from 'grammy';
+import { limit, type RateLimiter } from '@grammyjs/ratelimiter';
+import { Bot, GrammyError, type Context } from 'grammy';
 import { webhookCallback } from 'grammy';
+import { stream, type StreamFlavor } from '@grammyjs/stream';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../../bot/bot-service.ts';
 import { env } from '../../env.ts';
 import type { LangfuseService } from '../../observability/langfuse/langfuse.ts';
@@ -11,6 +12,9 @@ import * as debtHandlers from './handlers/debt/index.ts';
 import * as handlers from './handlers/index.ts';
 import { mainMenuKeyboard } from './keyboards.ts';
 import { createSanitizationMiddleware } from './sanitizer.ts';
+
+// Export the context type with streaming support
+export type TelegramContext = StreamFlavor<Context>;
 
 /**
  * Timing-safe string comparison to prevent timing attacks.
@@ -39,7 +43,7 @@ function redactSensitiveData(obj: Record<string, unknown>): Record<string, unkno
   for (const [key, value] of Object.entries(obj)) {
     const keyLower = key.toLowerCase();
     const shouldRedact = sensitiveKeys.some((sensitive) =>
-      keyLower.includes(sensitive.toLowerCase()),
+      keyLower.includes(sensitive.toLowerCase())
     );
 
     if (shouldRedact && typeof value === 'string' && value.length > 0) {
@@ -70,7 +74,7 @@ function getRateLimit(type: 'interactive' | 'bulk'): number {
 
 export class TelegramService implements BotService {
   readonly platform: Platform = 'telegram';
-  private bot: Bot;
+  private bot: Bot<TelegramContext>;
   private db: Database;
   private agent: Agent;
   private webhookSecret: string;
@@ -87,7 +91,7 @@ export class TelegramService implements BotService {
     this.db = db;
     this.agent = agent;
     this.langfuse = langfuse;
-    this.bot = new Bot(token);
+    this.bot = new Bot<TelegramContext>(token);
 
     // Create separate rate limiter for bulk operations (higher limit)
     this.bulkLimiter = limit({
@@ -104,6 +108,9 @@ export class TelegramService implements BotService {
   }
 
   private setupMiddleware(): void {
+    // Streaming support for long text messages
+    this.bot.use(stream());
+
     // Input sanitization - must be first, before rate limiting
     this.bot.use(createSanitizationMiddleware());
 
@@ -169,14 +176,17 @@ export class TelegramService implements BotService {
     });
 
     // Callback query handlers (button presses)
-    this.bot.callbackQuery('action:subscribe', (ctx) =>
-      handlers.handleSubscribeCallback(ctx, deps),
+    this.bot.callbackQuery(
+      'action:subscribe',
+      (ctx) => handlers.handleSubscribeCallback(ctx, deps),
     );
-    this.bot.callbackQuery('action:unsubscribe', (ctx) =>
-      handlers.handleUnsubscribeCallback(ctx, deps),
+    this.bot.callbackQuery(
+      'action:unsubscribe',
+      (ctx) => handlers.handleUnsubscribeCallback(ctx, deps),
     );
-    this.bot.callbackQuery('action:unsubscribe_confirm', (ctx) =>
-      handlers.handleUnsubscribeConfirm(ctx, deps),
+    this.bot.callbackQuery(
+      'action:unsubscribe_confirm',
+      (ctx) => handlers.handleUnsubscribeConfirm(ctx, deps),
     );
     this.bot.callbackQuery('action:status', (ctx) => handlers.handleStatusCallback(ctx, deps));
     this.bot.callbackQuery('action:help', (ctx) => handlers.handleHelpCallback(ctx));
@@ -290,7 +300,7 @@ export class TelegramService implements BotService {
    */
   async sendBulkMessage(chatId: string, content: string): Promise<void> {
     await this.bulkLimiter.control(() =>
-      this.bot.api.sendMessage(chatId, content, { parse_mode: 'HTML' }),
+      this.bot.api.sendMessage(chatId, content, { parse_mode: 'HTML' })
     );
   }
 
@@ -324,8 +334,7 @@ export class TelegramService implements BotService {
     return {
       platform: 'telegram',
       userId: body.message?.from?.id?.toString() || body.callback_query?.from?.id?.toString() || '',
-      chatId:
-        body.message?.chat?.id?.toString() ||
+      chatId: body.message?.chat?.id?.toString() ||
         body.callback_query?.message?.chat?.id?.toString() ||
         '',
       action: 'start', // Default, will be determined by handlers
@@ -358,7 +367,7 @@ export class TelegramService implements BotService {
   /**
    * Get the underlying bot instance
    */
-  getBot(): Bot {
+  getBot(): Bot<TelegramContext> {
     return this.bot;
   }
 }

@@ -91,13 +91,18 @@ async function processMessageAsync(
       };
     }
 
-    // Processing the message through the agent
-    const { backgroundOperations } = await agent.run(message, imageData, options.sessionId);
-    await backgroundOperations;
+    // Processing the message through the agent using stream
+    await agent.stream(
+      message,
+      async (_chunk) => {
+        // Process asynchronously
+      },
+      { sessionId: options.sessionId, platform: 'api', chatId: requestId },
+    );
 
     logger.info('Async message processing completed', {
       requestId,
-      sessionId: agent.getCurrentSessionId(),
+      sessionId: options.sessionId || agent.getCurrentSessionId(),
     });
   } catch (error) {
     logger.error('Async message processing failed', {
@@ -228,22 +233,19 @@ export async function handleMessageSync(
       }
     }
 
-    // Convert images array into single image if provided
-    let imageData: { image: string; mimeType: string } | undefined;
-    if (images && images.length > 0) {
-      imageData = {
-        image: images[0],
-        mimeType: 'image/jpeg',
-      };
-    }
-
-    const { response, backgroundOperations } = await agent.run(message, imageData, sessionId);
-    await backgroundOperations;
+    // Use stream method which returns accumulated content
+    const result = await agent.stream(
+      message,
+      async (_chunk) => {
+        // Accumulate chunks for final response
+      },
+      { sessionId, platform: 'api', chatId: requestId },
+    );
 
     return successResponse(
       {
-        response,
-        sessionId: agent.getCurrentSessionId(),
+        response: result.success ? result.content : 'Failed to process message',
+        sessionId: sessionId || 'default',
         timestamp: new Date().toISOString(),
       },
       200,

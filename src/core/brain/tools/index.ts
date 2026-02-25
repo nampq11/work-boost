@@ -21,7 +21,11 @@ import type { Database } from '../../storage/database.ts';
 import type { Tool } from '../types.ts';
 
 // Messaging tools
-export { createSendMessageTool, createSendSlackBlocksTool, createSendTelegramKeyboardTool } from './messaging/index.ts';
+export {
+  createSendMessageTool,
+  createSendSlackBlocksTool,
+  createSendTelegramKeyboardTool,
+} from './messaging/index.ts';
 
 // Formatting tools
 export { createFormatDailyReportTool, createFormatDebtEntryTool } from './formatting/index.ts';

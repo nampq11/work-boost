@@ -413,6 +413,8 @@ program
   .description('Interactive chat mode with the AI brain')
   .option('-s, --session <id>', 'Session ID for conversation history')
   .option('-v, --verbose', 'Enable verbose output')
+  .option('--stream', 'Enable streaming responses (default)')
+  .option('--no-stream', 'Disable streaming responses')
   .action(async (options) => {
     const validation = validateRequiredSecrets(false);
     if (!validation.valid) {
@@ -444,6 +446,7 @@ program
     const buffer = new Uint8Array(1024);
 
     let shouldExit = false;
+    const useStreaming = options.stream !== false;
 
     while (!shouldExit) {
       // Display prompt
@@ -475,18 +478,27 @@ program
             break;
           case '/clear':
             brain.clearSession(sessionId);
-            console.log('Conversation history cleared.');
+            brain.clearWorkingMemory(sessionId);
+            console.log('Conversation history and working memory cleared.');
             break;
           case '/help':
             console.log('\nAvailable commands:');
-            console.log('  /exit, /quit    - Exit chat mode');
-            console.log('  /clear          - Clear conversation history');
-            console.log('  /sessions       - List all sessions');
-            console.log('  /history        - Show conversation history');
-            console.log('  /capabilities   - List available capabilities');
-            console.log('  /session <id>   - Switch to a different session');
-            console.log('  /verbose        - Toggle verbose mode');
-            console.log('  /help           - Show this help message\n');
+            console.log('  /exit, /quit          - Exit chat mode');
+            console.log('  /clear                - Clear conversation history and working memory');
+            console.log('  /sessions             - List all sessions');
+            console.log('  /history              - Show conversation history');
+            console.log('  /capabilities         - List available capabilities');
+            console.log('  /session <id>         - Switch to a different session');
+            console.log('  /verbose              - Toggle verbose mode');
+            console.log('  /stream, /no-stream   - Toggle streaming mode');
+            console.log('  /plan <request>       - Create a plan for a complex task');
+            console.log('  /execute <planId>     - Execute a plan step by step');
+            console.log('  /remember <content>   - Store a memory');
+            console.log('  /recall <query>       - Retrieve relevant memories');
+            console.log('  /wm set <k> <v>       - Set working memory entity');
+            console.log('  /wm get <k>           - Get working memory entity');
+            console.log('  /wm clear             - Clear working memory');
+            console.log('  /help                 - Show this help message\n');
             break;
           case '/sessions':
             const sessions = brain.listSessions();
@@ -537,6 +549,101 @@ program
             options.verbose = !options.verbose;
             console.log(`Verbose mode: ${options.verbose ? 'enabled' : 'disabled'}`);
             break;
+          case '/stream':
+            options.stream = true;
+            console.log('Streaming enabled');
+            break;
+          case '/no-stream':
+            options.stream = false;
+            console.log('Streaming disabled');
+            break;
+          case '/plan': {
+            const planRequest = args.join(' ');
+            if (!planRequest) {
+              console.log('Usage: /plan <request>');
+              break;
+            }
+            console.log(`\n📋 Creating plan for: ${planRequest}\n`);
+            const planResult = await brain.createPlan(planRequest, sessionId);
+            if (planResult.success && planResult.plan) {
+              console.log(`✓ Plan created with ID: ${planResult.plan.id}`);
+              console.log(`  Steps: ${planResult.plan.steps.length}`);
+              for (const step of planResult.plan.steps) {
+                console.log(`    ${step.step}. ${step.description}`);
+              }
+              console.log(`\n  Use /execute ${planResult.plan.id} to run the plan\n`);
+            } else {
+              console.log(`✗ Plan creation failed: ${planResult.error}\n`);
+            }
+            break;
+          }
+          case '/execute': {
+            const planId = args[0];
+            if (!planId) {
+              console.log('Usage: /execute <planId>');
+              break;
+            }
+            console.log(`\n▶️  Executing plan: ${planId}\n`);
+            await brain.executePlan(planId, (progress) => {
+              const status = progress.status === 'completed' ? '✓' : progress.status === 'failed' ? '✗' : '→';
+              console.log(`  ${status} Step ${progress.step}/${progress.total}: ${progress.description}`);
+            });
+            console.log('\n✓ Plan execution completed\n');
+            break;
+          }
+          case '/remember': {
+            const content = args.join(' ');
+            if (!content) {
+              console.log('Usage: /remember <content>');
+              break;
+            }
+            const result = await brain.storeMemory(
+              sessionId,
+              'fact' as any,
+              content,
+              { source: 'cli' },
+            );
+            if (result.success) {
+              console.log(`\n✓ Remembered: ${content}\n`);
+            }
+            break;
+          }
+          case '/recall': {
+            const query = args.join(' ');
+            if (!query) {
+              console.log('Usage: /recall <query>');
+              break;
+            }
+            const result = await brain.retrieveMemories(sessionId, query);
+            console.log(`\n📚 Memories for "${query}":`);
+            if (result.memories.length === 0) {
+              console.log('  (none found)\n');
+            } else {
+              for (const mem of result.memories) {
+                console.log(`  - [${mem.type}] ${mem.content}`);
+              }
+              console.log('');
+            }
+            break;
+          }
+          case '/wm':
+            const wmAction = args[0];
+            if (wmAction === 'set' && args.length >= 3) {
+              const key = args[1];
+              const value = args.slice(2).join(' ');
+              brain.setWorkingEntity(sessionId, key, value);
+              console.log(`\n✓ Set ${key} = ${value}\n`);
+            } else if (wmAction === 'get' && args.length >= 2) {
+              const key = args[1];
+              const value = brain.getWorkingEntity(sessionId, key);
+              console.log(`\n📖 ${key} = ${value ?? '(undefined)'}\n`);
+            } else if (wmAction === 'clear') {
+              brain.clearWorkingMemory(sessionId);
+              console.log('\n✓ Working memory cleared\n');
+            } else {
+              console.log('Usage: /wm set <key> <value> | /wm get <key> | /wm clear');
+            }
+            break;
           default:
             console.log(`Unknown command: ${command}`);
             console.log('Type /help for available commands');
@@ -547,14 +654,33 @@ program
       // Send message to brain
       try {
         const startTime = Date.now();
-        const result = await brain.runWithTools(input, {
-          sessionId,
-          verbose: options.verbose,
-        });
-        const elapsed = Date.now() - startTime;
 
-        // Display response
-        console.log(`\n🤖 AI: ${result.response}`);
+        if (useStreaming) {
+          // Use streaming for better UX on long responses
+          console.log('\n🤖 AI: ');
+          await brain.stream(
+            input,
+            async (chunk) => {
+              if (!chunk.isFinal) {
+                // Stream chunk - print inline
+                Deno.stdout.writeSync(encoder.encode(chunk.content));
+              }
+            },
+            { sessionId, platform: 'cli', chatId: sessionId },
+          );
+          console.log('\n');
+        } else {
+          // Use standard response
+          const result = await brain.runWithTools(input, {
+            sessionId,
+            verbose: options.verbose,
+          });
+
+          // Display response
+          console.log(`\n🤖 AI: ${result.response}`);
+        }
+
+        const elapsed = Date.now() - startTime;
 
         if (options.verbose) {
           console.log(`\n⏱️  Response time: ${elapsed}ms`);

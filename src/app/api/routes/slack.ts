@@ -83,15 +83,23 @@ export async function handleSlackMessages(
 ): Promise<Response> {
   const text = body.text || '';
   const userId = body.user_id || '';
+  const sessionId = `slack_${userId}`;
 
-  // Get agent response
-  const response = await deps.agent.query(text, userId);
+  // Get agent response with streaming support
+  const result = await deps.agent.stream(
+    text,
+    async (_chunk) => {
+      // Slack doesn't support real-time streaming in responses
+      // We accumulate and send the final response
+    },
+    { sessionId, platform: 'slack', chatId: userId },
+  );
 
   // Send formatted response
   return new Response(
     JSON.stringify({
       response_type: 'in_channel',
-      text: deps.slack.formatToSlack(response),
+      text: result.success && result.content ? result.content : 'Sorry, I couldn\'t process that.',
     }),
     {
       status: 200,

@@ -1,6 +1,6 @@
 import type { Context } from 'grammy';
 import type { Message } from '../../../entity/task.ts';
-import type { Agent, Database } from '../../index.ts';
+import type { Agent, Database, TelegramService } from '../../index.ts';
 
 interface MessageHandlerDeps {
   db: Database;
@@ -19,6 +19,39 @@ function splitMessage(text: string, maxLength = 4096): string[] {
   }
   if (text) messages.push(text);
   return messages;
+}
+
+/**
+ * Create an async generator that streams the agent response
+ */
+async function* streamAgentResponse(
+  agent: any,
+  text: string,
+  sessionId: string,
+  chatId: string,
+): AsyncGenerator<string, void, unknown> {
+  // Accumulate chunks as they arrive
+  const chunks: string[] = [];
+
+  await agent.stream(
+    text,
+    async (chunk) => {
+      if (!chunk.isFinal && chunk.content) {
+        chunks.push(chunk.content);
+      }
+    },
+    { sessionId, platform: 'telegram', chatId },
+  );
+
+  // Yield the accumulated content in smaller chunks for streaming effect
+  const fullContent = chunks.join('');
+  const chunkSize = 15; // Characters per yield
+
+  for (let i = 0; i < fullContent.length; i += chunkSize) {
+    yield fullContent.slice(i, i + chunkSize);
+    // Small delay for animated effect
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
 }
 
 /**
@@ -47,24 +80,36 @@ export async function handleMessage(ctx: Context, deps: MessageHandlerDeps): Pro
   //   'Đã ghi nhận công việc của bạn! Tôi sẽ lên công việc cho bạn ngay!!!😊\n\nYour work has been recorded. Generating report...',
   // );
 
-  // Process with AI using runWithTools for tool calling support
+  // Process with AI using streaming for better UX
   try {
     const sessionId = `telegram_${fromId}`;
+    const agent = deps.agent;
 
-    const { response } = await deps.agent.runWithTools(text, {
-      sessionId,
-      platform: 'telegram',
-      chatId,
-      verbose: false,
-    });
+    // Check if context supports streaming (replyWithStream)
+    const hasStreaming = 'replyWithStream' in ctx && typeof ctx.replyWithStream === 'function';
 
-    // Send response from agent (response is a string)
-    if (response) {
-      const parts = splitMessage(response);
+    if (hasStreaming) {
+      // Use grammY streaming for animated message effect
+      // @ts-ignore - replyWithStream is added by stream plugin
+      await ctx.replyWithStream(streamAgentResponse(agent, text, sessionId, chatId));
+    } else {
+      // Fallback: accumulate and send
+      const result = await agent.stream(
+        text,
+        async (_chunk) => {
+          // Accumulate
+        },
+        { sessionId, platform: 'telegram', chatId },
+      );
 
-      // Send each part (message may be split if too long)
-      for (const part of parts) {
-        await ctx.api.sendMessage(chatId, part, { parse_mode: 'HTML' });
+      // Send the final response
+      if (result.success && result.content) {
+        const parts = splitMessage(result.content);
+
+        // Send each part (message may be split if too long)
+        for (const part of parts) {
+          await ctx.api.sendMessage(chatId, part, { parse_mode: 'HTML' });
+        }
       }
     }
   } catch (error) {
