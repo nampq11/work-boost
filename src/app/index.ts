@@ -19,31 +19,37 @@ export interface StartApiModeOptions {
  * Validate required secrets before starting services
  */
 function validateRequiredSecrets(): { valid: boolean; missing: string[] } {
-  const isProduction = env.DENO_ENV === 'production';
-  const required: string[] = [];
-  const missing: string[] = [];
+  try {
+    const isProduction = env.DENO_ENV === 'production';
+    const required: string[] = [];
+    const missing: string[] = [];
 
-  // Always require Google API key
-  required.push('GOOGLE_API_KEY');
+    // Always require Google API key
+    required.push('GOOGLE_API_KEY');
 
-  // In production, require all bot secrets
-  if (isProduction) {
-    required.push(
-      'SLACK_BOT_TOKEN',
-      'SLACK_SIGNING_SECRET',
-      'TELEGRAM_BOT_TOKEN',
-      'TELEGRAM_WEBHOOK_SECRET',
-    );
-  }
-
-  for (const secret of required) {
-    const value = env.get(secret);
-    if (!value) {
-      missing.push(secret);
+    // In production, require all bot secrets
+    if (isProduction) {
+      required.push(
+        'SLACK_BOT_TOKEN',
+        'SLACK_SIGNING_SECRET',
+        'TELEGRAM_BOT_TOKEN',
+        'TELEGRAM_WEBHOOK_SECRET',
+      );
     }
-  }
 
-  return { valid: missing.length === 0, missing };
+    for (const secret of required) {
+      const value = env.get(secret);
+      if (!value) {
+        missing.push(secret);
+      }
+    }
+
+    return { valid: missing.length === 0, missing };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('Error validating secrets: ' + errorMsg);
+    return { valid: false, missing: [] };
+  }
 }
 
 /**
