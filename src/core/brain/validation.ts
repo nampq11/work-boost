@@ -15,7 +15,7 @@ export interface ParamSchema {
   minLength?: number;
   maxLength?: number;
   pattern?: RegExp;
-  enum?: unknown[];
+  enum?: readonly unknown[] | unknown[];
   min?: number;
   max?: number;
   description?: string;
@@ -119,7 +119,7 @@ export function validateToolParams<T extends Record<string, unknown>>(
     if (spec.enum && !spec.enum.includes(value)) {
       return {
         valid: false,
-        error: `Parameter ${key} must be one of: ${spec.enum.join(', ')}`,
+        error: `Parameter ${key} must be one of: ${[...spec.enum].join(', ')}`,
       };
     }
 

@@ -1,6 +1,6 @@
-import type { Agent, Database } from '../index.ts';
 import type { BotService } from '../../bot/bot-service.ts';
 import type { Subscription } from '../../entity/subscription.ts';
+import type { Agent, Database } from '../index.ts';
 
 interface SchedulerDeps {
   db: Database;

@@ -3,19 +3,19 @@ import type { Agent, Database } from '../../core/services/index.ts';
 import type { Slack } from '../../core/services/slack/slack.ts';
 import type { TelegramService } from '../../core/services/telegram/telegram.ts';
 import {
+  type RequestContext,
   createRequestContext,
   logError,
   logRequest,
   logResponse,
-  type RequestContext,
 } from './middleware/logging.ts';
 import { validateSlackWebhook } from './middleware/slack-validation.ts';
 import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
 import {
+  type SlackDeps,
   handleSlackMessages,
   handleSlackSubscribe,
   handleSlackUnsubscribe,
-  type SlackDeps,
 } from './routes/slack.ts';
 import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
 

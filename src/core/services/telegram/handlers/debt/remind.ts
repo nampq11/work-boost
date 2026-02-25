@@ -1,6 +1,6 @@
 import type { Context } from 'grammy';
-import type { Agent, Database } from '../../../index.ts';
 import { DebtTelegramFormatter } from '../../../formatting/debt-telegram-formatter.ts';
+import type { Agent, Database } from '../../../index.ts';
 import { debtMenuKeyboard } from '../../keyboards.ts';
 
 interface RemindHandlerDeps {

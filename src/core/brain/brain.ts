@@ -20,6 +20,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { DailyWorkReport } from '../entity/agent.ts';
 import type { ParsedDebtEntry } from '../entity/debt.ts';
 import { logger } from '../logger/logger.ts';
+import type { LangfuseService } from '../observability/langfuse/langfuse.ts';
 import type { Slack } from '../services/slack/slack.ts';
 import type { TelegramService } from '../services/telegram/telegram.ts';
 import { getAllCapabilities } from './capabilities.ts';
@@ -42,19 +43,22 @@ export class Brain {
   private tools: Tool[];
   private slack?: Slack | null;
   private telegram?: TelegramService | null;
+  private langfuse?: LangfuseService | null;
 
   private constructor(
     config: BrainConfig,
     slack?: Slack | null,
     telegram?: TelegramService | null,
+    langfuse?: LangfuseService | null,
   ) {
     this.ai = new GoogleGenAI({ apiKey: config.apiKey });
     this.config = config;
     this.contextManager = new ContextManager(config.sessionTTL);
-    this.capabilities = getAllCapabilities(this.ai);
+    this.capabilities = getAllCapabilities(this.ai, langfuse);
     this.slack = slack;
     this.telegram = telegram;
-    this.tools = getAllTools(slack ?? null, telegram ?? null);
+    this.langfuse = langfuse;
+    this.tools = getAllTools(slack ?? null, telegram ?? null, langfuse);
   }
 
   /**
@@ -64,18 +68,21 @@ export class Brain {
     config: BrainConfig,
     slack?: Slack | null,
     telegram?: TelegramService | null,
+    langfuse?: LangfuseService | null,
   ): Promise<Brain> {
     if (this.instance) {
       // Update services if provided
-      if (slack !== undefined || telegram !== undefined) {
+      if (slack !== undefined || telegram !== undefined || langfuse !== undefined) {
         this.instance.slack = slack;
         this.instance.telegram = telegram;
-        this.instance.tools = getAllTools(slack ?? null, telegram ?? null);
+        this.instance.langfuse = langfuse;
+        this.instance.tools = getAllTools(slack ?? null, telegram ?? null, langfuse);
+        this.instance.capabilities = getAllCapabilities(this.instance.ai, langfuse);
       }
       return this.instance;
     }
 
-    this.instance = new Brain(config, slack, telegram);
+    this.instance = new Brain(config, slack, telegram, langfuse);
     return this.instance;
   }
 
@@ -444,10 +451,20 @@ User message: ${message}`;
  */
 export async function initBrain(
   apiKey: string,
-  model: string = 'gemini-2.5-flash',
+  options?: {
+    model?: string;
+    slack?: Slack | null;
+    telegram?: TelegramService | null;
+    langfuse?: LangfuseService | null;
+  },
 ): Promise<Brain> {
-  return Brain.init({
-    model,
-    apiKey,
-  });
+  return Brain.init(
+    {
+      model: options?.model ?? 'gemini-2.5-flash',
+      apiKey,
+    },
+    options?.slack,
+    options?.telegram,
+    options?.langfuse,
+  );
 }

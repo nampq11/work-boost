@@ -1,8 +1,9 @@
 /// <reference lib="deno.unstable" />
 import { env } from '../core/env.ts';
 import { logger } from '../core/logger/logger.ts';
-import { Database, initBrain } from '../core/services/index.ts';
+import { initLangfuse } from '../core/observability/index.ts';
 import { runMigrationIfNeeded } from '../core/services/database/migrate-slack-users.ts';
+import { Database, initBrain } from '../core/services/index.ts';
 import { startDailyScheduler } from '../core/services/scheduler/daily-job.ts';
 import { Slack } from '../core/services/slack/slack.ts';
 import { TelegramService } from '../core/services/telegram/telegram.ts';
@@ -86,11 +87,24 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   const db = await Database.init();
   logger.info('Database connected');
 
-  const agent = await initBrain(env.get('GOOGLE_API_KEY') || '');
+  // Initialize Langfuse tracing before Brain (for LLM call tracing)
+  const langfuse = initLangfuse({
+    publicKey: env.LANGFUSE_PUBLIC_KEY,
+    secretKey: env.LANGFUSE_SECRET_KEY,
+    host: env.LANGFUSE_HOST,
+    enabled: env.LANGFUSE_ENABLED,
+  });
+  if (langfuse.isEnabled()) {
+    logger.info('Langfuse tracing enabled');
+  } else {
+    logger.debug('Langfuse tracing disabled');
+  }
+
+  const agent = await initBrain(env.get('GOOGLE_API_KEY') || '', { langfuse: langfuse });
   logger.info('Agent initialized');
 
-  const slack = new Slack();
-  const telegram = new TelegramService(db, agent);
+  const slack = new Slack(langfuse);
+  const telegram = new TelegramService(db, agent, langfuse);
   logger.info('Bot services initialized');
 
   // Run migration BEFORE server starts (fail-fast if migration fails)

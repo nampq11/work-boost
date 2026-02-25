@@ -10,6 +10,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { DailyWorkReport } from '../entity/agent.ts';
 import type { ParsedDebtEntry } from '../entity/debt.ts';
 import { logger } from '../logger/logger.ts';
+import type { LangfuseService } from '../observability/langfuse/langfuse.ts';
 import { HUMAN_PROMPT, SYSTEM_PROMPT, dailyWorkSchema } from './prompts/daily-work-prompt.ts';
 import {
   DEBT_HUMAN_PROMPT,
@@ -20,54 +21,135 @@ import {
 import type { Capability, CapabilityResult } from './types.ts';
 
 /**
+ * Helper to trace LLM generation with Langfuse
+ */
+async function traceLLMCall<T>(
+  langfuse: LangfuseService | null,
+  options: {
+    modelName: string;
+    input: unknown;
+    execute: () => Promise<{ text?: string; usage?: { totalTokenCount?: number } }>;
+    parseResponse: (text: string) => T;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<{ success: boolean; data?: T; error?: string }> {
+  const startTime = Date.now();
+
+  if (!langfuse?.isEnabled()) {
+    // No tracing, just execute
+    try {
+      const response = await options.execute();
+      if (!response.text) {
+        return { success: false, error: 'No response from AI model' };
+      }
+      const data = options.parseResponse(response.text);
+      return { success: true, data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  // With tracing
+  const trace = langfuse.createTrace({
+    name: `llm_${options.modelName}`,
+    input: options.input,
+    metadata: options.metadata,
+  });
+
+  const generation = trace.generation({
+    name: options.modelName,
+    model: options.modelName,
+    startTime,
+  });
+
+  try {
+    const response = await options.execute();
+
+    if (!response.text) {
+      generation.update({ output: { error: 'No response from AI model' } });
+      generation.end();
+      trace.end();
+      return { success: false, error: 'No response from AI model' };
+    }
+
+    const data = options.parseResponse(response.text);
+
+    // Update generation with response data
+    generation.update({
+      output: response.text,
+      usageDetails: {
+        totalTokens: response.usage?.totalTokenCount ?? 0,
+        promptTokens: 0,
+        completionTokens: 0,
+      },
+      metadata: options.metadata,
+    });
+
+    generation.end();
+    trace.end();
+
+    // Flush trace asynchronously (fire and forget)
+    langfuse.flush().catch((error) => {
+      logger.warn('Failed to flush Langfuse trace', { error });
+    });
+
+    return { success: true, data };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+    generation.update({
+      output: { error: errorMessage },
+      metadata: { ...options.metadata, error: errorMessage },
+    });
+    generation.end();
+    trace.end();
+
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
  * Create a simple chat capability
  * Handles general conversation without expecting structured output
  */
-export function createChatCapability(ai: GoogleGenAI): Capability {
+export function createChatCapability(
+  ai: GoogleGenAI,
+  langfuse: LangfuseService | null = null,
+): Capability {
   return {
     id: 'chat',
     name: 'Chat',
     description: 'General conversation capability for casual chat and questions',
     execute: async (input: unknown): Promise<CapabilityResult> => {
-      try {
-        const { input: message, verbose = false } = input as { input: string; verbose?: boolean };
+      const { input: message, verbose = false } = input as { input: string; verbose?: boolean };
 
-        if (verbose) {
-          logger.debug('Chat input', { message });
-        }
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: message }],
-            },
-          ],
-        });
-
-        if (verbose) {
-          logger.debug('Chat response', { response: response.text });
-        }
-
-        if (!response.text) {
-          return {
-            success: false,
-            error: 'No response from AI model',
-          };
-        }
-
-        // Return the plain text response directly
-        return {
-          success: true,
-          data: response.text,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred',
-        };
+      if (verbose) {
+        logger.debug('Chat input', { message });
       }
+
+      return traceLLMCall(langfuse, {
+        modelName: 'gemini-2.5-flash',
+        input: { message },
+        execute: async () => {
+          return await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: message }],
+              },
+            ],
+          });
+        },
+        parseResponse: (text) => text, // Return plain text
+        metadata: { capability: 'chat' },
+      });
     },
   };
 }
@@ -76,61 +158,47 @@ export function createChatCapability(ai: GoogleGenAI): Capability {
  * Create a daily work report capability
  * Parses natural language and generates structured work reports
  */
-export function createDailyWorkReportCapability(ai: GoogleGenAI): Capability {
+export function createDailyWorkReportCapability(
+  ai: GoogleGenAI,
+  langfuse: LangfuseService | null = null,
+): Capability {
   return {
     id: 'daily-work-report',
     name: 'Daily Work Report',
     description:
       'Parse natural language and generate structured daily work reports with completed, incomplete, and planned tasks',
     execute: async (input: unknown): Promise<CapabilityResult> => {
-      try {
-        const { input: message, verbose = false } = input as { input: string; verbose?: boolean };
+      const { input: message, verbose = false } = input as { input: string; verbose?: boolean };
 
-        if (verbose) {
-          logger.debug('Daily work report input', { message });
-        }
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'model',
-              parts: [{ text: SYSTEM_PROMPT }],
-            },
-            {
-              role: 'user',
-              parts: [{ text: HUMAN_PROMPT.replace('{USER_INPUT}', message) }],
-            },
-          ],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: dailyWorkSchema,
-          },
-        });
-
-        if (verbose) {
-          logger.debug('Daily work report response', { response: response.text });
-        }
-
-        if (!response.text) {
-          return {
-            success: false,
-            error: 'No response from AI model',
-          };
-        }
-
-        const parsedResponse = JSON.parse(response.text) as DailyWorkReport;
-
-        return {
-          success: true,
-          data: parsedResponse,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred',
-        };
+      if (verbose) {
+        logger.debug('Daily work report input', { message });
       }
+
+      return traceLLMCall(langfuse, {
+        modelName: 'gemini-2.5-flash',
+        input: { message },
+        execute: async () => {
+          return await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              {
+                role: 'model',
+                parts: [{ text: SYSTEM_PROMPT }],
+              },
+              {
+                role: 'user',
+                parts: [{ text: HUMAN_PROMPT.replace('{USER_INPUT}', message) }],
+              },
+            ],
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: dailyWorkSchema,
+            },
+          });
+        },
+        parseResponse: (text) => JSON.parse(text) as DailyWorkReport,
+        metadata: { capability: 'daily-work-report' },
+      });
     },
   };
 }
@@ -139,63 +207,54 @@ export function createDailyWorkReportCapability(ai: GoogleGenAI): Capability {
  * Create a parse debt entry capability
  * Parses natural language debt descriptions into structured data
  */
-export function createParseDebtCapability(ai: GoogleGenAI): Capability {
+export function createParseDebtCapability(
+  ai: GoogleGenAI,
+  langfuse: LangfuseService | null = null,
+): Capability {
   return {
     id: 'parse-debt-entry',
     name: 'Parse Debt Entry',
     description:
       'Parse natural language debt descriptions into structured data with direction, amount, person, and reason',
     execute: async (input: unknown): Promise<CapabilityResult> => {
-      try {
-        const { input: debtInput } = input as { input: string };
+      const { input: debtInput } = input as { input: string };
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'model',
-              parts: [{ text: DEBT_SYSTEM_PROMPT }],
+      const result = await traceLLMCall(langfuse, {
+        modelName: 'gemini-2.5-flash',
+        input: { debtInput },
+        execute: async () => {
+          return await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              {
+                role: 'model',
+                parts: [{ text: DEBT_SYSTEM_PROMPT }],
+              },
+              {
+                role: 'user',
+                parts: [{ text: DEBT_HUMAN_PROMPT(debtInput) }],
+              },
+            ],
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: debtParseSchema,
             },
-            {
-              role: 'user',
-              parts: [{ text: DEBT_HUMAN_PROMPT(debtInput) }],
-            },
-          ],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: debtParseSchema,
-          },
-        });
+          });
+        },
+        parseResponse: (text) => {
+          const parsed = JSON.parse(text);
 
-        if (!response.text) {
-          return {
-            success: false,
-            error: 'No response from AI model',
-          };
-        }
+          // Validate required fields
+          if (!parsed.direction || typeof parsed.amount !== 'number' || !parsed.person) {
+            throw new Error('Invalid debt parsing response');
+          }
 
-        const parsed = JSON.parse(response.text);
+          return toParsedDebtEntry(parsed);
+        },
+        metadata: { capability: 'parse-debt-entry' },
+      });
 
-        // Validate required fields
-        if (!parsed.direction || typeof parsed.amount !== 'number' || !parsed.person) {
-          return {
-            success: false,
-            error: 'Invalid debt parsing response',
-          };
-        }
-
-        const debtEntry = toParsedDebtEntry(parsed);
-
-        return {
-          success: true,
-          data: debtEntry,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred',
-        };
-      }
+      return result;
     },
   };
 }
@@ -204,18 +263,25 @@ export function createParseDebtCapability(ai: GoogleGenAI): Capability {
  * Get all available capabilities
  * Add new capabilities here as needed
  */
-export function getAllCapabilities(ai: GoogleGenAI): Capability[] {
+export function getAllCapabilities(
+  ai: GoogleGenAI,
+  langfuse: LangfuseService | null = null,
+): Capability[] {
   return [
-    createChatCapability(ai),
-    createDailyWorkReportCapability(ai),
-    createParseDebtCapability(ai),
+    createChatCapability(ai, langfuse),
+    createDailyWorkReportCapability(ai, langfuse),
+    createParseDebtCapability(ai, langfuse),
   ];
 }
 
 /**
  * Get a capability by ID
  */
-export function getCapabilityById(ai: GoogleGenAI, id: string): Capability | undefined {
-  const capabilities = getAllCapabilities(ai);
+export function getCapabilityById(
+  ai: GoogleGenAI,
+  id: string,
+  langfuse: LangfuseService | null = null,
+): Capability | undefined {
+  const capabilities = getAllCapabilities(ai, langfuse);
   return capabilities.find((c) => c.id === id);
 }

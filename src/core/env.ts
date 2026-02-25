@@ -30,6 +30,10 @@ const envSchema = z.object({
   DENO_ENV: z.enum(['developement', 'production', 'test']).default('developement'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   REDACT_SECRETS: z.boolean().default(true),
+  LANGFUSE_PUBLIC_KEY: z.string().optional(),
+  LANGFUSE_SECRET_KEY: z.string().optional(),
+  LANGFUSE_HOST: z.string().optional(),
+  LANGFUSE_ENABLED: z.boolean().optional(),
 });
 
 type EnvSchema = z.infer<typeof envSchema>;
@@ -67,9 +71,20 @@ const envProxy = new Proxy(envHandlers, {
         return Deno.env.get('DENO_ENV') || 'developement';
       case 'LOG_LEVEL':
         return Deno.env.get('LOG_LEVEL') || 'info';
-      case 'REDACT_SECRETS':
+      case 'REDACT_SECRETS': {
         const redactValue = Deno.env.get('REDACT_SECRETS');
         return redactValue === undefined ? true : redactValue === 'false';
+      }
+      case 'LANGFUSE_PUBLIC_KEY':
+        return Deno.env.get('LANGFUSE_PUBLIC_KEY');
+      case 'LANGFUSE_SECRET_KEY':
+        return Deno.env.get('LANGFUSE_SECRET_KEY');
+      case 'LANGFUSE_ENABLED': {
+        const langfuseEnabled = Deno.env.get('LANGFUSE_ENABLED');
+        return langfuseEnabled === 'true';
+      }
+      case 'LANGFUSE_HOST':
+        return Deno.env.get('LANGFUSE_HOST') || 'https://cloud.langfuse.com';
       default:
         return Deno.env.get(prop);
     }

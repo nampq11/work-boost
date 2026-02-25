@@ -1,4 +1,4 @@
-import { Debt, DebtDirection, DebtStatus } from '../entity/debt.ts';
+import { Debt, DebtDirection, DebtStatus } from '../../entity/debt.ts';
 
 /**
  * Formatter for debt messages in Slack using plain text with emoji.
