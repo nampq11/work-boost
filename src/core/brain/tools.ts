@@ -10,6 +10,7 @@
 
 import type { BotService, KeyboardButton } from '../bot/bot-service.ts';
 import { logger } from '../logger/logger.ts';
+import type { LangfuseService } from '../observability/langfuse/langfuse.ts';
 import type { Slack } from '../services/slack/slack.ts';
 import type { TelegramService } from '../services/telegram/telegram.ts';
 import type { SendMessageParams, Tool, ToolPlatform } from './types.ts';
@@ -19,7 +20,11 @@ import { SCHEMAS, validateToolParams } from './validation.ts';
  * Create a send_message tool
  * Sends a text message to either Slack or Telegram
  */
-export function createSendMessageTool(slack: Slack | null, telegram: TelegramService | null): Tool {
+export function createSendMessageTool(
+  slack: Slack | null,
+  telegram: TelegramService | null,
+  langfuse?: LangfuseService | null,
+): Tool {
   return {
     name: 'send_message',
     description:
@@ -61,10 +66,30 @@ export function createSendMessageTool(slack: Slack | null, telegram: TelegramSer
 
       const { platform, chatId, text, parseMode } = validation.data! as SendMessageParams;
 
+      const startTime = Date.now();
+
+      // Create span for tool execution if Langfuse is enabled
+      let span: ReturnType<ReturnType<LangfuseService['createTrace']>['span']> | null = null;
+      if (langfuse?.isEnabled()) {
+        const trace = langfuse.createTrace({
+          name: 'tool_send_message',
+          input: { platform, chatId, text: text.substring(0, 100) + '...' },
+          metadata: { tool: 'send_message', platform },
+        });
+        span = trace.span({
+          name: 'tool_execution',
+          input: { platform, chatId, textLength: text.length },
+        });
+      }
+
       try {
         const service = platform === 'slack' ? slack : telegram;
 
         if (!service) {
+          if (span) {
+            span.update({ output: { success: false, error: `${platform} service not available` } });
+            span.end();
+          }
           return {
             success: false,
             error: `${platform} service not available`,
@@ -73,12 +98,32 @@ export function createSendMessageTool(slack: Slack | null, telegram: TelegramSer
 
         await service.sendMessage(chatId, text, { parseMode });
 
+        if (span) {
+          span.update({
+            output: { success: true },
+            metadata: { duration: Date.now() - startTime },
+          });
+          span.end();
+        }
+
         return {
           success: true,
           data: { message: 'Sent successfully' },
         };
       } catch (error) {
         logger.error('Failed to send message', { platform, chatId, error });
+
+        if (span) {
+          span.update({
+            output: {
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            metadata: { duration: Date.now() - startTime },
+          });
+          span.end();
+        }
+
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -92,7 +137,10 @@ export function createSendMessageTool(slack: Slack | null, telegram: TelegramSer
  * Create a send_slack_blocks tool
  * Sends a formatted Slack message with blocks
  */
-export function createSendSlackBlocksTool(slack: Slack | null): Tool {
+export function createSendSlackBlocksTool(
+  slack: Slack | null,
+  langfuse?: LangfuseService | null,
+): Tool {
   return {
     name: 'send_slack_blocks',
     description:
@@ -156,7 +204,10 @@ export function createSendSlackBlocksTool(slack: Slack | null): Tool {
  * Create a send_telegram_keyboard tool
  * Sends a Telegram message with inline keyboard
  */
-export function createSendTelegramKeyboardTool(telegram: TelegramService | null): Tool {
+export function createSendTelegramKeyboardTool(
+  telegram: TelegramService | null,
+  langfuse?: LangfuseService | null,
+): Tool {
   return {
     name: 'send_telegram_keyboard',
     description:
@@ -398,11 +449,15 @@ export function createFormatDebtEntryTool(): Tool {
 /**
  * Get all available tools
  */
-export function getAllTools(slack: Slack | null, telegram: TelegramService | null): Tool[] {
+export function getAllTools(
+  slack: Slack | null,
+  telegram: TelegramService | null,
+  langfuse?: LangfuseService | null,
+): Tool[] {
   return [
-    createSendMessageTool(slack, telegram),
-    createSendSlackBlocksTool(slack),
-    createSendTelegramKeyboardTool(telegram),
+    createSendMessageTool(slack, telegram, langfuse),
+    createSendSlackBlocksTool(slack, langfuse),
+    createSendTelegramKeyboardTool(telegram, langfuse),
     createFormatDailyReportTool(),
     createFormatDebtEntryTool(),
   ];

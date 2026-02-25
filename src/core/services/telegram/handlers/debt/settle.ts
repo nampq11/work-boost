@@ -1,7 +1,7 @@
 import type { Context } from 'grammy';
 import { DebtStatus } from '../../../../entity/debt.ts';
-import type { Agent, Database } from '../../../index.ts';
 import { DebtTelegramFormatter } from '../../../formatting/debt-telegram-formatter.ts';
+import type { Agent, Database } from '../../../index.ts';
 import { debtMenuKeyboard } from '../../keyboards.ts';
 
 interface SettleHandlerDeps {

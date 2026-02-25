@@ -1,9 +1,10 @@
 import { autoRetry } from '@grammyjs/auto-retry';
-import { limit, type RateLimiter } from '@grammyjs/ratelimiter';
+import { type RateLimiter, limit } from '@grammyjs/ratelimiter';
 import { Bot, GrammyError } from 'grammy';
 import { webhookCallback } from 'grammy';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../../bot/bot-service.ts';
 import { env } from '../../env.ts';
+import type { LangfuseService } from '../../observability/langfuse/langfuse.ts';
 import type { Agent, Database } from '../index.ts';
 import { handleDebtInput, hasPendingDebt } from './handlers/debt/debt.ts';
 import * as debtHandlers from './handlers/debt/index.ts';
@@ -38,7 +39,7 @@ function redactSensitiveData(obj: Record<string, unknown>): Record<string, unkno
   for (const [key, value] of Object.entries(obj)) {
     const keyLower = key.toLowerCase();
     const shouldRedact = sensitiveKeys.some((sensitive) =>
-      keyLower.includes(sensitive.toLowerCase())
+      keyLower.includes(sensitive.toLowerCase()),
     );
 
     if (shouldRedact && typeof value === 'string' && value.length > 0) {
@@ -74,8 +75,9 @@ export class TelegramService implements BotService {
   private agent: Agent;
   private webhookSecret: string;
   private bulkLimiter: RateLimiter;
+  private langfuse?: LangfuseService;
 
-  constructor(db: Database, agent: Agent) {
+  constructor(db: Database, agent: Agent, langfuse?: LangfuseService) {
     const token = env.get('TELEGRAM_BOT_TOKEN');
     if (!token) {
       throw new Error('TELEGRAM_BOT_TOKEN is required');
@@ -84,6 +86,7 @@ export class TelegramService implements BotService {
     this.webhookSecret = env.get('TELEGRAM_WEBHOOK_SECRET') || '';
     this.db = db;
     this.agent = agent;
+    this.langfuse = langfuse;
     this.bot = new Bot(token);
 
     // Create separate rate limiter for bulk operations (higher limit)
@@ -166,17 +169,14 @@ export class TelegramService implements BotService {
     });
 
     // Callback query handlers (button presses)
-    this.bot.callbackQuery(
-      'action:subscribe',
-      (ctx) => handlers.handleSubscribeCallback(ctx, deps),
+    this.bot.callbackQuery('action:subscribe', (ctx) =>
+      handlers.handleSubscribeCallback(ctx, deps),
     );
-    this.bot.callbackQuery(
-      'action:unsubscribe',
-      (ctx) => handlers.handleUnsubscribeCallback(ctx, deps),
+    this.bot.callbackQuery('action:unsubscribe', (ctx) =>
+      handlers.handleUnsubscribeCallback(ctx, deps),
     );
-    this.bot.callbackQuery(
-      'action:unsubscribe_confirm',
-      (ctx) => handlers.handleUnsubscribeConfirm(ctx, deps),
+    this.bot.callbackQuery('action:unsubscribe_confirm', (ctx) =>
+      handlers.handleUnsubscribeConfirm(ctx, deps),
     );
     this.bot.callbackQuery('action:status', (ctx) => handlers.handleStatusCallback(ctx, deps));
     this.bot.callbackQuery('action:help', (ctx) => handlers.handleHelpCallback(ctx));
@@ -223,10 +223,35 @@ export class TelegramService implements BotService {
   }
 
   async sendMessage(chatId: string, content: string, options?: SendOptions): Promise<void> {
+    const startTime = Date.now();
+
+    // Create span for tracing if Langfuse is enabled
+    let span: ReturnType<ReturnType<LangfuseService['createTrace']>['span']> | null = null;
+    if (this.langfuse?.isEnabled()) {
+      const trace = this.langfuse.createTrace({
+        name: 'telegram_send_message',
+        input: { chatId, content: content.substring(0, 100) + '...' },
+        metadata: { platform: 'telegram', parseMode: options?.parseMode },
+      });
+      span = trace.span({
+        name: 'telegram_api_call',
+        input: { chatId, contentLength: content.length },
+      });
+    }
+
     try {
       await this.bot.api.sendMessage(chatId, content, {
         parse_mode: options?.parseMode === 'None' ? undefined : options?.parseMode || 'HTML',
       });
+
+      // Update span with success
+      if (span) {
+        span.update({
+          output: { success: true },
+          metadata: { duration: Date.now() - startTime },
+        });
+        span.end();
+      }
     } catch (error) {
       console.error(
         'Failed to send Telegram message:',
@@ -235,6 +260,19 @@ export class TelegramService implements BotService {
           chatId,
         }),
       );
+
+      // Update span with error
+      if (span) {
+        span.update({
+          output: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          metadata: { duration: Date.now() - startTime },
+        });
+        span.end();
+      }
+
       throw error;
     }
   }
@@ -245,7 +283,7 @@ export class TelegramService implements BotService {
    */
   async sendBulkMessage(chatId: string, content: string): Promise<void> {
     await this.bulkLimiter.control(() =>
-      this.bot.api.sendMessage(chatId, content, { parse_mode: 'HTML' })
+      this.bot.api.sendMessage(chatId, content, { parse_mode: 'HTML' }),
     );
   }
 
@@ -279,7 +317,8 @@ export class TelegramService implements BotService {
     return {
       platform: 'telegram',
       userId: body.message?.from?.id?.toString() || body.callback_query?.from?.id?.toString() || '',
-      chatId: body.message?.chat?.id?.toString() ||
+      chatId:
+        body.message?.chat?.id?.toString() ||
         body.callback_query?.message?.chat?.id?.toString() ||
         '',
       action: 'start', // Default, will be determined by handlers

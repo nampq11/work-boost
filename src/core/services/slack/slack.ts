@@ -1,16 +1,19 @@
 import type { BotService, BotUpdate, Platform, SendOptions } from '../../bot/bot-service.ts';
 import { env } from '../../env.ts';
 import { logger } from '../../logger/logger.ts';
+import type { LangfuseService } from '../../observability/langfuse/langfuse.ts';
 
 export class Slack implements BotService {
   readonly platform: Platform = 'slack';
   private baseUrl: string = `https://slack.com`;
   private slackBotToken: string;
   private signingSecret: string;
+  private langfuse?: LangfuseService;
 
-  constructor() {
+  constructor(langfuse?: LangfuseService) {
     this.slackBotToken = env.get('SLACK_BOT_TOKEN') || '';
     this.signingSecret = env.get('SLACK_SIGNING_SECRET') || '';
+    this.langfuse = langfuse;
   }
 
   async sendMessageToChannel(blocks: object): Promise<void> {
@@ -20,6 +23,22 @@ export class Slack implements BotService {
   }
 
   async sendMessage(chatId: string, content: string, options?: SendOptions): Promise<void> {
+    const startTime = Date.now();
+
+    // Create span for tracing if Langfuse is enabled
+    let span: ReturnType<ReturnType<LangfuseService['createTrace']>['span']> | null = null;
+    if (this.langfuse?.isEnabled()) {
+      const trace = this.langfuse.createTrace({
+        name: 'slack_send_message',
+        input: { chatId, content: content.substring(0, 100) + '...' },
+        metadata: { platform: 'slack', hasBlocks: !!options?.keyboard },
+      });
+      span = trace.span({
+        name: 'slack_api_call',
+        input: { chatId, contentLength: content.length },
+      });
+    }
+
     const url = `${this.baseUrl}/api/chat.postMessage`;
 
     // Use keyboard as blocks if provided (for rich formatting)
@@ -48,8 +67,30 @@ export class Slack implements BotService {
       }
       const responseJson = await response.json();
       logger.debug('Slack message sent', { response: responseJson });
+
+      // Update span with success
+      if (span) {
+        span.update({
+          output: { success: true, timestamp: responseJson.ts },
+          metadata: { duration: Date.now() - startTime },
+        });
+        span.end();
+      }
     } catch (error) {
       logger.error('Failed to send Slack message', { error });
+
+      // Update span with error
+      if (span) {
+        span.update({
+          output: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          metadata: { duration: Date.now() - startTime },
+        });
+        span.end();
+      }
+
       throw error;
     }
   }

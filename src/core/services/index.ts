@@ -6,3 +6,6 @@ import type { Brain } from '../brain/index.ts';
 
 // Type alias for backward compatibility
 export type Agent = Brain;
+
+// Re-export observability services
+export * from '../observability/index.ts';
