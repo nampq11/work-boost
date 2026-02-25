@@ -25,6 +25,9 @@ export * from './capabilities.ts';
 // Tools
 export * from './tools/index.ts';
 
+// Prompts
+export * from './prompts/index.ts';
+
 // Validation
 export * from './validation.ts';
 
@@ -39,9 +42,6 @@ export * from './planning/index.ts';
 
 // Memory Layer
 export * from './memory/index.ts';
-
-// Data Access (now in tools/)
-export * from './tools/index.ts';
 
 // Streaming
 export * from './streaming/index.ts';

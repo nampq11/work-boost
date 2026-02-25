@@ -11,13 +11,13 @@ import type { DailyWorkReport } from '../entity/agent.ts';
 import type { ParsedDebtEntry } from '../entity/debt.ts';
 import { logger } from '../logger/logger.ts';
 import type { LangfuseService } from '../observability/langfuse/langfuse.ts';
-import { dailyWorkSchema, HUMAN_PROMPT, SYSTEM_PROMPT } from './prompts/daily-work-prompt.ts';
+import { dailyWorkSchema, HUMAN_PROMPT, SYSTEM_PROMPT } from './prompts/daily-work/index.ts';
 import {
   DEBT_HUMAN_PROMPT,
   DEBT_SYSTEM_PROMPT,
   debtParseSchema,
   toParsedDebtEntry,
-} from './prompts/debt-prompt.ts';
+} from './prompts/debt/index.ts';
 import type { Capability, CapabilityResult } from './types.ts';
 
 /**

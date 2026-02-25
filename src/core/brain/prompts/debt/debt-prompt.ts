@@ -4,15 +4,8 @@
  * Prompts for parsing natural language debt entries into structured data.
  */
 
-import { DebtDirection, ParsedDebtEntry } from '../../entity/debt.ts';
-
-enum SchemaType {
-  ARRAY = 'array',
-  OBJECT = 'object',
-  STRING = 'string',
-  NUMBER = 'number',
-  BOOLEAN = 'boolean',
-}
+import { DebtDirection, ParsedDebtEntry } from '../../../entity/debt.ts';
+import { SchemaType } from '../types.ts';
 
 /**
  * System prompt for parsing debt entries
@@ -93,7 +86,7 @@ export const debtParseSchema = {
     },
   },
   required: ['direction', 'amount', 'person'],
-};
+} as const;
 
 /**
  * Type for the parsed debt response from AI

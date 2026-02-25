@@ -10,7 +10,7 @@ import type { GoogleGenAI } from '@google/genai';
 import { logger } from '../../logger/logger.ts';
 import type { LangfuseService } from '../../observability/langfuse/langfuse.ts';
 import type { Tool } from '../types.ts';
-import { PLAN_SYSTEM_PROMPT, planSchema } from './prompts/plan-prompt.ts';
+import { PLAN_SYSTEM_PROMPT, planSchema } from '../prompts/planning/index.ts';
 import {
   type Plan,
   type PlanOptions,
@@ -76,10 +76,7 @@ export class Planner {
         .map((t) => `- ${t.name}: ${t.description}`)
         .join('\n');
 
-      const systemPrompt = PLAN_SYSTEM_PROMPT.replace('{TOOLS}', toolDescriptions).replace(
-        '{MAX_STEPS}',
-        String(maxSteps),
-      );
+      const systemPrompt = PLAN_SYSTEM_PROMPT([toolDescriptions], maxSteps);
 
       // Generate plan
       const response = await this.ai.models.generateContent({

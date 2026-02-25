@@ -46,20 +46,39 @@ export const planSchema = {
     },
   },
   required: ['summary', 'steps'],
-};
+} as const;
 
 /**
- * System prompt for plan generation
+ * Plan step interface
  */
-export const PLAN_SYSTEM_PROMPT = `You are a planning assistant for Work Boost bot.
+export interface PlanStepData {
+  description: string;
+  action: string;
+  parameters?: Record<string, unknown>;
+  expectedOutcome?: string;
+}
+
+/**
+ * Plan data interface
+ */
+export interface PlanData {
+  summary: string;
+  steps: PlanStepData[];
+  estimatedDuration?: number;
+}
+
+/**
+ * System prompt template for plan generation
+ */
+export const PLAN_SYSTEM_PROMPT = (tools: string[], maxSteps: number = 10): string => `You are a planning assistant for Work Boost bot.
 
 Your job is to break down user requests into clear, executable steps.
 
 Available tools:
-{TOOLS}
+${tools.join('\n')}
 
 Rules:
-1. Create at most {MAX_STEPS} steps
+1. Create at most ${maxSteps} steps
 2. Each step should be atomic and independently verifiable
 3. Use only the available tools listed above
 4. Be specific about what each step does
