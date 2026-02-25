@@ -69,7 +69,7 @@ async function traceLLMCall<T>(
   const generation = trace.generation({
     name: options.modelName,
     model: options.modelName,
-    startTime: new Date(startTime).toISOString(),
+    startTime,
   });
 
   try {

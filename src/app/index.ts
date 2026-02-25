@@ -2,7 +2,7 @@
 import { env } from '../core/env.ts';
 import { logger } from '../core/logger/logger.ts';
 import { initLangfuse } from '../core/observability/index.ts';
-import { runMigrationIfNeeded } from '../core/services/database/migrate-slack-users.ts';
+import { runMigrationIfNeeded } from '../core/storage/migrate-slack-users.ts';
 import { Database, initBrain } from '../core/services/index.ts';
 import { startDailyScheduler } from '../core/services/scheduler/daily-job.ts';
 import { Slack } from '../core/services/slack/slack.ts';

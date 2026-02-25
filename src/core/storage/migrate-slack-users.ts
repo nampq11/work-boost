@@ -13,9 +13,9 @@
  * }
  */
 
-import type { Platform } from '../../bot/bot-service.ts';
-import type { Subscription } from '../../entity/subscription.ts';
-import type { User } from '../../entity/user.ts';
+import type { Platform } from '../bot/bot-service.ts';
+import type { Subscription } from '../entity/subscription.ts';
+import type { User } from '../entity/user.ts';
 import type { Database } from './database.ts';
 import { IndexKeys } from './indexes.ts';
 

@@ -3,7 +3,7 @@
  * Sends periodic reminders to users about their unpaid debts
  */
 
-import type { Database } from '../database/database.ts';
+import type { Database } from '../../storage/database.ts';
 import { DebtTelegramFormatter } from '../formatting/debt-telegram-formatter.ts';
 
 const formatter = new DebtTelegramFormatter();
