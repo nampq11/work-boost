@@ -1,3 +1,4 @@
+/// <reference lib="deno.unstable" />
 import { Debt, DebtDirection, DebtReminderSettings, DebtStatus } from '../../entity/debt.ts';
 import { Subscription } from '../../entity/subscription.ts';
 import { Message } from '../../entity/task.ts';

@@ -1,4 +1,4 @@
-import type { AgentResponse, TaskItem } from '../entity/agent.ts';
+import type { AgentResponse, TaskItem } from '../../entity/agent.ts';
 
 /**
  * Formatter for Telegram messages using HTML parse mode.

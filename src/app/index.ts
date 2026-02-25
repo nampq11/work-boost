@@ -1,3 +1,4 @@
+/// <reference lib="deno.unstable" />
 import { env } from '../core/env.ts';
 import { logger } from '../core/logger/logger.ts';
 import { Database, initBrain } from '../core/services/_index.ts';
@@ -36,7 +37,7 @@ function validateRequiredSecrets(): { valid: boolean; missing: string[] } {
   }
 
   for (const secret of required) {
-    const value = env.get(secret as any);
+    const value = env.get(secret);
     if (!value) {
       missing.push(secret);
     }
@@ -120,14 +121,12 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
 }
 
 // Start server when run directly
-if (import.meta.main) {
-  startApiMode({
-    port: 3001,
-    host: '0.0.0.0',
-    apiPrefix: '/api',
-  }).catch((error) => {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error('Failed to start API server:', { error: errorMsg });
-    Deno.exit(1);
-  });
-}
+startApiMode({
+  port: 3001,
+  host: '0.0.0.0',
+  apiPrefix: '/api',
+}).catch((error) => {
+  const errorMsg = error instanceof Error ? error.message : String(error);
+  logger.error('Failed to start API server:', { error: errorMsg });
+  Deno.exit(1);
+});

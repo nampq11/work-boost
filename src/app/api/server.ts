@@ -221,8 +221,13 @@ export function createServer(config: ApiServerConfig) {
       // ==============================================================
       // Health Check
       // ==============================================================
-      if (pathname === '/ ' && method === 'GET') {
-        const healthData: any = {
+      if (pathname === '/' && method === 'GET') {
+        const healthData: {
+          status: string;
+          timestamp: string;
+          version: string;
+          database?: string;
+        } = {
           status: 'healthy',
           timestamp: new Date().toISOString(),
           version: Deno.env.get('VERSION') || 'unknown',
@@ -329,7 +334,7 @@ export function createServer(config: ApiServerConfig) {
         try {
           // Slack sends URL-encoded form data
           const params = new URLSearchParams(bodyString);
-          parsedBody = Object.fromEntries(params.entries());
+          parsedBody = Object.fromEntries(params as unknown as Iterable<[string, string]>);
         } catch {
           try {
             parsedBody = JSON.parse(bodyString);

@@ -47,6 +47,6 @@
   },
   "allowScripts": {
     "allow": [],
-    "deny": ["npm:@biomejs/biome@1.9.4"]
+    "deny": ["npm:@biomejs/biome@1.9.4", "npm:oxlint@0.11.0"]
   }
 }

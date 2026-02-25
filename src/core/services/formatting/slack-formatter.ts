@@ -1,4 +1,4 @@
-import type { AgentResponse } from '../entity/agent.ts';
+import type { AgentResponse } from '../../entity/agent.ts';
 
 export class SlackFormatter {
   format(response: AgentResponse): string {

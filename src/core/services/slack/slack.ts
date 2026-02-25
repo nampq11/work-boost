@@ -85,7 +85,9 @@ export class Slack implements BotService {
 
   async parseUpdate(request: Request): Promise<BotUpdate> {
     const bodyText = await request.text();
-    const params = Object.fromEntries(new URLSearchParams(bodyText).entries());
+    const params = Object.fromEntries(
+      new URLSearchParams(bodyText) as unknown as Iterable<[string, string]>,
+    );
 
     const action = (params.command?.replace('/', '') as BotUpdate['action']) || 'message';
 
@@ -107,7 +109,9 @@ export class Slack implements BotService {
 
     try {
       // Try URL-encoded form data first (Slack's default)
-      body = Object.fromEntries(new URLSearchParams(bodyText).entries());
+      body = Object.fromEntries(
+        new URLSearchParams(bodyText) as unknown as Iterable<[string, string]>,
+      );
     } catch {
       try {
         body = JSON.parse(bodyText);

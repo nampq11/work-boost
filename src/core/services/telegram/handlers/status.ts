@@ -1,5 +1,5 @@
 import type { Context } from 'grammy';
-import type { Database } from '../../services/database/database.ts';
+import type { Database } from '../../database/database.ts';
 import { mainMenuKeyboard } from '../keyboards.ts';
 
 interface StatusHandlerDeps {

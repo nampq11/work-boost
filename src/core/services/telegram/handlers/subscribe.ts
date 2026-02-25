@@ -1,6 +1,6 @@
 import type { Context } from 'grammy';
-import type { Subscription } from '../../entity/subscription.ts';
-import type { Database } from '../../services/database/database.ts';
+import type { Subscription } from '../../../entity/subscription.ts';
+import type { Agent, Database } from '../../_index.ts';
 import { mainMenuKeyboard } from '../keyboards.ts';
 
 interface SubscribeHandlerDeps {
