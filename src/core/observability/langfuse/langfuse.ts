@@ -154,11 +154,8 @@ class LangfuseTraceImpl implements LangfuseTrace {
   }
 
   end(): void {
-    try {
-      this.sdkTrace.end();
-    } catch (error) {
-      logger.warn('Failed to end Langfuse trace', { error });
-    }
+    // Langfuse traces don't have an end() method - they're finalized automatically on flush
+    // This method exists for API compatibility but is a no-op
   }
 }
 
