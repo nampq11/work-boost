@@ -69,7 +69,7 @@ async function traceLLMCall<T>(
   const generation = trace.generation({
     name: options.modelName,
     model: options.modelName,
-    startTime,
+    startTime: new Date(startTime).toISOString(),
   });
 
   try {
@@ -78,7 +78,6 @@ async function traceLLMCall<T>(
     if (!response.text) {
       generation.update({ output: { error: 'No response from AI model' } });
       generation.end();
-      trace.end();
       return { success: false, error: 'No response from AI model' };
     }
 
@@ -96,7 +95,6 @@ async function traceLLMCall<T>(
     });
 
     generation.end();
-    trace.end();
 
     // Flush trace asynchronously (fire and forget)
     langfuse.flush().catch((error) => {
@@ -112,7 +110,6 @@ async function traceLLMCall<T>(
       metadata: { ...options.metadata, error: errorMessage },
     });
     generation.end();
-    trace.end();
 
     return {
       success: false,
