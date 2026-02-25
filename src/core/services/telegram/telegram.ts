@@ -290,7 +290,7 @@ export class TelegramService implements BotService {
   /**
    * Handle webhook using std/http mode (native Deno.serve() compatible)
    */
-  async handleWebhook(request: Request): Promise<Response> {
+  handleWebhook(request: Request): Promise<Response> {
     const handleUpdate = webhookCallback(this.bot, 'std/http');
     return handleUpdate(request);
   }

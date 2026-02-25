@@ -3,7 +3,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ES2022",
-    "lib": ["ESNext", "deno.ns", "DOM"],
+    "lib": ["ESNext", "DOM"],
     "jsx": "react",
     "strictNullChecks": true,
     "strictFunctionTypes": true,

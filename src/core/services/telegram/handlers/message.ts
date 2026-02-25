@@ -42,10 +42,10 @@ export async function handleMessage(ctx: Context, deps: MessageHandlerDeps): Pro
   };
   await deps.db.storeDailyWorkMessage(message);
 
-  // Send acknowledgement
-  await ctx.reply(
-    'Đã ghi nhận công việc của bạn! Tôi sẽ lên công việc cho bạn ngay!!!😊\n\nYour work has been recorded. Generating report...',
-  );
+  // // Send acknowledgement
+  // await ctx.reply(
+  //   'Đã ghi nhận công việc của bạn! Tôi sẽ lên công việc cho bạn ngay!!!😊\n\nYour work has been recorded. Generating report...',
+  // );
 
   // Process with AI using runWithTools for tool calling support
   try {
