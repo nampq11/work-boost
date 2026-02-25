@@ -27,8 +27,9 @@ export class Slack implements BotService {
 
     // Create span for tracing if Langfuse is enabled
     let span: ReturnType<ReturnType<LangfuseService['createTrace']>['span']> | null = null;
+    let trace: ReturnType<LangfuseService['createTrace']> | null = null;
     if (this.langfuse?.isEnabled()) {
-      const trace = this.langfuse.createTrace({
+      trace = this.langfuse.createTrace({
         name: 'slack_send_message',
         input: { chatId, content: content.substring(0, 100) + '...' },
         metadata: { platform: 'slack', hasBlocks: !!options?.keyboard },
@@ -76,6 +77,9 @@ export class Slack implements BotService {
         });
         span.end();
       }
+      if (trace) {
+        trace.end();
+      }
     } catch (error) {
       logger.error('Failed to send Slack message', { error });
 
@@ -89,6 +93,9 @@ export class Slack implements BotService {
           metadata: { duration: Date.now() - startTime },
         });
         span.end();
+      }
+      if (trace) {
+        trace.end();
       }
 
       throw error;

@@ -227,8 +227,9 @@ export class TelegramService implements BotService {
 
     // Create span for tracing if Langfuse is enabled
     let span: ReturnType<ReturnType<LangfuseService['createTrace']>['span']> | null = null;
+    let trace: ReturnType<LangfuseService['createTrace']> | null = null;
     if (this.langfuse?.isEnabled()) {
-      const trace = this.langfuse.createTrace({
+      trace = this.langfuse.createTrace({
         name: 'telegram_send_message',
         input: { chatId, content: content.substring(0, 100) + '...' },
         metadata: { platform: 'telegram', parseMode: options?.parseMode },
@@ -252,6 +253,9 @@ export class TelegramService implements BotService {
         });
         span.end();
       }
+      if (trace) {
+        trace.end();
+      }
     } catch (error) {
       console.error(
         'Failed to send Telegram message:',
@@ -271,6 +275,9 @@ export class TelegramService implements BotService {
           metadata: { duration: Date.now() - startTime },
         });
         span.end();
+      }
+      if (trace) {
+        trace.end();
       }
 
       throw error;
