@@ -83,8 +83,14 @@ const envProxy = new Proxy(envHandlers, {
         const langfuseEnabled = Deno.env.get('LANGFUSE_ENABLED');
         return langfuseEnabled === 'true';
       }
-      case 'LANGFUSE_HOST':
-        return Deno.env.get('LANGFUSE_HOST') || 'https://cloud.langfuse.com';
+      case 'LANGFUSE_HOST': {
+        const host = Deno.env.get('LANGFUSE_HOST') || Deno.env.get('LANGFUSE_BASE_URL');
+        return host || 'https://cloud.langfuse.com';
+      }
+      case 'LANGFUSE_BASE_URL': {
+        const host = Deno.env.get('LANGFUSE_BASE_URL') || Deno.env.get('LANGFUSE_HOST');
+        return host || 'https://cloud.langfuse.com';
+      }
       default:
         return Deno.env.get(prop);
     }
