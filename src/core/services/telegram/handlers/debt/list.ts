@@ -1,6 +1,6 @@
 import type { Context } from 'grammy';
 import { DebtDirection, DebtStatus } from '../../../../entity/debt.ts';
-import type { Agent, Database } from '../../../_index.ts';
+import type { Agent, Database } from '../../../index.ts';
 import { DebtTelegramFormatter } from '../../../formatting/debt-telegram-formatter.ts';
 import { debtListKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
 

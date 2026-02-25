@@ -1,11 +1,10 @@
 import { autoRetry } from '@grammyjs/auto-retry';
-import { type RateLimiter, limit } from '@grammyjs/ratelimiter';
-
+import { limit, type RateLimiter } from '@grammyjs/ratelimiter';
 import { Bot, GrammyError } from 'grammy';
 import { webhookCallback } from 'grammy';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../../bot/bot-service.ts';
 import { env } from '../../env.ts';
-import type { Agent, Database } from '../_index.ts';
+import type { Agent, Database } from '../index.ts';
 import { handleDebtInput, hasPendingDebt } from './handlers/debt/debt.ts';
 import * as debtHandlers from './handlers/debt/index.ts';
 import * as handlers from './handlers/index.ts';

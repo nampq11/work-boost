@@ -11,7 +11,7 @@ import { Command } from 'commander';
 import type { Brain } from '../../core/brain/index.ts';
 import { env } from '../../core/env.ts';
 import { logger } from '../../core/logger/logger.ts';
-import { Database, initBrain } from '../../core/services/_index.ts';
+import { Database, initBrain } from '../../core/services/index.ts';
 import { runMigrationIfNeeded } from '../../core/services/database/migrate-slack-users.ts';
 import { startDailyScheduler } from '../../core/services/scheduler/daily-job.ts';
 import { Slack } from '../../core/services/slack/slack.ts';

@@ -1,5 +1,5 @@
 import type { Subscription } from '../../../core/entity/subscription.ts';
-import type { Agent, Database } from '../../../core/services/_index.ts';
+import type { Agent, Database } from '../../../core/services/index.ts';
 import type { Slack } from '../../../core/services/slack/slack.ts';
 
 export interface SlackDeps {

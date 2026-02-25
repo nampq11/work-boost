@@ -1,5 +1,5 @@
 import type { Context } from 'grammy';
-import type { Agent, Database } from '../../../_index.ts';
+import type { Agent, Database } from '../../../index.ts';
 
 interface CallbackHandlerDeps {
   db: Database;

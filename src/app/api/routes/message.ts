@@ -217,7 +217,9 @@ export async function handleMessageSync(
         } catch (createError) {
           return errorResponse(
             ERROR_CODES.SESSION_NOT_FOUND,
-            `Failed to create session: ${createError instanceof Error ? createError.message : String(createError)}`,
+            `Failed to create session: ${
+              createError instanceof Error ? createError.message : String(createError)
+            }`,
             400,
             undefined,
             requestId,

@@ -20,4 +20,4 @@ export * from './entity/task.ts';
 export * from './entity/user.ts';
 
 // Export services
-export * from './services/_index.ts';
+export * from './services/index.ts';

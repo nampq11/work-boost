@@ -1,8 +1,6 @@
-import type { Agent, Database, Subscription } from '../_index.ts';
+import type { Agent, Database } from '../index.ts';
 import type { BotService } from '../../bot/bot-service.ts';
-import type { AgentResponse } from '../../entity/agent.ts';
-import { SlackFormatter } from '../formatting/slack-formatter.ts';
-import { TelegramFormatter } from '../formatting/telegram-formatter.ts';
+import type { Subscription } from '../../entity/subscription.ts';
 
 interface SchedulerDeps {
   db: Database;
@@ -62,12 +60,7 @@ async function batchProcess<T, R>(
 /**
  * Process a single subscription - generate and send daily summary
  */
-async function processSubscription(
-  sub: Subscription,
-  deps: SchedulerDeps,
-  slackFormatter: SlackFormatter,
-  telegramFormatter: TelegramFormatter,
-): Promise<ProcessResult> {
+async function processSubscription(sub: Subscription, deps: SchedulerDeps): Promise<ProcessResult> {
   try {
     // Get user's recent messages
     const messages = await deps.db.getMessagesByUserId(sub.userId);
@@ -76,18 +69,23 @@ async function processSubscription(
       return { success: false, userId: sub.userId, reason: 'no_messages' };
     }
 
-    // Generate summary using AI
+    // Generate summary using AI with daily-work-report capability
     const latestMessage = messages[messages.length - 1];
-    const response = await deps.agent.envoke({
-      content: latestMessage.content,
+
+    // Use run() with capability to get the formatted response
+    const { response } = await deps.agent.run(latestMessage.content, {
+      sessionId: `daily_${sub.userId}`,
+      capability: 'daily-work-report',
       verbose: false,
     });
 
-    if (!response.success) {
-      return { success: false, userId: sub.userId, reason: response.error };
+    // Check if response contains an error
+    if (response.startsWith('Error:')) {
+      return { success: false, userId: sub.userId, reason: response };
     }
 
     // Send to each enabled platform (sequentially per user to avoid rate limits)
+    // The response is already formatted by the capability, send directly
     for (const platform of sub.enabled) {
       try {
         const bot = platform === 'slack' ? deps.slackBot : deps.telegramBot;
@@ -98,15 +96,8 @@ async function processSubscription(
           continue;
         }
 
-        if (platform === 'slack') {
-          const formatted = slackFormatter.format(response as AgentResponse);
-          await bot.sendMessage(chatId, formatted);
-        } else {
-          const parts = telegramFormatter.format(response as AgentResponse);
-          for (const part of parts) {
-            await bot.sendMessage(chatId, part, { parseMode: 'HTML' });
-          }
-        }
+        // Send formatted response directly (already formatted by capability)
+        await bot.sendMessage(chatId, response);
 
         console.log(`Sent daily summary to ${sub.userId} via ${platform}`);
       } catch (platformError) {
@@ -132,8 +123,6 @@ async function processSubscription(
 export async function startDailyScheduler(deps: SchedulerDeps): Promise<void> {
   const schedule = getSchedule();
   const batchSize = getBatchSize();
-  const slackFormatter = new SlackFormatter();
-  const telegramFormatter = new TelegramFormatter();
 
   Deno.cron('daily-summary', schedule, async () => {
     const startTime = Date.now();
@@ -143,10 +132,8 @@ export async function startDailyScheduler(deps: SchedulerDeps): Promise<void> {
     console.log(`Found ${subscriptions.length} active subscriptions (batch size: ${batchSize})`);
 
     // Process subscriptions in parallel batches
-    const results = await batchProcess(
-      subscriptions,
-      batchSize,
-      (sub) => processSubscription(sub, deps, slackFormatter, telegramFormatter),
+    const results = await batchProcess(subscriptions, batchSize, (sub) =>
+      processSubscription(sub, deps),
     );
 
     // Log summary

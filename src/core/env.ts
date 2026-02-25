@@ -2,8 +2,8 @@ import process from 'node:process';
 import { load } from '@std/dotenv';
 import { z } from 'zod';
 
-const isMcpMode = Deno.args.includes('--mode') &&
-  Deno.args[Deno.args.indexOf('--mode') + 1] === 'mcp';
+const isMcpMode =
+  Deno.args.includes('--mode') && Deno.args[Deno.args.indexOf('--mode') + 1] === 'mcp';
 
 // Load .env file if it exists (skip in production where env vars are already set)
 let envFile: Record<string, string> = {};

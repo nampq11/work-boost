@@ -1,7 +1,7 @@
 import type { Context } from 'grammy';
 import type { DebtDirection } from '../../../../entity/debt.ts';
 import { DebtStatus } from '../../../../entity/debt.ts';
-import type { Agent, Database } from '../../../_index.ts';
+import type { Agent, Database } from '../../../index.ts';
 import { debtDirectionKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
 
 interface DebtHandlerDeps {

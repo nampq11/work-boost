@@ -1,5 +1,5 @@
 import { logger } from '../../core/logger/logger.ts';
-import type { Agent, Database } from '../../core/services/_index.ts';
+import type { Agent, Database } from '../../core/services/index.ts';
 import type { Slack } from '../../core/services/slack/slack.ts';
 import type { TelegramService } from '../../core/services/telegram/telegram.ts';
 import {
@@ -138,7 +138,8 @@ function createRateLimiter(windowMs: number, maxRequests: number) {
 
   return function checkRateLimit(request: Request): Response | null {
     // Extract client IP from headers or connection info
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
       'unknown';
 
@@ -194,9 +195,10 @@ export function createServer(config: ApiServerConfig) {
   );
 
   // Build Slack deps if available
-  const slackDeps: SlackDeps | undefined = config.db && config.agent && config.slack
-    ? { db: config.db, agent: config.agent, slack: config.slack }
-    : undefined;
+  const slackDeps: SlackDeps | undefined =
+    config.db && config.agent && config.slack
+      ? { db: config.db, agent: config.agent, slack: config.slack }
+      : undefined;
 
   function buildApiPath(route: string): string {
     if (!apiPrefix || apiPrefix === '') return route;
