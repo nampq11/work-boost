@@ -70,8 +70,9 @@ export function createSendMessageTool(
 
       // Create span for tool execution if Langfuse is enabled
       let span: ReturnType<ReturnType<LangfuseService['createTrace']>['span']> | null = null;
+      let trace: ReturnType<LangfuseService['createTrace']> | null = null;
       if (langfuse?.isEnabled()) {
-        const trace = langfuse.createTrace({
+        trace = langfuse.createTrace({
           name: 'tool_send_message',
           input: { platform, chatId, text: text.substring(0, 100) + '...' },
           metadata: { tool: 'send_message', platform },
@@ -90,6 +91,9 @@ export function createSendMessageTool(
             span.update({ output: { success: false, error: `${platform} service not available` } });
             span.end();
           }
+          if (trace) {
+            trace.end();
+          }
           return {
             success: false,
             error: `${platform} service not available`,
@@ -104,6 +108,9 @@ export function createSendMessageTool(
             metadata: { duration: Date.now() - startTime },
           });
           span.end();
+        }
+        if (trace) {
+          trace.end();
         }
 
         return {
@@ -122,6 +129,9 @@ export function createSendMessageTool(
             metadata: { duration: Date.now() - startTime },
           });
           span.end();
+        }
+        if (trace) {
+          trace.end();
         }
 
         return {

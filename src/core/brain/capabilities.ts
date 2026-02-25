@@ -11,7 +11,7 @@ import type { DailyWorkReport } from '../entity/agent.ts';
 import type { ParsedDebtEntry } from '../entity/debt.ts';
 import { logger } from '../logger/logger.ts';
 import type { LangfuseService } from '../observability/langfuse/langfuse.ts';
-import { HUMAN_PROMPT, SYSTEM_PROMPT, dailyWorkSchema } from './prompts/daily-work-prompt.ts';
+import { dailyWorkSchema, HUMAN_PROMPT, SYSTEM_PROMPT } from './prompts/daily-work-prompt.ts';
 import {
   DEBT_HUMAN_PROMPT,
   DEBT_SYSTEM_PROMPT,
@@ -28,7 +28,14 @@ async function traceLLMCall<T>(
   options: {
     modelName: string;
     input: unknown;
-    execute: () => Promise<{ text?: string; usage?: { totalTokenCount?: number } }>;
+    execute: () => Promise<{
+      text?: string;
+      usageMetadata?: {
+        promptTokenCount?: number;
+        candidatesTokenCount?: number;
+        totalTokenCount?: number;
+      };
+    }>;
     parseResponse: (text: string) => T;
     metadata?: Record<string, unknown>;
   },
@@ -81,9 +88,9 @@ async function traceLLMCall<T>(
     generation.update({
       output: response.text,
       usageDetails: {
-        totalTokens: response.usage?.totalTokenCount ?? 0,
-        promptTokens: 0,
-        completionTokens: 0,
+        totalTokens: response.usageMetadata?.totalTokenCount ?? 0,
+        promptTokens: response.usageMetadata?.promptTokenCount ?? 0,
+        completionTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
       },
       metadata: options.metadata,
     });

@@ -14,6 +14,7 @@ import type {
   CreateTraceOptions,
   LangfuseConfig,
   LangfuseGeneration,
+  LangfuseServiceConfig,
   LangfuseSpan,
   LangfuseTrace,
   LangfuseTracer,
@@ -227,16 +228,16 @@ class LangfuseGenerationImpl extends LangfuseSpanImpl implements LangfuseGenerat
         output: options.output,
         usage: options.usageDetails
           ? {
-              promptTokens: options.usageDetails.promptTokens ?? 0,
-              completionTokens: options.usageDetails.completionTokens ?? 0,
-              totalTokens: options.usageDetails.totalTokens ?? 0,
-            }
+            promptTokens: options.usageDetails.promptTokens ?? 0,
+            completionTokens: options.usageDetails.completionTokens ?? 0,
+            totalTokens: options.usageDetails.totalTokens ?? 0,
+          }
           : undefined,
         cost: options.costDetails
           ? {
-              totalCost: options.costDetails.totalCost ?? 0,
-              currency: options.costDetails.currency ?? 'USD',
-            }
+            totalCost: options.costDetails.totalCost ?? 0,
+            currency: options.costDetails.currency ?? 'USD',
+          }
           : undefined,
         metadata: options.metadata,
       });
@@ -257,14 +258,6 @@ class LangfuseGenerationImpl extends LangfuseSpanImpl implements LangfuseGenerat
 // ===== 3. Langfuse Service Class =====
 
 /**
- * Configuration for the Langfuse service
- */
-export interface LangfuseServiceConfig extends LangfuseConfig {
-  /** Flush interval in milliseconds (default: 1000) */
-  flushInterval?: number;
-}
-
-/**
  * Langfuse observability service
  *
  * Singleton service following Logger pattern:
@@ -283,8 +276,7 @@ export class LangfuseService implements LangfuseTracer {
       host: config.host ?? 'https://cloud.langfuse.com',
       enabled: config.enabled ?? false,
     };
-    this.enabled =
-      this.config.enabled &&
+    this.enabled = this.config.enabled &&
       !!this.config.publicKey &&
       !!this.config.secretKey &&
       LangfuseSDK !== null;
@@ -305,8 +297,8 @@ export class LangfuseService implements LangfuseTracer {
       const reason = !this.config.enabled
         ? 'disabled by configuration'
         : !this.config.publicKey || !this.config.secretKey
-          ? 'missing credentials'
-          : 'SDK not available';
+        ? 'missing credentials'
+        : 'SDK not available';
       logger.debug(`Langfuse tracing disabled: ${reason}`);
     }
   }
