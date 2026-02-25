@@ -136,7 +136,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     console.error('Error:', errorMsg);
     if (errorStack) console.error('Stack:', errorStack);
     logger.error('Failed to start API server: ' + errorMsg);
-    Deno.exit(1);
+    throw error;
   }
 }
 
@@ -152,5 +152,4 @@ startApiMode({
   console.error('Error:', errorMsg);
   if (errorStack) console.error('Stack:', errorStack);
   logger.error('Failed to start API server: ' + errorMsg);
-  Deno.exit(1);
 });
