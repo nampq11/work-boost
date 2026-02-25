@@ -133,11 +133,12 @@ export class DebtTelegramFormatter {
   }): string {
     const netPosition = summary.totalLent - summary.totalBorrowed;
     const netEmoji = netPosition > 0 ? '🟢' : netPosition < 0 ? '🔴' : '⚪';
-    const netText = netPosition > 0
-      ? `You're owed ${this.formatCurrency(Math.abs(netPosition), 'USD')}`
-      : netPosition < 0
-      ? `You owe ${this.formatCurrency(Math.abs(netPosition), 'USD')}`
-      : 'All settled up!';
+    const netText =
+      netPosition > 0
+        ? `You're owed ${this.formatCurrency(Math.abs(netPosition), 'USD')}`
+        : netPosition < 0
+          ? `You owe ${this.formatCurrency(Math.abs(netPosition), 'USD')}`
+          : 'All settled up!';
 
     return (
       `<b>💵 Debt Summary</b>\n\n` +

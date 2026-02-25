@@ -1,7 +1,7 @@
 import type { Context } from 'grammy';
 import type { Message } from '../../entity/task.ts';
-import type { Agent, Database } from '../../services/_index.ts';
 import { TelegramFormatter } from '../../formatting/telegram-formatter.ts';
+import type { Agent, Database } from '../../services/_index.ts';
 
 interface MessageHandlerDeps {
   db: Database;

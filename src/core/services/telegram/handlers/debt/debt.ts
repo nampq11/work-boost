@@ -62,9 +62,9 @@ export async function handleDebt(ctx: Context, deps: DebtHandlerDeps): Promise<v
       const directionText = parsed.direction === 'lent' ? 'lent to' : 'borrowed from';
       await ctx.reply(
         `✅ Debt recorded successfully!\n\n` +
-          `You ${directionText} ${parsed.person}: ${parsed.currency || '$'}${
-            parsed.amount.toFixed(2)
-          }` +
+          `You ${directionText} ${parsed.person}: ${parsed.currency || '$'}${parsed.amount.toFixed(
+            2,
+          )}` +
           (parsed.reason ? `\nReason: ${parsed.reason}` : ''),
         { reply_markup: debtMenuKeyboard() },
       );
@@ -166,9 +166,9 @@ export async function handleDebtInput(
     const directionText = parsed.direction === 'lent' ? 'lent to' : 'borrowed from';
     await ctx.reply(
       `✅ Debt recorded successfully!\n\n` +
-        `You ${directionText} ${parsed.person}: ${parsed.currency || '$'}${
-          parsed.amount.toFixed(2)
-        }` +
+        `You ${directionText} ${parsed.person}: ${parsed.currency || '$'}${parsed.amount.toFixed(
+          2,
+        )}` +
         (parsed.reason ? `\nReason: ${parsed.reason}` : ''),
       { reply_markup: debtMenuKeyboard() },
     );

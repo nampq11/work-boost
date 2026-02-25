@@ -106,11 +106,13 @@ async function settleDebt(
   const updated = await deps.db.settleDebt(debtId);
 
   if (updated) {
-    const directionText = debt.direction === 'lent'
-      ? `was paid back by ${debt.personName}`
-      : `you paid back to ${debt.personName}`;
+    const directionText =
+      debt.direction === 'lent'
+        ? `was paid back by ${debt.personName}`
+        : `you paid back to ${debt.personName}`;
 
-    const message = `✅ Debt marked as paid!\n\n` +
+    const message =
+      `✅ Debt marked as paid!\n\n` +
       `${formatter.formatCurrency(updated.amount, updated.currency)} ${directionText}` +
       (updated.reason ? `\nReason: ${updated.reason}` : '');
 

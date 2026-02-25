@@ -1,6 +1,6 @@
-import type { BotService } from '../bot/bot-service.ts';
-import type { AgentResponse } from '../entity/agent.ts';
 import type { Agent, Database, Subscription } from '../_index.ts';
+import type { BotService } from '../../bot/bot-service.ts';
+import type { AgentResponse } from '../../entity/agent.ts';
 import { SlackFormatter } from '../formatting/slack-formatter.ts';
 import { TelegramFormatter } from '../formatting/telegram-formatter.ts';
 
@@ -143,8 +143,10 @@ export async function startDailyScheduler(deps: SchedulerDeps): Promise<void> {
     console.log(`Found ${subscriptions.length} active subscriptions (batch size: ${batchSize})`);
 
     // Process subscriptions in parallel batches
-    const results = await batchProcess(subscriptions, batchSize, (sub) =>
-      processSubscription(sub, deps, slackFormatter, telegramFormatter),
+    const results = await batchProcess(
+      subscriptions,
+      batchSize,
+      (sub) => processSubscription(sub, deps, slackFormatter, telegramFormatter),
     );
 
     // Log summary

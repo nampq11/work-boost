@@ -19,9 +19,9 @@
 import { GoogleGenAI } from '@google/genai';
 import type { DailyWorkReport } from '../entity/agent.ts';
 import type { ParsedDebtEntry } from '../entity/debt.ts';
+import { logger } from '../logger/logger.ts';
 import type { Slack } from '../services/slack/slack.ts';
 import type { TelegramService } from '../services/telegram/telegram.ts';
-import { logger } from '../logger/logger.ts';
 import { getAllCapabilities } from './capabilities.ts';
 import { ContextManager } from './context.ts';
 import { executeToolCall, getAllTools } from './tools.ts';

@@ -42,8 +42,11 @@
     "exclude": ["node_modules/", ".deno/"]
   },
   "deploy": {
-    "exclude": ["node_modules/", ".deno/", "docs/", ".vscode/", ".worktrees/"],
-    "include": ["src/", "deno.json", "deno.lock"],
-    "entrypoint": "src/app/index.ts"
+    "org": "nampq11",
+    "app": "work-boost"
+  },
+  "allowScripts": {
+    "allow": [],
+    "deny": ["npm:@biomejs/biome@1.9.4"]
   }
 }
