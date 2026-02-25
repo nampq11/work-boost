@@ -64,14 +64,21 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   const enableScheduler = options.enableScheduler !== false;
 
   logger.info('Starting API server on http://' + host + ':' + port + apiPrefix, undefined, 'green');
+  console.log('[DEBUG] Environment DENO_ENV:', env.DENO_ENV);
+  console.log('[DEBUG] GOOGLE_API_KEY set:', !!env.get('GOOGLE_API_KEY'));
 
   // Validate required secrets before initializing services
+  console.log('[DEBUG] Validating required secrets...');
   const secretValidation = validateRequiredSecrets();
+  console.log('[DEBUG] Secret validation result:', secretValidation);
   if (!secretValidation.valid) {
-    throw new Error('Missing required secrets: ' + secretValidation.missing.join(', '));
+    const missingMsg = 'Missing required secrets: ' + secretValidation.missing.join(', ');
+    console.error('[ERROR] ' + missingMsg);
+    throw new Error(missingMsg);
   }
 
   // Initialize services
+  console.log('[DEBUG] Initializing services...');
   logger.info('Initializing services...');
   const db = await Database.init();
   logger.info('Database connected');
@@ -121,7 +128,11 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error('Failed to start API server:', { error: errorMsg });
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error('=== API SERVER START FAILED ===');
+    console.error('Error:', errorMsg);
+    if (errorStack) console.error('Stack:', errorStack);
+    logger.error('Failed to start API server: ' + errorMsg);
     Deno.exit(1);
   }
 }
@@ -133,6 +144,10 @@ startApiMode({
   apiPrefix: '/api',
 }).catch((error) => {
   const errorMsg = error instanceof Error ? error.message : String(error);
-  logger.error('Failed to start API server:', { error: errorMsg });
+  const errorStack = error instanceof Error ? error.stack : undefined;
+  console.error('=== API SERVER START FAILED ===');
+  console.error('Error:', errorMsg);
+  if (errorStack) console.error('Stack:', errorStack);
+  logger.error('Failed to start API server: ' + errorMsg);
   Deno.exit(1);
 });

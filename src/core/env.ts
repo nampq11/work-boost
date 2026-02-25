@@ -2,9 +2,17 @@ import process from 'node:process';
 import { load } from '@std/dotenv';
 import { z } from 'zod';
 
-const isMcpMode =
-  Deno.args.includes('--mode') && Deno.args[Deno.args.indexOf('--mode') + 1] === 'mcp';
-const envFile = await load();
+const isMcpMode = Deno.args.includes('--mode') &&
+  Deno.args[Deno.args.indexOf('--mode') + 1] === 'mcp';
+
+// Load .env file if it exists (skip in production where env vars are already set)
+let envFile: Record<string, string> = {};
+try {
+  envFile = await load();
+} catch {
+  // .env file doesn't exist or can't be read - that's OK in production
+  console.log('[DEBUG] No .env file found, using environment variables');
+}
 
 if (isMcpMode) {
   for (const [key, value] of Object.entries(envFile)) {
