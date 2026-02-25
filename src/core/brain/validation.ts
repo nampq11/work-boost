@@ -322,4 +322,63 @@ export const SCHEMAS = {
     person: { type: 'string' as const, required: true, minLength: 1, maxLength: 100 },
     reason: { type: 'string' as const, required: false, maxLength: 500 },
   },
+
+  // Database query tools
+  queryUser: {
+    userId: { type: 'string' as const, required: false, minLength: 1, maxLength: 100 },
+    username: { type: 'string' as const, required: false, minLength: 1, maxLength: 100 },
+    subscribed: { type: 'boolean' as const, required: false },
+  },
+
+  queryTask: {
+    taskId: { type: 'string' as const, required: false, minLength: 1, maxLength: 100 },
+    userId: { type: 'string' as const, required: false, minLength: 1, maxLength: 100 },
+    status: { type: 'string' as const, required: false, minLength: 1, maxLength: 50 },
+    limit: { type: 'number' as const, required: false, min: 1, max: 100 },
+  },
+
+  queryDebt: {
+    debtId: { type: 'string' as const, required: false, minLength: 1, maxLength: 100 },
+    userId: { type: 'string' as const, required: false, minLength: 1, maxLength: 100 },
+    direction: {
+      type: 'string' as const,
+      required: false,
+      enum: ['lent', 'borrowed'],
+    },
+    status: {
+      type: 'string' as const,
+      required: false,
+      enum: ['pending', 'paid', 'cancelled'],
+    },
+    personName: { type: 'string' as const, required: false, minLength: 1, maxLength: 100 },
+    limit: { type: 'number' as const, required: false, min: 1, max: 100 },
+  },
+
+  createDebt: {
+    userId: { type: 'string' as const, required: true, minLength: 1, maxLength: 100 },
+    direction: {
+      type: 'string' as const,
+      required: true,
+      enum: ['lent', 'borrowed'],
+    },
+    amount: { type: 'number' as const, required: true, min: 0 },
+    currency: { type: 'string' as const, required: false, minLength: 3, maxLength: 3 },
+    personName: { type: 'string' as const, required: true, minLength: 1, maxLength: 100 },
+    reason: { type: 'string' as const, required: false, maxLength: 500 },
+  },
+
+  updateDebt: {
+    debtId: { type: 'string' as const, required: true, minLength: 1, maxLength: 100 },
+    status: {
+      type: 'string' as const,
+      required: false,
+      enum: ['pending', 'paid', 'cancelled'],
+    },
+    amount: { type: 'number' as const, required: false, min: 0 },
+    reason: { type: 'string' as const, required: false, maxLength: 500 },
+  },
+
+  deleteDebt: {
+    debtId: { type: 'string' as const, required: true, minLength: 1, maxLength: 100 },
+  },
 } as const;

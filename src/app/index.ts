@@ -59,12 +59,9 @@ function validateRequiredSecrets(): { valid: boolean; missing: string[] } {
 export async function startApiMode(options: StartApiModeOptions): Promise<void> {
   const port = options.port;
   const host = options.host;
-  const apiPrefix =
-    Deno.env.get('WORKBOOST_API_PREFIX') !== undefined
-      ? Deno.env.get('WORKBOOST_API_PREFIX') === '""'
-        ? ''
-        : Deno.env.get('WORKBOOST_API_PREFIX')!
-      : options.apiPrefix;
+  const apiPrefix = Deno.env.get('WORKBOOST_API_PREFIX') !== undefined
+    ? Deno.env.get('WORKBOOST_API_PREFIX') === '""' ? '' : Deno.env.get('WORKBOOST_API_PREFIX')!
+    : options.apiPrefix;
   const enableScheduler = options.enableScheduler !== false;
 
   logger.info('Starting API server on http://' + host + ':' + port + apiPrefix, undefined, 'green');

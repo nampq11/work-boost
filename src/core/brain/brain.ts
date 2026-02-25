@@ -17,6 +17,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
+import type { Database } from '../storage/database.ts';
 import type { DailyWorkReport } from '../entity/agent.ts';
 import type { ParsedDebtEntry } from '../entity/debt.ts';
 import { logger } from '../logger/logger.ts';
@@ -25,8 +26,11 @@ import type { Slack } from '../services/slack/slack.ts';
 import type { TelegramService } from '../services/telegram/telegram.ts';
 import { getAllCapabilities } from './capabilities.ts';
 import { ContextManager } from './context.ts';
-import { executeToolCall, getAllTools } from './tools.ts';
+import { createPlanner, Planner, PlanStatus, StepStatus } from './planning/index.ts';
+import { Streamer, createChunkSender, createStreamer } from './streaming/index.ts';
+import { executeToolCall, getAllTools } from './tools/index.ts';
 import type { BrainConfig, BrainRunResult, Capability, Context, Message, Tool } from './types.ts';
+import { LongTermMemory, WorkingMemory, MemoryType } from './memory/index.ts';
 
 /**
  * The Brain class - core agent loop
@@ -45,11 +49,19 @@ export class Brain {
   private telegram?: TelegramService | null;
   private langfuse?: LangfuseService | null;
 
+  // Enhanced agent features
+  private planner: Planner;
+  private streamer: Streamer;
+  private workingMemory: WorkingMemory;
+  private longTermMemory?: LongTermMemory;
+  private db?: Database;
+
   private constructor(
     config: BrainConfig,
     slack?: Slack | null,
     telegram?: TelegramService | null,
     langfuse?: LangfuseService | null,
+    db?: Database,
   ) {
     this.ai = new GoogleGenAI({ apiKey: config.apiKey });
     this.config = config;
@@ -58,7 +70,19 @@ export class Brain {
     this.slack = slack;
     this.telegram = telegram;
     this.langfuse = langfuse;
-    this.tools = getAllTools(slack ?? null, telegram ?? null, langfuse);
+    this.db = db;
+
+    // Initialize tools with database tools if db is available
+    this.tools = getAllTools(slack ?? null, telegram ?? null, langfuse, db);
+
+    // Initialize enhanced features
+    this.planner = createPlanner(this.ai, langfuse);
+    this.streamer = createStreamer(this.ai, langfuse);
+    this.workingMemory = new WorkingMemory();
+
+    if (db) {
+      this.longTermMemory = new LongTermMemory(db.kv, this.ai, langfuse);
+    }
   }
 
   /**
@@ -69,6 +93,7 @@ export class Brain {
     slack?: Slack | null,
     telegram?: TelegramService | null,
     langfuse?: LangfuseService | null,
+    db?: Database,
   ): Promise<Brain> {
     if (this.instance) {
       // Update services if provided
@@ -76,13 +101,13 @@ export class Brain {
         this.instance.slack = slack;
         this.instance.telegram = telegram;
         this.instance.langfuse = langfuse;
-        this.instance.tools = getAllTools(slack ?? null, telegram ?? null, langfuse);
+        this.instance.tools = getAllTools(slack ?? null, telegram ?? null, langfuse, db);
         this.instance.capabilities = getAllCapabilities(this.instance.ai, langfuse);
       }
       return this.instance;
     }
 
-    this.instance = new Brain(config, slack, telegram, langfuse);
+    this.instance = new Brain(config, slack, telegram, langfuse, db);
     return this.instance;
   }
 
@@ -444,6 +469,279 @@ User message: ${message}`;
     const result = await executeToolCall(this.tools, { name: toolName, parameters });
     return result;
   }
+
+  /**
+   * Create a plan for a user request
+   *
+   * The planning layer analyzes what to do before executing.
+   * Provides transparency by showing the plan to the user.
+   */
+  async createPlan(
+    userRequest: string,
+    sessionId: string,
+    options: {
+      maxSteps?: number;
+      requireApproval?: boolean;
+    } = {},
+  ) {
+    const planResult = await this.planner.createPlan(
+      userRequest,
+      sessionId,
+      this.tools,
+      options,
+    );
+
+    if (planResult.success && planResult.plan) {
+      this.planner.storePlan(planResult.plan);
+    }
+
+    return planResult;
+  }
+
+  /**
+   * Execute a plan step by step
+   *
+   * Runs through plan steps with progress updates.
+   */
+  async executePlan(
+    planId: string,
+    onProgress?: (progress: { step: number; total: number; description: string; status: string }) => void,
+  ) {
+    const plan = this.planner.getPlan(planId);
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+
+    plan.status = PlanStatus.IN_PROGRESS;
+    plan.startedAt = new Date();
+
+    const results: unknown[] = [];
+
+    for (const step of plan.steps) {
+      step.status = StepStatus.IN_PROGRESS;
+      onProgress?.({
+        step: step.step,
+        total: plan.steps.length,
+        description: step.description,
+        status: step.status,
+      });
+
+      try {
+        // Execute the step using the appropriate tool
+        const tool = this.tools.find((t) => t.name === step.action);
+        if (tool) {
+          const result = await tool.execute(step.parameters || {});
+          step.result = result;
+          results.push(result);
+          step.status = StepStatus.COMPLETED;
+        } else {
+          step.status = StepStatus.FAILED;
+          step.error = `Tool not found: ${step.action}`;
+        }
+      } catch (error) {
+        step.status = StepStatus.FAILED;
+        step.error = error instanceof Error ? error.message : 'Unknown error';
+      }
+
+      onProgress?.({
+        step: step.step,
+        total: plan.steps.length,
+        description: step.description,
+        status: step.status,
+      });
+    }
+
+    plan.status = PlanStatus.COMPLETED;
+    plan.completedAt = new Date();
+    plan.actualDuration = plan.completedAt.getTime() - plan.startedAt!.getTime();
+
+    return {
+      success: true,
+      plan,
+      results,
+    };
+  }
+
+  /**
+   * Stream a response to the user
+   *
+   * Sends partial responses as they arrive from the LLM.
+   * Provides better UX for long-running responses.
+   */
+  async stream(
+    message: string,
+    onChunk: (chunk: { content: string; isFinal: boolean }) => void | Promise<void>,
+    options: {
+      sessionId?: string;
+      platform?: 'slack' | 'telegram';
+      chatId?: string;
+    } = {},
+  ) {
+    const { sessionId = 'default', platform, chatId } = options;
+
+    // Add user message to context
+    this.contextManager.addMessage(sessionId, {
+      role: 'user',
+      content: message,
+    });
+
+    // Get context messages
+    const contextMessages = this.contextManager.getMessages(sessionId);
+
+    // Build messages for streaming
+    const messages: Message[] = [
+      {
+        role: 'system',
+        content: `You are a helpful assistant for Work Boost bot.
+Platform: ${platform || 'unknown'}
+Chat ID: ${chatId || 'unknown'}
+
+Provide concise, helpful responses.`,
+        timestamp: new Date(),
+      },
+      ...contextMessages,
+    ];
+
+    // Stream the response
+    const result = await this.streamer.stream(messages, this.tools, {
+      onChunk: async (chunk) => {
+        await onChunk({ content: chunk.content, isFinal: chunk.isFinal });
+      },
+    });
+
+    // Add final accumulated content to context
+    if (result.success && result.content) {
+      this.contextManager.addMessage(sessionId, {
+        role: 'model',
+        content: result.content,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Store a memory in long-term memory
+   *
+   * Stores knowledge that persists across sessions.
+   */
+  async storeMemory(
+    userId: string,
+    type: MemoryType,
+    content: string,
+    metadata: Record<string, unknown> = {},
+    options: { importance?: number; ttl?: number } = {},
+  ) {
+    if (!this.longTermMemory) {
+      return { success: false, error: 'Long-term memory not available' };
+    }
+
+    const id = await this.longTermMemory.store({
+      userId,
+      type,
+      content,
+      metadata,
+      importance: options.importance ?? 0.5,
+    }, { ttl: options.ttl });
+
+    return { success: true, id };
+  }
+
+  /**
+   * Retrieve relevant memories
+   *
+   * Loads memories relevant to a query from long-term storage.
+   */
+  async retrieveMemories(
+    userId: string,
+    query: string,
+    options: { maxResults?: number; minScore?: number; types?: MemoryType[] } = {},
+  ) {
+    if (!this.longTermMemory) {
+      return { success: false, error: 'Long-term memory not available', memories: [] };
+    }
+
+    const memories = await this.longTermMemory.retrieve(query, userId, options);
+
+    return {
+      success: true,
+      memories,
+      count: memories.length,
+    };
+  }
+
+  /**
+   * Set working memory goal
+   *
+   * Sets the current goal for a session.
+   */
+  setWorkingGoal(sessionId: string, goal: string): void {
+    this.workingMemory.setGoal(sessionId, goal);
+  }
+
+  /**
+   * Get working memory goal
+   *
+   * Gets the current goal for a session.
+   */
+  getWorkingGoal(sessionId: string): string | undefined {
+    return this.workingMemory.getGoal(sessionId);
+  }
+
+  /**
+   * Store entity in working memory
+   *
+   * Stores an important entity for the current session.
+   */
+  setWorkingEntity(sessionId: string, key: string, value: unknown): void {
+    this.workingMemory.setEntity(sessionId, key, value);
+  }
+
+  /**
+   * Get entity from working memory
+   *
+   * Retrieves an entity from the current session.
+   */
+  getWorkingEntity(sessionId: string, key: string): unknown | undefined {
+    return this.workingMemory.getEntity(sessionId, key);
+  }
+
+  /**
+   * Clear working memory for a session
+   *
+   * Clears all working memory for a session.
+   */
+  clearWorkingMemory(sessionId: string): void {
+    this.workingMemory.clear(sessionId);
+  }
+
+  /**
+   * Get the planner instance
+   */
+  getPlanner(): Planner {
+    return this.planner;
+  }
+
+  /**
+   * Get the streamer instance
+   */
+  getStreamer(): Streamer {
+    return this.streamer;
+  }
+
+  /**
+   * Get the long-term memory instance
+   */
+  getLongTermMemory(): LongTermMemory | undefined {
+    return this.longTermMemory;
+  }
+
+  /**
+   * Get the working memory instance
+   */
+  getWorkingMemory(): WorkingMemory {
+    return this.workingMemory;
+  }
 }
 
 /**
@@ -456,6 +754,7 @@ export async function initBrain(
     slack?: Slack | null;
     telegram?: TelegramService | null;
     langfuse?: LangfuseService | null;
+    db?: Database;
   },
 ): Promise<Brain> {
   return Brain.init(
@@ -466,5 +765,6 @@ export async function initBrain(
     options?.slack,
     options?.telegram,
     options?.langfuse,
+    options?.db,
   );
 }

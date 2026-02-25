@@ -255,8 +255,11 @@ program
     console.log('');
     for (const check of checks) {
       const status = check.status === 'ok' ? '✓' : check.status === 'warning' ? '⚠' : '✗';
-      const statusColor =
-        check.status === 'ok' ? 'green' : check.status === 'warning' ? 'yellow' : 'red';
+      const statusColor = check.status === 'ok'
+        ? 'green'
+        : check.status === 'warning'
+        ? 'yellow'
+        : 'red';
       logger.info(
         `${status} ${check.name}: ${check.message || check.status}`,
         undefined,
@@ -544,7 +547,7 @@ program
       // Send message to brain
       try {
         const startTime = Date.now();
-        const result = await brain.run(input, {
+        const result = await brain.runWithTools(input, {
           sessionId,
           verbose: options.verbose,
         });
