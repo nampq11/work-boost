@@ -3,7 +3,15 @@ import { Debt, DebtDirection, DebtReminderSettings, DebtStatus } from '../entity
 import { Subscription } from '../entity/subscription.ts';
 import { Message } from '../entity/task.ts';
 import { User } from '../entity/user.ts';
-import { IndexKeys, PrimaryKeys } from './indexes.ts';
+import { IndexKeys, PrimaryKeys, listIndexed } from './indexes.ts';
+
+function isSameCalendarDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
 
 export class Database {
   private static instance: Database;
@@ -35,29 +43,21 @@ export class Database {
   }
 
   async store(user: User): Promise<void> {
-    await this.kv.set(['users', user.id], user);
-    console.log('Saved account!');
+    await this.kv.set(PrimaryKeys.user(user.id), user);
   }
 
   async getById(id: string): Promise<User | null> {
-    const result = await this.kv.get(['users', id]);
-    return result.value as User;
+    const result = await this.kv.get<User>(PrimaryKeys.user(id));
+    return result.value ?? null;
   }
 
   async getAllSubscribedUsers(): Promise<User[]> {
-    const users: User[] = [];
-    const entries = this.kv.list({ prefix: ['users'] });
-    for await (const entry of entries) {
-      const user = entry.value as User;
-      if (user.subscribed) users.push(user);
-    }
-
-    return users;
+    const users = await listIndexed<User>(this.kv, ['users']);
+    return users.filter((user) => user.subscribed);
   }
 
   async delete(id: string): Promise<void> {
-    await this.kv.delete(['users', id]);
-    console.log('Deleted account!');
+    await this.kv.delete(PrimaryKeys.user(id));
   }
 
   async storeDailyWorkMessage(message: Message): Promise<void> {
@@ -70,14 +70,8 @@ export class Database {
   }
 
   async getDailyWork(userId: string, date: Date): Promise<Message | undefined> {
-    const listMessageByUserId = await this.kv.getMany<Message[]>([['messagesByUserId', userId]]);
-
-    // filter by Date
-    for (const message of listMessageByUserId) {
-      if (message.value?.date.getDate() === date.getDate()) {
-        return message.value as Message;
-      }
-    }
+    const messages = await this.getMessagesByUserId(userId);
+    return messages.find((message) => isSameCalendarDay(message.date, date));
   }
 
   // Subscription methods for multi-platform support
@@ -130,26 +124,15 @@ export class Database {
    * Get all active subscriptions using the index for O(1) lookups
    */
   async getAllActiveSubscriptions(): Promise<Subscription[]> {
-    const subscriptions: Subscription[] = [];
-    // Use the active_subscriptions index instead of scanning all subscriptions
     const prefix = IndexKeys.activeSubscription('NO_USER').slice(0, -1); // Remove placeholder
-    const entries = this.kv.list({ prefix });
-    for await (const entry of entries) {
-      subscriptions.push(entry.value as Subscription);
-    }
-    return subscriptions;
+    return listIndexed<Subscription>(this.kv, prefix);
   }
 
   /**
    * Get messages by user using indexed lookups, sorted by date (oldest first)
    */
   async getMessagesByUserId(userId: string): Promise<Message[]> {
-    const messages: Message[] = [];
-    // Use the user-specific message index instead of scanning all messages
-    const entries = this.kv.list({ prefix: IndexKeys.messagesByUserPrefix(userId) });
-    for await (const entry of entries) {
-      messages.push(entry.value as Message);
-    }
+    const messages = await listIndexed<Message>(this.kv, IndexKeys.messagesByUserPrefix(userId));
     return messages.sort((a, b) => a.date.getTime() - b.date.getTime());
   }
 
@@ -228,11 +211,7 @@ export class Database {
    * Get all debts for a user, sorted by creation date (newest first)
    */
   async getDebtsByUserId(userId: string): Promise<Debt[]> {
-    const debts: Debt[] = [];
-    const entries = this.kv.list({ prefix: IndexKeys.debtsByUserPrefix(userId) });
-    for await (const entry of entries) {
-      debts.push(entry.value as Debt);
-    }
+    const debts = await listIndexed<Debt>(this.kv, IndexKeys.debtsByUserPrefix(userId));
     return debts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
@@ -240,11 +219,7 @@ export class Database {
    * Get only unpaid (pending) debts for a user
    */
   async getUnpaidDebtsByUserId(userId: string): Promise<Debt[]> {
-    const debts: Debt[] = [];
-    const entries = this.kv.list({ prefix: IndexKeys.unpaidDebtsByUserPrefix(userId) });
-    for await (const entry of entries) {
-      debts.push(entry.value as Debt);
-    }
+    const debts = await listIndexed<Debt>(this.kv, IndexKeys.unpaidDebtsByUserPrefix(userId));
     return debts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
@@ -376,16 +351,9 @@ export class Database {
    * Get all users who have debt reminders enabled
    */
   async getAllDebtReminderUsers(): Promise<DebtReminderSettings[]> {
-    const settings: DebtReminderSettings[] = [];
     const prefix = IndexKeys.debtReminderSettings('').slice(0, -1);
-    const entries = this.kv.list({ prefix });
-    for await (const entry of entries) {
-      const s = entry.value as DebtReminderSettings;
-      if (s.enabled) {
-        settings.push(s);
-      }
-    }
-    return settings;
+    const settings = await listIndexed<DebtReminderSettings>(this.kv, prefix);
+    return settings.filter((setting) => setting.enabled);
   }
 
   /**
@@ -444,55 +412,3 @@ export class Database {
     return summary;
   }
 }
-
-// export class TaskDB {
-//     static async create(task: Omit<Task, "id">): Promise<Task>{
-//         const id = generateId();
-//         const now = new Date();
-//         const newTask = {
-//             id,
-//             ...task,
-//             createAt: now,
-//             updateAt: now,
-//         };
-
-//         await kv.atomic()
-//         .set(["tasks", id], newTask)
-//         .set(["tasks_by_status", newTask.status, id], id)
-//         .set(["tasks_by_user", newTask.createdBy, id], id)
-//         .commit();
-
-//         return newTask;
-//     }
-
-//     static async getById(id: string): Promise<Task | null> {
-//         const result = await kv.get(["tasks", id]);
-//         return result.value as Task;
-//     }
-
-//     static async getByStatus(status: string): Promise<Task[]> {
-//         const tasks: Task[] = [];
-//         const entries = kv.list({prefix: ["tasks_by_status", status]});
-
-//         for await (const entry of entries) {
-//             const task = await this.getById(entry.value as string);
-//             if (task) tasks.push(task);
-//         }
-
-//         return tasks;
-//     }
-
-//     static async updateStatus(id: string, status: string): Promise<Task | null> {
-//         const task = await this.getById(id);
-//         if (!task) return null;
-
-//         const updatedTask = {...task, status, updateAt: new Date()};
-//         await kv.atomic()
-//         .set(["tasks", id], updatedTask)
-//         .set(["tasks_by_status", status, id], id)
-//         .delete(["tasks_by_status", task.status, id])
-//         .commit();
-
-//         return updatedTask;
-//     }
-// }

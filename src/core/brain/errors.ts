@@ -50,7 +50,7 @@ export class BrainError extends Error {
     public code: ErrorCode,
     message: string,
     public retryable: boolean = false,
-    public cause?: Error,
+    public override cause?: Error,
   ) {
     super(message);
     this.name = 'BrainError';

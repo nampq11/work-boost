@@ -6,8 +6,7 @@
 
 import { logger } from '../../../logger/logger.ts';
 import type { LangfuseService } from '../../../observability/langfuse/langfuse.ts';
-import type { Slack } from '../../../services/slack/slack.ts';
-import type { TelegramService } from '../../../services/telegram/telegram.ts';
+import type { MessageSender } from '../../../ports/messaging.ts';
 import type { SendMessageParams, Tool } from '../../types.ts';
 import { validateToolParams } from '../../validation.ts';
 import { SCHEMAS } from '../../validation.ts';
@@ -17,8 +16,8 @@ import { SCHEMAS } from '../../validation.ts';
  * Sends a text message to either Slack or Telegram
  */
 export function createSendMessageTool(
-  slack: Slack | null,
-  telegram: TelegramService | null,
+  slack: MessageSender | null,
+  telegram: MessageSender | null,
   langfuse?: LangfuseService | null,
 ): Tool {
   return {
@@ -60,7 +59,8 @@ export function createSendMessageTool(
         };
       }
 
-      const { platform, chatId, text, parseMode } = validation.data! as unknown as SendMessageParams;
+      const { platform, chatId, text, parseMode } = validation
+        .data! as unknown as SendMessageParams;
 
       const startTime = Date.now();
 

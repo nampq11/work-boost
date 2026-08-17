@@ -9,7 +9,7 @@
  */
 
 import type { GoogleGenAI } from '@google/genai';
-import type { KeyboardButton } from '../bot/bot-service.ts';
+import type { MessageButton } from '../ports/messaging.ts';
 
 /**
  * A message in the conversation
@@ -124,5 +124,5 @@ export interface SendMessageParams {
   chatId: string;
   text: string;
   parseMode?: 'HTML' | 'Markdown' | 'None';
-  keyboard?: KeyboardButton[][];
+  keyboard?: MessageButton[][];
 }

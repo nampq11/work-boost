@@ -4,10 +4,9 @@
  * Sends a Telegram message with inline keyboard
  */
 
-import type { BotService, KeyboardButton } from '../../../bot/bot-service.ts';
 import { logger } from '../../../logger/logger.ts';
 import type { LangfuseService } from '../../../observability/langfuse/langfuse.ts';
-import type { TelegramService } from '../../../services/telegram/telegram.ts';
+import type { MessageButton, MessageSender } from '../../../ports/messaging.ts';
 import type { Tool } from '../../types.ts';
 import { validateToolParams } from '../../validation.ts';
 import { SCHEMAS } from '../../validation.ts';
@@ -17,7 +16,7 @@ import { SCHEMAS } from '../../validation.ts';
  * Sends a Telegram message with inline keyboard
  */
 export function createSendTelegramKeyboardTool(
-  telegram: TelegramService | null,
+  telegram: MessageSender | null,
   langfuse?: LangfuseService | null,
 ): Tool {
   return {
@@ -73,7 +72,7 @@ export function createSendTelegramKeyboardTool(
       } = validation.data! as {
         chatId: string;
         text: string;
-        keyboard: KeyboardButton[][];
+        keyboard: MessageButton[][];
         parseMode?: 'HTML' | 'Markdown' | 'None';
       };
 

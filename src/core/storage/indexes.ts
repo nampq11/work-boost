@@ -54,9 +54,6 @@ export const IndexKeys = {
     ['unpaid_debts_by_user', userId, debtId] as const,
   debtReminderSettings: (userId: string) => ['debt_reminders', userId] as const,
 
-  // Legacy (for backward compatibility)
-  messagesByUserId: (userId: string) => ['messagesByUserId', userId] as const,
-
   // Migration keys
   migration: (name: string) => ['migration', name] as const,
   userMigrated: (userId: string) => ['users', userId, '_migrated'] as const,

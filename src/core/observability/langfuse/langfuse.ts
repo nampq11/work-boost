@@ -21,6 +21,37 @@ import type {
   TraceMetadata,
 } from './types.ts';
 
+type LangfuseClient = InstanceType<typeof import('langfuse').Langfuse>;
+type LangfuseTraceClient = ReturnType<LangfuseClient['trace']>;
+type LangfuseSpanClient = ReturnType<LangfuseTraceClient['span']>;
+type LangfuseGenerationClient = ReturnType<LangfuseTraceClient['generation']>;
+type LangfuseMapValue = string | number | boolean | string[] | null;
+
+function normalizeModelParameters(
+  parameters?: Record<string, unknown>,
+): Record<string, LangfuseMapValue> | undefined {
+  if (!parameters) return undefined;
+
+  return Object.fromEntries(
+    Object.entries(parameters).map(([key, value]) => {
+      if (
+        value === null ||
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
+        return [key, value];
+      }
+
+      if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+        return [key, value];
+      }
+
+      return [key, JSON.stringify(value)];
+    }),
+  );
+}
+
 // ===== 1. No-op Tracer (Fallback) =====
 
 /**
@@ -40,7 +71,7 @@ class NoOpSpan implements LangfuseSpan {
  * No-op generation for when tracing is disabled
  */
 class NoOpGeneration extends NoOpSpan implements LangfuseGeneration {
-  update(_options: {
+  override update(_options: {
     output?: unknown;
     usageDetails?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
     costDetails?: { totalCost?: number; currency?: string };
@@ -95,11 +126,11 @@ try {
  * Real Langfuse trace using SDK
  */
 class LangfuseTraceImpl implements LangfuseTrace {
-  private sdkTrace: ReturnType<typeof import('langfuse').Langfuse.prototype.trace>;
+  private sdkTrace: LangfuseTraceClient;
   private metadata: TraceMetadata;
 
   constructor(
-    sdkTrace: ReturnType<typeof import('langfuse').Langfuse.prototype.trace>,
+    sdkTrace: LangfuseTraceClient,
     metadata: TraceMetadata = {},
   ) {
     this.sdkTrace = sdkTrace;
@@ -142,8 +173,8 @@ class LangfuseTraceImpl implements LangfuseTrace {
         name: options.name,
         input: options.input,
         model: options.model,
-        modelParameters: options.modelParameters,
-        startTime: options.startTime,
+        modelParameters: normalizeModelParameters(options.modelParameters),
+        startTime: options.startTime ? new Date(options.startTime) : undefined,
         metadata: options.metadata,
       });
       return new LangfuseGenerationImpl(sdkGeneration);
@@ -163,13 +194,9 @@ class LangfuseTraceImpl implements LangfuseTrace {
  * Real Langfuse span using SDK
  */
 class LangfuseSpanImpl implements LangfuseSpan {
-  private sdkSpan: ReturnType<
-    ReturnType<typeof import('langfuse').Langfuse.prototype.trace>['span']
-  >;
+  private sdkSpan: LangfuseSpanClient;
 
-  constructor(
-    sdkSpan: ReturnType<ReturnType<typeof import('langfuse').Langfuse.prototype.trace>['span']>,
-  ) {
+  constructor(sdkSpan: LangfuseSpanClient) {
     this.sdkSpan = sdkSpan;
   }
 
@@ -197,24 +224,14 @@ class LangfuseSpanImpl implements LangfuseSpan {
  * Real Langfuse generation using SDK
  */
 class LangfuseGenerationImpl extends LangfuseSpanImpl implements LangfuseGeneration {
-  private sdkGeneration: ReturnType<
-    ReturnType<typeof import('langfuse').Langfuse.prototype.trace>['generation']
-  >;
+  private sdkGeneration: LangfuseGenerationClient;
 
-  constructor(
-    sdkGeneration: ReturnType<
-      ReturnType<typeof import('langfuse').Langfuse.prototype.trace>['generation']
-    >,
-  ) {
-    super(
-      sdkGeneration as unknown as ReturnType<
-        ReturnType<typeof import('langfuse').Langfuse.prototype.trace>['span']
-      >,
-    );
+  constructor(sdkGeneration: LangfuseGenerationClient) {
+    super(sdkGeneration as unknown as LangfuseSpanClient);
     this.sdkGeneration = sdkGeneration;
   }
 
-  update(options: {
+  override update(options: {
     output?: unknown;
     usageDetails?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
     costDetails?: { totalCost?: number; currency?: string };
@@ -223,17 +240,16 @@ class LangfuseGenerationImpl extends LangfuseSpanImpl implements LangfuseGenerat
     try {
       this.sdkGeneration.update({
         output: options.output,
-        usage: options.usageDetails
+        usageDetails: options.usageDetails
           ? {
             promptTokens: options.usageDetails.promptTokens ?? 0,
             completionTokens: options.usageDetails.completionTokens ?? 0,
             totalTokens: options.usageDetails.totalTokens ?? 0,
           }
           : undefined,
-        cost: options.costDetails
+        costDetails: options.costDetails?.totalCost !== undefined
           ? {
-            totalCost: options.costDetails.totalCost ?? 0,
-            currency: options.costDetails.currency ?? 'USD',
+            total: options.costDetails.totalCost,
           }
           : undefined,
         metadata: options.metadata,
@@ -243,7 +259,7 @@ class LangfuseGenerationImpl extends LangfuseSpanImpl implements LangfuseGenerat
     }
   }
 
-  end(): void {
+  override end(): void {
     try {
       this.sdkGeneration.end();
     } catch (error) {
@@ -264,7 +280,7 @@ class LangfuseGenerationImpl extends LangfuseSpanImpl implements LangfuseGenerat
  */
 export class LangfuseService implements LangfuseTracer {
   private config: LangfuseServiceConfig;
-  private sdkInstance: ReturnType<typeof import('langfuse').Langfuse> | null = null;
+  private sdkInstance: LangfuseClient | null = null;
   private enabled: boolean;
 
   constructor(config: LangfuseServiceConfig = {}) {
@@ -273,10 +289,12 @@ export class LangfuseService implements LangfuseTracer {
       host: config.host ?? 'https://cloud.langfuse.com',
       enabled: config.enabled ?? false,
     };
-    this.enabled = this.config.enabled &&
-      !!this.config.publicKey &&
-      !!this.config.secretKey &&
-      LangfuseSDK !== null;
+    this.enabled = Boolean(
+      this.config.enabled &&
+        !!this.config.publicKey &&
+        !!this.config.secretKey &&
+        LangfuseSDK !== null,
+    );
 
     if (this.enabled && LangfuseSDK) {
       try {

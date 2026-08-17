@@ -1,6 +1,6 @@
 import type { Context } from 'grammy';
 import type { Message } from '../../../entity/task.ts';
-import type { Agent, Database, TelegramService } from '../../index.ts';
+import type { Agent, Database } from '../../index.ts';
 
 interface MessageHandlerDeps {
   db: Database;
@@ -25,7 +25,7 @@ function splitMessage(text: string, maxLength = 4096): string[] {
  * Create an async generator that streams the agent response
  */
 async function* streamAgentResponse(
-  agent: any,
+  agent: Agent,
   text: string,
   sessionId: string,
   chatId: string,

@@ -1,4 +1,5 @@
 import { logger } from '../../../core/logger/logger.ts';
+import type { AgentPort } from '../../../core/ports/agent.ts';
 import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
 import { isValidSessionId, sanitizeInput } from '../utils/security.ts';
 
@@ -62,9 +63,9 @@ function validateMessageRequest(body: unknown): {
  * Process message asynchronously without blocking the response
  */
 async function processMessageAsync(
-  agent: any,
+  agent: AgentPort,
   message: string,
-  options: { sessionId?: string; images?: string[]; imageData?: string; fileData?: any },
+  options: { sessionId?: string; images?: string[]; imageData?: string; fileData?: unknown },
   requestId?: string,
 ): Promise<void> {
   try {
@@ -75,20 +76,6 @@ async function processMessageAsync(
       } catch {
         await agent.createSession(options.sessionId);
       }
-    }
-
-    // Convert image data into expected format
-    let imageData: { image: string; mimeType: string } | undefined;
-    if (options.images && options.images.length > 0 && options.images[0]) {
-      imageData = {
-        image: options.images[0],
-        mimeType: 'image/jpeg',
-      };
-    } else if (options.imageData && typeof options.imageData === 'string') {
-      imageData = {
-        image: options.imageData,
-        mimeType: 'image/jpeg',
-      };
     }
 
     // Processing the message through the agent using stream
@@ -102,7 +89,7 @@ async function processMessageAsync(
 
     logger.info('Async message processing completed', {
       requestId,
-      sessionId: options.sessionId || agent.getCurrentSessionId(),
+      sessionId: options.sessionId || 'default',
     });
   } catch (error) {
     logger.error('Async message processing failed', {
@@ -117,7 +104,7 @@ async function processMessageAsync(
  */
 export async function handleMessage(
   req: Request,
-  agent: any,
+  agent: AgentPort,
   requestId: string,
 ): Promise<Response> {
   try {
@@ -149,7 +136,7 @@ export async function handleMessage(
     const response = successResponse(
       {
         message: 'Message accepted for processing',
-        sessionId: sessionId || agent.getCurrentSessionId(),
+        sessionId: sessionId || 'default',
         messageId: requestId,
         timestamp: new Date().toISOString(),
       },
@@ -186,7 +173,7 @@ export async function handleMessage(
  */
 export async function handleMessageSync(
   req: Request,
-  agent: any,
+  agent: AgentPort,
   requestId: string,
 ): Promise<Response> {
   try {
@@ -269,7 +256,7 @@ export async function handleMessageSync(
  */
 export async function handleMessageReset(
   req: Request,
-  agent: any,
+  agent: AgentPort,
   requestId: string,
 ): Promise<Response> {
   try {
@@ -295,31 +282,26 @@ export async function handleMessageReset(
       }
 
       // Create new session with the same id
-      const newSession = await agent.createSession(sessionId);
+      const newSessionId = await agent.createSession(sessionId);
 
       return successResponse(
         {
           message: `Session ${sessionId} has been reset`,
-          sessionId: newSession.id,
+          sessionId: newSessionId,
         },
         200,
         requestId,
       );
     } else {
-      // Reset current session
-      const currentSessionId = agent.getCurrentSessionId();
+      await agent.removeSession('default');
 
-      if (currentSessionId) {
-        await agent.removeSession(currentSessionId);
-      }
-
-      // Create a new session
-      const newSession = await agent.createSession();
+      // Create a new default session
+      const newSessionId = await agent.createSession('default');
 
       return successResponse(
         {
-          message: 'Current session has been reset',
-          sessionId: newSession.id,
+          message: 'Default session has been reset',
+          sessionId: newSessionId,
           timestamp: new Date().toISOString(),
         },
         200,

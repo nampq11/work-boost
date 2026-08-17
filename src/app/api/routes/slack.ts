@@ -1,10 +1,11 @@
 import type { Subscription } from '../../../core/entity/subscription.ts';
-import type { Agent, Database } from '../../../core/services/index.ts';
+import type { AgentPort } from '../../../core/ports/agent.ts';
+import type { Database } from '../../../core/services/index.ts';
 import type { Slack } from '../../../core/services/slack/slack.ts';
 
 export interface SlackDeps {
   db: Database;
-  agent: Agent;
+  agent: AgentPort;
   slack: Slack;
 }
 
@@ -99,7 +100,7 @@ export async function handleSlackMessages(
   return new Response(
     JSON.stringify({
       response_type: 'in_channel',
-      text: result.success && result.content ? result.content : 'Sorry, I couldn\'t process that.',
+      text: result.success && result.content ? result.content : "Sorry, I couldn't process that.",
     }),
     {
       status: 200,

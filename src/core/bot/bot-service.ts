@@ -1,3 +1,5 @@
+import type { MessageButton, SendMessageOptions } from '../ports/messaging.ts';
+
 export type Platform = 'slack' | 'telegram';
 
 export interface BotUpdate {
@@ -21,13 +23,5 @@ export interface BotService {
   handleWebhook(request: Request): Promise<Response>;
 }
 
-export interface SendOptions {
-  parseMode?: 'HTML' | 'Markdown' | 'None';
-  keyboard?: KeyboardButton[][];
-}
-
-export interface KeyboardButton {
-  text: string;
-  callback_data?: string;
-  url?: string;
-}
+export type SendOptions = SendMessageOptions;
+export type KeyboardButton = MessageButton;

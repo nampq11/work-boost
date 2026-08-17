@@ -22,15 +22,15 @@ import type { DailyWorkReport } from '../entity/agent.ts';
 import type { ParsedDebtEntry } from '../entity/debt.ts';
 import { logger } from '../logger/logger.ts';
 import type { LangfuseService } from '../observability/langfuse/langfuse.ts';
-import type { Slack } from '../services/slack/slack.ts';
-import type { TelegramService } from '../services/telegram/telegram.ts';
+import type { AgentPlatform, AgentPort } from '../ports/agent.ts';
+import type { MessageSender } from '../ports/messaging.ts';
 import { getAllCapabilities } from './capabilities.ts';
 import { ContextManager } from './context.ts';
 import { createPlanner, Planner, PlanStatus, StepStatus } from './planning/index.ts';
-import { Streamer, createChunkSender, createStreamer } from './streaming/index.ts';
+import { createChunkSender, createStreamer, Streamer } from './streaming/index.ts';
 import { executeToolCall, getAllTools } from './tools/index.ts';
 import type { BrainConfig, BrainRunResult, Capability, Context, Message, Tool } from './types.ts';
-import { LongTermMemory, WorkingMemory, MemoryType } from './memory/index.ts';
+import { LongTermMemory, MemoryType, WorkingMemory } from './memory/index.ts';
 
 /**
  * The Brain class - core agent loop
@@ -38,15 +38,15 @@ import { LongTermMemory, WorkingMemory, MemoryType } from './memory/index.ts';
  * Trust the model. Don't over-engineer. Don't pre-specify workflows.
  * Give it capabilities and let it reason.
  */
-export class Brain {
+export class Brain implements AgentPort {
   private static instance: Brain;
   private ai: GoogleGenAI;
   private config: BrainConfig;
   private contextManager: ContextManager;
   private capabilities: Capability[];
   private tools: Tool[];
-  private slack?: Slack | null;
-  private telegram?: TelegramService | null;
+  private slack?: MessageSender | null;
+  private telegram?: MessageSender | null;
   private langfuse?: LangfuseService | null;
 
   // Enhanced agent features
@@ -58,8 +58,8 @@ export class Brain {
 
   private constructor(
     config: BrainConfig,
-    slack?: Slack | null,
-    telegram?: TelegramService | null,
+    slack?: MessageSender | null,
+    telegram?: MessageSender | null,
     langfuse?: LangfuseService | null,
     db?: Database,
   ) {
@@ -90,8 +90,8 @@ export class Brain {
    */
   static async init(
     config: BrainConfig,
-    slack?: Slack | null,
-    telegram?: TelegramService | null,
+    slack?: MessageSender | null,
+    telegram?: MessageSender | null,
     langfuse?: LangfuseService | null,
     db?: Database,
   ): Promise<Brain> {
@@ -261,6 +261,16 @@ ${formatTasks(report.planned)}`;
     return `${direction}: ${debt.amount} ${debt.currency} ${debt.person}${reason}`;
   }
 
+  async parseDebtEntry(input: string): Promise<ParsedDebtEntry | null> {
+    const cap = this.capabilities.find((c) => c.id === 'parse-debt-entry');
+    if (!cap) return null;
+
+    const result = await cap.execute({ input });
+    if (!result.success || !result.data) return null;
+
+    return result.data as ParsedDebtEntry;
+  }
+
   /**
    * Session management methods
    */
@@ -332,7 +342,7 @@ ${formatTasks(report.planned)}`;
     message: string,
     options: {
       sessionId?: string;
-      platform?: 'slack' | 'telegram';
+      platform?: AgentPlatform;
       chatId?: string;
       tools?: Tool[];
       verbose?: boolean;
@@ -505,7 +515,9 @@ User message: ${message}`;
    */
   async executePlan(
     planId: string,
-    onProgress?: (progress: { step: number; total: number; description: string; status: string }) => void,
+    onProgress?: (
+      progress: { step: number; total: number; description: string; status: string },
+    ) => void,
   ) {
     const plan = this.planner.getPlan(planId);
     if (!plan) {
@@ -573,7 +585,7 @@ User message: ${message}`;
     onChunk: (chunk: { content: string; isFinal: boolean }) => void | Promise<void>,
     options: {
       sessionId?: string;
-      platform?: 'slack' | 'telegram';
+      platform?: AgentPlatform;
       chatId?: string;
     } = {},
   ) {
@@ -751,8 +763,8 @@ export async function initBrain(
   apiKey: string,
   options?: {
     model?: string;
-    slack?: Slack | null;
-    telegram?: TelegramService | null;
+    slack?: MessageSender | null;
+    telegram?: MessageSender | null;
     langfuse?: LangfuseService | null;
     db?: Database;
   },

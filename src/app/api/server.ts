@@ -1,21 +1,22 @@
 import { logger } from '../../core/logger/logger.ts';
-import type { Agent, Database } from '../../core/services/index.ts';
+import type { AgentPort } from '../../core/ports/agent.ts';
+import type { Database } from '../../core/services/index.ts';
 import type { Slack } from '../../core/services/slack/slack.ts';
 import type { TelegramService } from '../../core/services/telegram/telegram.ts';
 import {
-  type RequestContext,
   createRequestContext,
   logError,
   logRequest,
   logResponse,
+  type RequestContext,
 } from './middleware/logging.ts';
 import { validateSlackWebhook } from './middleware/slack-validation.ts';
 import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
 import {
-  type SlackDeps,
   handleSlackMessages,
   handleSlackSubscribe,
   handleSlackUnsubscribe,
+  type SlackDeps,
 } from './routes/slack.ts';
 import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
 
@@ -34,7 +35,7 @@ export interface ApiServerConfig {
   slack?: Slack;
   telegram?: TelegramService;
   db?: Database;
-  agent?: Agent;
+  agent?: AgentPort;
 }
 
 // ============================================================================
@@ -138,8 +139,7 @@ function createRateLimiter(windowMs: number, maxRequests: number) {
 
   return function checkRateLimit(request: Request): Response | null {
     // Extract client IP from headers or connection info
-    const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
       'unknown';
 
@@ -195,10 +195,9 @@ export function createServer(config: ApiServerConfig) {
   );
 
   // Build Slack deps if available
-  const slackDeps: SlackDeps | undefined =
-    config.db && config.agent && config.slack
-      ? { db: config.db, agent: config.agent, slack: config.slack }
-      : undefined;
+  const slackDeps: SlackDeps | undefined = config.db && config.agent && config.slack
+    ? { db: config.db, agent: config.agent, slack: config.slack }
+    : undefined;
 
   function buildApiPath(route: string): string {
     if (!apiPrefix || apiPrefix === '') return route;

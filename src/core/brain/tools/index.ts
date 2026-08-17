@@ -15,8 +15,7 @@
 
 import { logger } from '../../logger/logger.ts';
 import type { LangfuseService } from '../../observability/langfuse/langfuse.ts';
-import type { Slack } from '../../services/slack/slack.ts';
-import type { TelegramService } from '../../services/telegram/telegram.ts';
+import type { MessageSender } from '../../ports/messaging.ts';
 import type { Database } from '../../storage/database.ts';
 import type { Tool } from '../types.ts';
 
@@ -75,8 +74,8 @@ import { createSendTelegramKeyboardTool } from './messaging/telegram-keyboard.ts
  * Collects all tools from messaging, formatting, and (optionally) database modules.
  */
 export function getAllTools(
-  slack: Slack | null,
-  telegram: TelegramService | null,
+  slack: MessageSender | null,
+  telegram: MessageSender | null,
   langfuse?: LangfuseService | null,
   db?: Database,
 ): Tool[] {

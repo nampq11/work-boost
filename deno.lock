@@ -16,6 +16,7 @@
     "npm:@google/genai@^1.22.0": "1.22.0",
     "npm:@grammyjs/auto-retry@2": "2.0.2_grammy@1.40.0",
     "npm:@grammyjs/ratelimiter@^1.2.1": "1.2.1",
+    "npm:@grammyjs/stream@1": "1.0.1_grammy@1.40.0",
     "npm:@types/node@*": "24.2.0",
     "npm:boxen@^8.0.1": "8.0.1",
     "npm:chalk@^5.6.2": "5.6.2",
@@ -155,6 +156,13 @@
     },
     "@grammyjs/ratelimiter@1.2.1": {
       "integrity": "sha512-4bmVUBCBnIb2epbDiBLCvvnVjaYg7kDCPR1Ptt6gqoxm5vlD8BjainYv+yjF6221hu2KUv8QAckumDI+6xyGsQ=="
+    },
+    "@grammyjs/stream@1.0.1_grammy@1.40.0": {
+      "integrity": "sha512-L1hKvKdI1odWa2mRzfcEP8TdZPjgzHaATE2t2SFpSyikXCViVIEzKjZcM6tDRZFce4uzqckkN5tRM8WPW/1BUg==",
+      "dependencies": [
+        "abort-controller",
+        "grammy"
+      ]
     },
     "@grammyjs/types@3.24.0": {
       "integrity": "sha512-qQIEs4lN5WqUdr4aT8MeU6UFpMbGYAvcvYSW1A4OO1PABGJQHz/KLON6qvpf+5RxaNDQBxiY2k2otIhg/AG7RQ=="
@@ -617,6 +625,7 @@
       "npm:@google/genai@^1.22.0",
       "npm:@grammyjs/auto-retry@2",
       "npm:@grammyjs/ratelimiter@^1.2.1",
+      "npm:@grammyjs/stream@1",
       "npm:boxen@^8.0.1",
       "npm:chalk@^5.6.2",
       "npm:commander@^12.1.0",

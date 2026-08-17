@@ -4,10 +4,9 @@
  * Sends a formatted Slack message with blocks
  */
 
-import type { BotService, KeyboardButton } from '../../../bot/bot-service.ts';
 import { logger } from '../../../logger/logger.ts';
 import type { LangfuseService } from '../../../observability/langfuse/langfuse.ts';
-import type { Slack } from '../../../services/slack/slack.ts';
+import type { MessageButton, MessageSender } from '../../../ports/messaging.ts';
 import type { Tool } from '../../types.ts';
 import { validateToolParams } from '../../validation.ts';
 import { SCHEMAS } from '../../validation.ts';
@@ -17,7 +16,7 @@ import { SCHEMAS } from '../../validation.ts';
  * Sends a formatted Slack message with blocks
  */
 export function createSendSlackBlocksTool(
-  slack: Slack | null,
+  slack: MessageSender | null,
   langfuse?: LangfuseService | null,
 ): Tool {
   return {
@@ -62,7 +61,7 @@ export function createSendSlackBlocksTool(
           };
         }
 
-        await slack.sendMessage(chatId, '', { keyboard: blocks as KeyboardButton[][] });
+        await slack.sendMessage(chatId, '', { keyboard: blocks as MessageButton[][] });
 
         return {
           success: true,
