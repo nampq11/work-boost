@@ -191,44 +191,48 @@ deno task start
 ## Architecture
 
 ```
-src/
-├── app/                       # Express.js API server
-│   ├── api/                   # API routes and middleware
-│   │   ├── routes/            # Route handlers
-│   │   └── middleware/        # Express middleware
-│   ├── cli/                   # Command-line interface
-│   │   └── index.ts           # CLI entry point with chat mode
-│   └── index.ts               # API entry point
-├── core/
-│   ├── bot/                   # Bot service interface
-│   └── index.ts               # Core interfaces
-├── services/
-│   ├── agent/                 # AI agent integration (Google GenAI)
-│   ├── database/              # Deno KV storage layer
-│   ├── formatting/            # Platform-specific formatters
-│   │   ├── debt-slack-formatter.ts
-│   │   └── debt-telegram-formatter.ts
-│   ├── scheduler/             # Cron job scheduler
-│   │   └── debt-reminder-job.ts
-│   ├── slack/                 # Slack integration
-│   └── telegram/              # Telegram integration
-│       ├── handlers/          # Command handlers
-│       │   ├── debt/          # Debt tracking commands
-│       │   ├── start.ts
-│       │   ├── subscribe.ts
-│       │   ├── unsubscribe.ts
-│       │   ├── status.ts
-│       │   ├── help.ts
-│       │   └── message.ts     # AI message handler
-│       └── keyboards.ts       # Inline keyboards
-├── entity/                    # Data models
+api/                           # API entrypoint (Deno Deploy)
+└── src/
+    ├── main.ts                # API entry point
+    └── api/                   # HTTP server, routes, middleware
+cli/
+└── src/
+    └── main.ts                # CLI entry point (Commander.js)
+packages/
+├── data-schemas/              # Pure data models (no deps)
+│   ├── agent.ts               # AI agent state
 │   ├── debt.ts                # Debt/loan tracking
 │   ├── task.ts                # Task management
 │   ├── subscription.ts        # User subscriptions
-│   ├── user.ts                # User profiles
-│   └── agent.ts               # AI agent state
-└── index.ts                   # Main entry point
+│   └── user.ts                # User profiles
+├── data-provider/             # Deno KV storage layer
+│   └── database.ts            # Database class, indexes, migrations
+├── shared/                    # Cross-cutting concerns
+│   ├── env.ts                 # Environment configuration
+│   ├── logger/                # Winston-based logging
+│   └── observability/         # Langfuse tracing
+├── brain/                     # AI agent loop (Google GenAI)
+│   └── src/
+│       ├── brain.ts           # Core agent loop
+│       ├── capabilities.ts    # Agent capabilities
+│       ├── memory/            # Short/long-term KV memory
+│       ├── planning/          # Plan-before-execute layer
+│       ├── prompts/           # System prompts (debt, daily-work, planning)
+│       ├── streaming/         # Streaming responses
+│       ├── tools/             # Data access, formatting, messaging tools
+│       └── ports/             # Platform abstraction interfaces
+└── services/                  # Platform adapters
+    └── src/
+        ├── slack/             # Slack integration
+        ├── telegram/          # Telegram integration
+        │   ├── handlers/      # Command handlers
+        │   └── keyboards.ts   # Inline keyboards
+        ├── bot/               # Bot service interface
+        ├── scheduler/         # Cron job schedulers
+        └── *-formatter.ts     # Platform-specific formatters
 ```
+
+Internal cross-package imports use `@work-boost/*` bare specifiers (e.g. `@work-boost/brain`, `@work-boost/services/slack/slack.ts`). All external dependency versions are pinned in the root `deno.json`.
 
 ## License
 

@@ -30,7 +30,7 @@ The LLM now:
 
 Capabilities define WHAT the brain can do. Each capability handles a specific type of interaction.
 
-### `src/core/brain/capabilities.ts`
+### `packages/brain/src/capabilities.ts`
 
 Available capabilities:
 
@@ -60,7 +60,7 @@ const result = await brain.run("hôm nay tôi hoàn thành task A", {
 
 Tools define HOW the brain interacts with external services (Slack, Telegram).
 
-### `src/core/brain/tools.ts`
+### `packages/brain/src/tools.ts`
 
 Available tools:
 
@@ -79,7 +79,7 @@ Each tool has:
 
 ## New/Updated Files
 
-### `src/core/brain/types.ts`
+### `packages/brain/src/types.ts`
 
 Added new types:
 
@@ -89,7 +89,7 @@ Added new types:
 - `ToolPlatform`: 'slack' | 'telegram'
 - `SendMessageParams`: Parameters for sending messages
 
-### `src/core/brain/brain.ts`
+### `packages/brain/src/brain.ts`
 
 Added new methods:
 
@@ -99,13 +99,13 @@ Added new methods:
 
 The `init()` method now accepts optional `slack` and `telegram` services to initialize tools.
 
-### `src/core/brain/capabilities.ts`
+### `packages/brain/src/capabilities.ts`
 
 - Added `createChatCapability()` for general conversation
 - `chat` is now the default capability
 - Fixed `daily-work-report` to use proper JSON schema
 
-### `src/core/brain/index.ts`
+### `packages/brain/src/index.ts`
 
 Re-exports the tools module.
 

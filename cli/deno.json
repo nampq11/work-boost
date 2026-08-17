@@ -1,0 +1,7 @@
+{
+  "name": "@work-boost/cli",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./src/main.ts"
+  }
+}

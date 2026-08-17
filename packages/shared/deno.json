@@ -1,0 +1,9 @@
+{
+  "name": "@work-boost/shared",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./logger/*": "./logger/*",
+    "./observability/*": "./observability/*"
+  }
+}

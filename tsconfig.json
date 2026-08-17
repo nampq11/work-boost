@@ -11,6 +11,6 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src", "deno.d.ts"],
+  "include": ["api", "cli", "packages", "tests", "deno.d.ts"],
   "exclude": ["node_modules", "**/node_modules/*"]
 }

@@ -3,8 +3,8 @@
  */
 
 import { assert, assertEquals, assertExists } from '@std/assert';
-import { type Debt, DebtDirection, DebtStatus } from '../../../src/core/entity/debt.ts';
-import { DebtTelegramFormatter } from '../../../src/core/services/formatting/debt-telegram-formatter.ts';
+import { type Debt, DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import { DebtTelegramFormatter } from '@work-boost/services';
 
 Deno.test('DebtTelegramFormatter formats single debt item', () => {
   const formatter = new DebtTelegramFormatter();

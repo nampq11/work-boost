@@ -1,5 +1,5 @@
 import { assertEquals, assertExists } from '@std/assert';
-import { Brain } from '../src/core/brain/index.ts';
+import { Brain } from '@work-boost/brain';
 
 Deno.test('Brain - initialize and run daily work report', async () => {
   const apiKey = Deno.env.get('GOOGLE_API_KEY');

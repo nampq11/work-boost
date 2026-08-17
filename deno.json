@@ -1,14 +1,22 @@
 {
+  "workspace": [
+    "packages/data-schemas",
+    "packages/data-provider",
+    "packages/shared",
+    "packages/brain",
+    "packages/services",
+    "api",
+    "cli"
+  ],
   "tasks": {
-    "dev": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron --watch src/app/index.ts",
-    "cli": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/cli/index.ts",
+    "dev": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron --watch api/src/main.ts",
+    "cli": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron cli/src/main.ts",
     "test": "deno test --allow-all --unstable-kv --unstable-cron",
-    "start": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/api/server.ts",
-    "start-api": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/index.ts",
+    "start": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron api/src/main.ts",
     "lint": "deno run -A npm:oxlint",
     "lint:fix": "deno run -A npm:oxlint --fix",
     "format": "deno run -A npm:@biomejs/biome format --write .",
-    "format:check": "deno run -A npm:@biomejs/biome format --write false .",
+    "format:check": "deno run -A npm:@biomejs/biome format .",
     "check": "deno run -A npm:@biomejs/biome check --write .",
     "check:ci": "deno run -A npm:@biomejs/biome check . && deno task lint"
   },
@@ -30,7 +38,18 @@
     "@grammyjs/auto-retry": "npm:@grammyjs/auto-retry@^2.0.0",
     "@grammyjs/ratelimiter": "npm:@grammyjs/ratelimiter@^1.2.1",
     "@grammyjs/stream": "npm:@grammyjs/stream@^1.0.0",
-    "commander": "npm:commander@^12.1.0"
+    "commander": "npm:commander@^12.1.0",
+    "@work-boost/data-schemas": "./packages/data-schemas/mod.ts",
+    "@work-boost/data-schemas/": "./packages/data-schemas/",
+    "@work-boost/data-provider": "./packages/data-provider/mod.ts",
+    "@work-boost/data-provider/": "./packages/data-provider/",
+    "@work-boost/shared": "./packages/shared/mod.ts",
+    "@work-boost/shared/": "./packages/shared/",
+    "@work-boost/brain": "./packages/brain/mod.ts",
+    "@work-boost/brain/": "./packages/brain/src/",
+    "@work-boost/services": "./packages/services/mod.ts",
+    "@work-boost/services/": "./packages/services/src/",
+    "@work-boost/api": "./api/src/main.ts"
   },
   "nodeModulesDir": "auto",
   "fmt": {

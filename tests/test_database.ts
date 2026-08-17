@@ -1,8 +1,8 @@
 import { assertEquals, assertExists } from '@std/assert';
-import { DebtDirection, DebtStatus } from '../src/core/entity/debt.ts';
-import { Message } from '../src/core/entity/task.ts';
-import { User } from '../src/core/entity/user.ts';
-import { Database } from '../src/core/storage/database.ts';
+import { Database } from '@work-boost/data-provider';
+import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import { Message } from '@work-boost/data-schemas/task.ts';
+import { User } from '@work-boost/data-schemas/user.ts';
 
 async function withTestDatabase(test: (db: Database) => Promise<void>): Promise<void> {
   const db = await Database.createForTest();

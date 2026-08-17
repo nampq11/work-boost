@@ -72,7 +72,7 @@ The conversation history—the thread connecting actions into coherent behavior.
 ## Architecture
 
 ```
-src/core/brain/
+packages/brain/src/
 ├── types.ts           # Core types (Capability, Tool, Knowledge, Context)
 ├── brain.ts           # The Brain class (main loop)
 ├── capabilities.ts    # Atomic capabilities
