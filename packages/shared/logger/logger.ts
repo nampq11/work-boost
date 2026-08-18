@@ -43,6 +43,8 @@ export const redactRecursively = (
   key?: string,
   seen = new WeakSet<object>(),
 ): unknown => {
+  // Keep the global flag authoritative for every redaction path, not just message strings
+  if (env.REDACT_SECRETS === false) return value;
   if (
     key &&
     SENSITIVE_KEYS.some((sensitiveKey) => sensitiveKey.toLowerCase() === key.toLowerCase())
