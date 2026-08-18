@@ -19,9 +19,9 @@ const logLevels = {
 // ===== 2. Security Layer: Data Redaction =====
 
 const SENSITIVE_KEYS = ['apiKey', 'password', 'secret', 'token', 'auth', 'key', 'credential'];
-// Quoted values stop at the closing quote; unquoted values stop at a delimiter.
+// Quoted values run to the closing quote, matching escaped delimiters through; unquoted values stop at a delimiter.
 const MASK_REGEX = new RegExp(
-  `(${SENSITIVE_KEYS.join('|')})(["']?\\s*[:=]\\s*)(?:(["'])[^"']*\\3|[^\\s,;&}]+)`,
+  `(${SENSITIVE_KEYS.join('|')})(["']?\\s*[:=]\\s*)(?:(["'])(?:[^"'\\\\]|\\\\.)*\\3|[^\\s,;&}]+)`,
   'gi',
 );
 
@@ -35,18 +35,37 @@ export const redactSensitiveData = (message: string) => {
   });
 };
 
-// Redact sensitive values recursively so metadata objects reach transports redacted too
-const redactRecursively = (value: unknown): unknown => {
+// Redact sensitive values recursively so metadata objects reach transports redacted too.
+// The key matters: a value under a sensitive key (e.g. { token: "..." }) would not
+// match MASK_REGEX by itself, so redact it whole. `seen` breaks reference cycles.
+export const redactRecursively = (
+  value: unknown,
+  key?: string,
+  seen = new WeakSet<object>(),
+): unknown => {
+  if (
+    key &&
+    SENSITIVE_KEYS.some((sensitiveKey) => sensitiveKey.toLowerCase() === key.toLowerCase())
+  ) {
+    return '***REDACTED***';
+  }
   if (typeof value === 'string') {
     return redactSensitiveData(value);
   }
-  if (Array.isArray(value)) {
-    return value.map((item) => redactRecursively(item));
-  }
   if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, redactRecursively(entry)]),
-    );
+    // Circular metadata would otherwise recurse until stringifyMeta's fallback catches it
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+    const redacted = Array.isArray(value)
+      ? value.map((item) => redactRecursively(item, undefined, seen))
+      : Object.fromEntries(
+          Object.entries(value).map(([entryKey, entry]) => [
+            entryKey,
+            redactRecursively(entry, entryKey, seen),
+          ]),
+        );
+    seen.delete(value);
+    return redacted;
   }
   return value;
 };

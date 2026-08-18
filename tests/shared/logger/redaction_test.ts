@@ -3,7 +3,7 @@
  */
 
 import { assertEquals } from '@std/assert';
-import { redactSensitiveData } from '@work-boost/shared/logger/logger.ts';
+import { redactRecursively, redactSensitiveData } from '@work-boost/shared/logger/logger.ts';
 
 Deno.test('redactSensitiveData redacts quoted JSON values', () => {
   assertEquals(
@@ -33,4 +33,31 @@ Deno.test('redactSensitiveData redacts multiple keys in one message', () => {
     redactSensitiveData('apiKey=abc token=xyz'),
     'apiKey=***REDACTED*** token=***REDACTED***',
   );
+});
+
+Deno.test('redactSensitiveData redacts quoted values containing escaped delimiters', () => {
+  assertEquals(redactSensitiveData('token="a\\"b"'), 'token="***REDACTED***"');
+});
+
+Deno.test('redactRecursively redacts values under sensitive metadata keys', () => {
+  assertEquals(redactRecursively({ user: 'alice', token: 'abc123', data: { apiKey: 'sk-1' } }), {
+    user: 'alice',
+    token: '***REDACTED***',
+    data: { apiKey: '***REDACTED***' },
+  });
+});
+
+Deno.test('redactRecursively redacts sensitive metadata keys case-insensitively', () => {
+  assertEquals(redactRecursively({ Token: 'abc', Password: 'xyz' }), {
+    Token: '***REDACTED***',
+    Password: '***REDACTED***',
+  });
+});
+
+Deno.test('redactRecursively terminates on circular metadata', () => {
+  const circular: Record<string, unknown> = { name: 'circle' };
+  circular.self = circular;
+  assertEquals(redactRecursively({ config: circular }), {
+    config: { name: 'circle', self: '[Circular]' },
+  });
 });

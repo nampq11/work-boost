@@ -35,7 +35,7 @@ export const SYSTEM_PROMPT: string = `
       "incomplete": [],
       "planned": [{ "project": "B4", "task": "cải thiện kỹ thuật tìm kiếm" }]
     }
-    Input: "No tasks were completed, but I plan to work on user interface tomorrow"
+    Input: "No tasks were completed, but I plan to work on UI tomorrow"
     Output:
     {
       "completed": [],
