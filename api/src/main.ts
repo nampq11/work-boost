@@ -4,7 +4,7 @@ import { startDailyScheduler } from '@work-boost/services/scheduler/daily-job.ts
 /// <reference lib="deno.unstable" />
 import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import { createServer } from './api/server.ts';
+import { createServer } from './server.ts';
 
 export interface StartApiModeOptions {
   port: number;
