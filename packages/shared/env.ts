@@ -1,0 +1,120 @@
+import process from 'node:process';
+import { load } from '@std/dotenv';
+import { z } from 'zod';
+
+const isMcpMode =
+  Deno.args.includes('--mode') && Deno.args[Deno.args.indexOf('--mode') + 1] === 'mcp';
+
+// Load .env file if it exists (skip in production where env vars are already set)
+let envFile: Record<string, string> = {};
+try {
+  envFile = await load();
+} catch {
+  // .env file doesn't exist or can't be read - that's OK in production
+  console.log('[DEBUG] No .env file found, using environment variables');
+}
+
+// Process environment always wins over .env file values (matches MCP mode behavior).
+for (const [key, value] of Object.entries(envFile)) {
+  if (Deno.env.get(key) === undefined) {
+    Deno.env.set(key, value);
+  }
+}
+
+// 'developement' is accepted for backward compatibility but normalized to 'development'
+const normalizeDenoEnv = (value: string | undefined): string =>
+  value === 'developement' ? 'development' : (value ?? 'development');
+
+const envSchema = z.object({
+  DENO_ENV: z.enum(['development', 'developement', 'production', 'test']).default('development'),
+  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
+  REDACT_SECRETS: z.boolean().default(true),
+  LANGFUSE_PUBLIC_KEY: z.string().optional(),
+  LANGFUSE_SECRET_KEY: z.string().optional(),
+  LANGFUSE_HOST: z.string().optional(),
+  LANGFUSE_ENABLED: z.boolean().optional(),
+});
+
+type EnvSchema = z.infer<typeof envSchema>;
+
+/**
+ * Get environment variable by key
+ * This function works correctly with TypeScript and Deno
+ */
+function getEnvValue(key: string): string | undefined {
+  return Deno.env.get(key);
+}
+
+/**
+ * Environment object that supports both property access and function call syntax
+ * - env.GOOGLE_API_KEY (property access)
+ * - env.get('GOOGLE_API_KEY') (function call)
+ */
+const envHandlers = {
+  get(key: string): string | undefined {
+    return getEnvValue(key);
+  },
+};
+
+const envProxy = new Proxy(envHandlers, {
+  get(_target, prop: string | symbol): any {
+    if (prop === 'get' && typeof prop === 'string') {
+      return envHandlers.get;
+    }
+    if (typeof prop !== 'string') {
+      return undefined;
+    }
+    // Handle property access like env.GOOGLE_API_KEY
+    switch (prop) {
+      case 'DENO_ENV':
+        return normalizeDenoEnv(Deno.env.get('DENO_ENV'));
+      case 'LOG_LEVEL':
+        return Deno.env.get('LOG_LEVEL') || 'info';
+      case 'REDACT_SECRETS': {
+        const redactValue = Deno.env.get('REDACT_SECRETS');
+        return redactValue === undefined ? true : redactValue !== 'false';
+      }
+      case 'LANGFUSE_PUBLIC_KEY':
+        return Deno.env.get('LANGFUSE_PUBLIC_KEY');
+      case 'LANGFUSE_SECRET_KEY':
+        return Deno.env.get('LANGFUSE_SECRET_KEY');
+      case 'LANGFUSE_ENABLED': {
+        const langfuseEnabled = Deno.env.get('LANGFUSE_ENABLED');
+        return langfuseEnabled === 'true';
+      }
+      case 'LANGFUSE_HOST': {
+        const host = Deno.env.get('LANGFUSE_HOST') || Deno.env.get('LANGFUSE_BASE_URL');
+        return host || 'https://cloud.langfuse.com';
+      }
+      case 'LANGFUSE_BASE_URL': {
+        const host = Deno.env.get('LANGFUSE_BASE_URL') || Deno.env.get('LANGFUSE_HOST');
+        return host || 'https://cloud.langfuse.com';
+      }
+      default:
+        return Deno.env.get(prop);
+    }
+  },
+});
+
+export const env = envProxy as EnvSchema & { get(key: string): string | undefined };
+
+export const validateEnv = () => {
+  const envToValidate = {
+    DENO_ENV: Deno.env.get('DENO_ENV'),
+    LOG_LEVEL: Deno.env.get('LOG_LEVEL'),
+    REDACT_SECRETS: Deno.env.get('REDACT_SECRETS') === 'false' ? false : true,
+  };
+
+  const result = envSchema.safeParse(envToValidate);
+  if (!result.success) {
+    // Note: logger might not be available during early initialization
+    const errorMsg = `Environment validation failed: ${JSON.stringify(result.error.issues)}`;
+    if (isMcpMode) {
+      process.stderr.write(`[MCP-SERVER] ERROR: ${errorMsg}\n`);
+    } else {
+      console.error('Environment validation failed:', result.error.issues);
+    }
+    return false;
+  }
+  return result.success;
+};

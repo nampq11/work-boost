@@ -14,7 +14,7 @@ The agent loop has been enhanced with four major features:
 ## File Structure
 
 ```
-src/core/brain/
+packages/brain/src/
 ├── planning/
 │   ├── types.ts          # Plan, PlanStep, PlanStatus, etc.
 │   ├── planner.ts        # Planner class
@@ -65,9 +65,9 @@ const result = await brain.executePlan(planResult.plan!.id, (progress) => {
 ```
 
 ### Files
-- `src/core/brain/planning/types.ts` - Type definitions
-- `src/core/brain/planning/planner.ts` - Planner implementation
-- `src/core/brain/planning/prompts/plan-prompt.ts` - System prompt for plan generation
+- `packages/brain/src/planning/types.ts` - Type definitions
+- `packages/brain/src/planning/planner.ts` - Planner implementation
+- `packages/brain/src/prompts/planning/plan-prompt.ts` - System prompt for plan generation
 
 ## 2. Memory/Knowledge Layer
 
@@ -117,9 +117,9 @@ const amount = brain.getWorkingEntity(sessionId, "debt_amount");
 ```
 
 ### Files
-- `src/core/brain/memory/types.ts` - Type definitions
-- `src/core/brain/memory/working-memory.ts` - Short-term memory implementation
-- `src/core/brain/memory/long-term-memory.ts` - Persistent KV memory
+- `packages/brain/src/memory/types.ts` - Type definitions
+- `packages/brain/src/memory/working-memory.ts` - Short-term memory implementation
+- `packages/brain/src/memory/long-term-memory.ts` - Persistent KV memory
 
 ## 3. Data Access Tools
 
@@ -149,8 +149,8 @@ const result = await brain.runWithTools(message, {
 ```
 
 ### Files
-- `src/core/brain/data-access/types.ts` - Parameter types
-- `src/core/brain/data-access/database-tools.ts` - Tool implementations
+- `packages/brain/src/tools/database/types.ts` - Parameter types
+- `packages/brain/src/tools/database/database-tools.ts` - Tool implementations
 
 ## 4. Streaming Responses
 
@@ -178,8 +178,8 @@ await brain.stream(
 ```
 
 ### Files
-- `src/core/brain/streaming/types.ts` - Type definitions
-- `src/core/brain/streaming/streamer.ts` - Stream handler
+- `packages/brain/src/streaming/types.ts` - Type definitions
+- `packages/brain/src/streaming/streamer.ts` - Stream handler
 
 ## Updated Brain API
 

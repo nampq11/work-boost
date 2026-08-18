@@ -24,7 +24,7 @@ The CLI is built into the Work Boost application. No additional installation req
 deno task cli --help
 
 # Or directly with deno
-deno run --allow-all --env-file=.env --unstable-kv --unstable-cron src/app/cli/index.ts --help
+deno run --allow-all --env-file=.env --unstable-kv --unstable-cron cli/src/main.ts --help
 ```
 
 ## Commands
@@ -315,11 +315,11 @@ deno task cli scheduler:run
 
 ## Architecture
 
-The CLI is built with [Commander.js](https://www.npmjs.com/package/commander) and located at `src/app/cli/index.ts`.
+The CLI is built with [Commander.js](https://www.npmjs.com/package/commander) and located at `cli/src/main.ts`.
 
-```
-src/app/cli/
-└── index.ts          # Main CLI entry point
+```text
+cli/src/
+└── main.ts          # Main CLI entry point
 ```
 
 ### Command Structure
@@ -338,7 +338,7 @@ program
 
 To add a new command to the CLI:
 
-1. Open `src/app/cli/index.ts`
+1. Open `cli/src/main.ts`
 2. Add a new command using the `program.command()` pattern
 3. Update this documentation with the new command
 

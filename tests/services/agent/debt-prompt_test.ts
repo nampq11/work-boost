@@ -9,8 +9,8 @@ import {
   type DebtParseResponse,
   debtParseSchema,
   toParsedDebtEntry,
-} from '../../../src/core/brain/prompts/debt-prompt.ts';
-import { DebtDirection, type ParsedDebtEntry } from '../../../src/core/entity/debt.ts';
+} from '@work-boost/brain';
+import { DebtDirection, type ParsedDebtEntry } from '@work-boost/data-schemas/debt.ts';
 
 Deno.test('DEBT_SYSTEM_PROMPT contains required instructions', () => {
   assertExists(DEBT_SYSTEM_PROMPT);

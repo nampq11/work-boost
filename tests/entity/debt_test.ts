@@ -10,7 +10,7 @@ import {
   type DebtReminderSettings,
   DebtStatus,
   type ParsedDebtEntry,
-} from '../../src/core/entity/debt.ts';
+} from '@work-boost/data-schemas/debt.ts';
 
 Deno.test('DebtDirection enum has correct values', () => {
   assertEquals(DebtDirection.LENT, 'lent');

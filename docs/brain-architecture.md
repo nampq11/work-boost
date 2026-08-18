@@ -72,16 +72,20 @@ The conversation history—the thread connecting actions into coherent behavior.
 ## Architecture
 
 ```
-src/core/brain/
+packages/brain/src/
 ├── types.ts           # Core types (Capability, Tool, Knowledge, Context)
 ├── brain.ts           # The Brain class (main loop)
 ├── capabilities.ts    # Atomic capabilities
-├── tools.ts           # Platform-specific tools for function calling
-├── knowledge.ts       # On-demand domain knowledge
 ├── context.ts         # Conversation context management
 ├── prompts/           # AI prompts and schemas
-│   ├── daily-work-prompt.ts
-│   └── debt-prompt.ts
+│   ├── daily-work/
+│   ├── debt/
+│   └── planning/
+├── planning/          # Planning layer
+├── streaming/         # Streaming responses
+├── tools/             # Platform-specific tools for function calling
+├── memory/            # Memory layer
+├── ports/             # Port interfaces
 └── index.ts          # Module exports
 ```
 
@@ -90,7 +94,7 @@ src/core/brain/
 ### Basic Initialization
 
 ```typescript
-import { Brain } from '@/core/brain/index.ts';
+import { Brain } from '@work-boost/brain';
 
 const brain = await Brain.init({
   model: 'gemini-2.5-flash',
@@ -372,7 +376,7 @@ The Brain replaces the old `src/services/agent` architecture:
 | `envoke()` method | `run()` method (or `runWithTools()` for function calling) |
 | `formatToSlack()` | Built into `formatCapabilityResult()` or `send_message` tool |
 | Session in-memory | `ContextManager` |
-| Prompts in `services/agent/prompts` | `core/brain/prompts` |
+| Prompts in `services/agent/prompts` | `packages/brain/src/prompts` |
 | JSON parsing manual | Capabilities handle structured output |
 | Platform-specific format code | Tools system (`send_slack_blocks`, `send_telegram_keyboard`) |
 
