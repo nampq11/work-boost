@@ -2,7 +2,7 @@ import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { Context } from 'grammy';
-import { DebtTelegramFormatter } from '../../../debt-telegram-formatter.ts';
+import { DebtTelegramFormatter } from '../../../formatters/debt-telegram-formatter.ts';
 import { debtListKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
 
 interface ListHandlerDeps {

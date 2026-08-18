@@ -16,8 +16,8 @@
 import type { Platform } from '@work-boost/data-schemas';
 import type { Subscription } from '@work-boost/data-schemas';
 import type { User } from '@work-boost/data-schemas';
-import type { Database } from './database.ts';
-import { IndexKeys } from './indexes.ts';
+import type { Database } from '../database.ts';
+import { IndexKeys } from '../indexes.ts';
 
 export interface OldUser {
   id: string;
