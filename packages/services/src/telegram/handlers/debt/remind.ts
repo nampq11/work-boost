@@ -1,7 +1,7 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import type { Context } from 'grammy';
-import { DebtTelegramFormatter } from '../../../debt-telegram-formatter.ts';
+import { DebtTelegramFormatter } from '../../../formatters/debt-telegram-formatter.ts';
 import { debtMenuKeyboard } from '../../keyboards.ts';
 
 interface RemindHandlerDeps {

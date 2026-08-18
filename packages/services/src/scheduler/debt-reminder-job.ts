@@ -4,7 +4,7 @@
  */
 
 import type { Database } from '@work-boost/data-provider/database.ts';
-import { DebtTelegramFormatter } from '../debt-telegram-formatter.ts';
+import { DebtTelegramFormatter } from '../formatters/debt-telegram-formatter.ts';
 
 const formatter = new DebtTelegramFormatter();
 
