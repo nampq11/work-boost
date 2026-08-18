@@ -5,12 +5,10 @@
     "packages/shared",
     "packages/brain",
     "packages/services",
-    "api",
-    "cli"
+    "api"
   ],
   "tasks": {
     "dev": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron --watch api/src/main.ts",
-    "cli": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron cli/src/main.ts",
     "test": "deno test --allow-all --unstable-kv --unstable-cron",
     "start": "deno run --allow-all --env-file=.env --unstable-kv --unstable-cron api/src/main.ts",
     "lint": "deno run -A npm:oxlint",

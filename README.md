@@ -113,31 +113,6 @@ The server will start on http://localhost:3001/api
 **AI Chat:**
 - Simply send any message to chat with the AI assistant
 
-### Interactive CLI Chat Mode
-
-Chat directly with the AI brain from the command line (useful for testing):
-
-```sh
-# Start chat mode
-deno task cli chat
-
-# Start with verbose mode
-deno task cli chat --verbose
-
-# Start with custom session ID
-deno task cli chat --session my-session
-```
-
-**Chat Commands:**
-- `/exit`, `/quit` - Exit chat mode
-- `/clear` - Clear conversation history
-- `/sessions` - List all sessions
-- `/history` - Show conversation history
-- `/capabilities` - List available AI capabilities
-- `/session <id>` - Switch to a different session
-- `/verbose` - Toggle verbose mode
-- `/help` - Show help message
-
 ### Daily Summary Schedule
 
 Configure when to receive daily summaries via environment variables:
