@@ -18,10 +18,14 @@ const logLevels = {
 
 // ===== 2. Security Layer: Data Redaction =====
 
-const SENTITIVE_KEYS = ['apiKey', 'password', 'secret', 'token', 'auth', 'key', 'credential'];
-const MASK_REGEX = new RegExp(`(${SENTITIVE_KEYS.join('|')})("']?\\s*[:=]\\s*)(["'])?.*?\\3`, 'gi');
+const SENSITIVE_KEYS = ['apiKey', 'password', 'secret', 'token', 'auth', 'key', 'credential'];
+// Quoted values stop at the closing quote; unquoted values stop at a delimiter.
+const MASK_REGEX = new RegExp(
+  `(${SENSITIVE_KEYS.join('|')})(["']?\\s*[:=]\\s*)(?:(["'])[^"']*\\3|[^\\s,;&}]+)`,
+  'gi',
+);
 
-const redactSensitiveData = (message: string) => {
+export const redactSensitiveData = (message: string) => {
   const shouldRedact = env.REDACT_SECRETS !== false;
   if (!shouldRedact) return message;
 
@@ -29,6 +33,22 @@ const redactSensitiveData = (message: string) => {
     const quoteMark = quote || '';
     return `${key}${separator}${quoteMark}***REDACTED***${quoteMark}`;
   });
+};
+
+// Redact sensitive values recursively so metadata objects reach transports redacted too
+const redactRecursively = (value: unknown): unknown => {
+  if (typeof value === 'string') {
+    return redactSensitiveData(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactRecursively(item));
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, redactRecursively(entry)]),
+    );
+  }
+  return value;
 };
 
 // ===== 3. Visual Formatting Layer =====
@@ -65,10 +85,24 @@ const maskFormat = winston.format((info) => {
   if (typeof info.message === 'string') {
     info.message = redactSensitiveData(info.message);
   }
+  for (const [key, value] of Object.entries(info)) {
+    if (key !== 'message' && key !== 'level' && key !== 'timestamp') {
+      info[key] = redactRecursively(value);
+    }
+  }
   return info;
 });
 
-const consoleFormat = winston.format.printf(({ level, message, timestamp, color }) => {
+// Metadata may contain values JSON.stringify cannot serialize (circular refs, functions)
+const stringifyMeta = (meta: Record<string, unknown>): string => {
+  try {
+    return JSON.stringify(meta);
+  } catch {
+    return ' [unserializable metadata]';
+  }
+};
+
+const consoleFormat = winston.format.printf(({ level, message, timestamp, color, ...rest }) => {
   const colorize = levelColorMap[level] || chalk.white;
   let formattedMessage = message;
 
@@ -77,12 +111,14 @@ const consoleFormat = winston.format.printf(({ level, message, timestamp, color 
     formattedMessage = (chalk[color as ChalkColor] as (text: string) => string)(message as string);
   }
 
-  return `${chalk.dim(timestamp)} ${colorize(level.toUpperCase())}: ${formattedMessage}`;
+  const meta = Object.keys(rest).length > 0 ? ` ${stringifyMeta(rest)}` : '';
+  return `${chalk.dim(timestamp)} ${colorize(level.toUpperCase())}: ${formattedMessage}${meta}`;
 });
 
 // File formatting (no colors)
-const fileFormat = winston.format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}] : ${message}`;
+const fileFormat = winston.format.printf(({ level, message, timestamp, ...rest }) => {
+  const meta = Object.keys(rest).length > 0 ? ` ${stringifyMeta(rest)}` : '';
+  return `${timestamp} [${level.toUpperCase()}] : ${message}${meta}`;
 });
 
 // ===== 4. Configuration Layer =====
@@ -122,6 +158,8 @@ export class Logger {
       }
       if (info.error instanceof Error) {
         info.message = `\n${info.error.stack}`;
+        // Error payload is folded into the message; drop it so it isn't duplicated as empty metadata
+        delete info.error;
       }
       return info;
     });
@@ -154,30 +192,39 @@ export class Logger {
   private createTransports(filePath?: string): winston.transport[] {
     const transports: winston.transport[] = [];
 
+    const createConsoleTransport = (): winston.transport =>
+      new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+          maskFormat(),
+          consoleFormat,
+        ),
+      });
+
     if (filePath) {
-      // File transport
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      transports.push(
-        new winston.transports.File({
-          filename: filePath,
-          format: winston.format.combine(
-            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-            maskFormat(),
-            fileFormat,
-          ),
-        }),
-      );
+      try {
+        // File transport
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        transports.push(
+          new winston.transports.File({
+            filename: filePath,
+            format: winston.format.combine(
+              winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+              maskFormat(),
+              fileFormat,
+            ),
+          }),
+        );
+      } catch (error) {
+        // Directory creation failed - fall back to console so logging still works
+        console.error(
+          `Failed to create log directory for ${filePath}, falling back to console: ${error}`,
+        );
+        transports.push(createConsoleTransport());
+      }
     } else {
       // Console transport
-      transports.push(
-        new winston.transports.Console({
-          format: winston.format.combine(
-            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-            maskFormat(),
-            consoleFormat,
-          ),
-        }),
-      );
+      transports.push(createConsoleTransport());
     }
     return transports;
   }
@@ -213,7 +260,7 @@ export class Logger {
 
   // ===== Specilized Display Methods =====
 
-  displayAIResponse(response: Record<string, unknown>): void {
+  displayAIResponse(response: string | Record<string, unknown>): void {
     if (this.isSilent) return;
 
     const content =
@@ -269,25 +316,15 @@ export class Logger {
 
   redirectToFile(filePath: string): void {
     try {
-      // Ensure directory exists
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-
       // Clear existing transports
       this.logger.clear();
 
-      // Add file transport
-      this.logger.add(
-        new winston.transports.File({
-          filename: filePath,
-          format: winston.format.combine(
-            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-            maskFormat(),
-            fileFormat,
-          ),
-        }),
-      );
+      for (const transport of this.createTransports(filePath)) {
+        this.logger.add(transport);
+      }
     } catch (error) {
-      this.error(`Failed to redirect logger to file: ${error}`);
+      // After clear() no transports exist, so the logger itself cannot emit this failure
+      console.error(`Failed to redirect logger to file: ${error}`);
     }
   }
 
@@ -296,18 +333,12 @@ export class Logger {
       // Clear existing transports
       this.logger.clear();
 
-      // Add console transport
-      this.logger.add(
-        new winston.transports.Console({
-          format: winston.format.combine(
-            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-            maskFormat(),
-            consoleFormat,
-          ),
-        }),
-      );
+      for (const transport of this.createTransports()) {
+        this.logger.add(transport);
+      }
     } catch (error) {
-      this.error(`Failed to redirect logger to console: ${error}`);
+      // After clear() no transports exist, so the logger itself cannot emit this failure
+      console.error(`Failed to redirect logger to console: ${error}`);
     }
   }
 

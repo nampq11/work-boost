@@ -25,10 +25,10 @@ import type { LangfuseService } from '@work-boost/shared/observability/langfuse/
 import { getAllCapabilities } from './capabilities.ts';
 import { ContextManager } from './context.ts';
 import { LongTermMemory, MemoryType, WorkingMemory } from './memory/index.ts';
-import { PlanStatus, Planner, StepStatus, createPlanner } from './planning/index.ts';
+import { createPlanner, Planner, PlanStatus, StepStatus } from './planning/index.ts';
 import type { AgentPlatform, AgentPort } from './ports/agent.ts';
 import type { MessageSender } from './ports/messaging.ts';
-import { Streamer, createChunkSender, createStreamer } from './streaming/index.ts';
+import { createChunkSender, createStreamer, Streamer } from './streaming/index.ts';
 import { executeToolCall, getAllTools } from './tools/index.ts';
 import type { BrainConfig, BrainRunResult, Capability, Context, Message, Tool } from './types.ts';
 
@@ -491,7 +491,6 @@ User message: ${message}`;
     sessionId: string,
     options: {
       maxSteps?: number;
-      requireApproval?: boolean;
     } = {},
   ) {
     const planResult = await this.planner.createPlan(userRequest, sessionId, this.tools, options);

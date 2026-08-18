@@ -60,7 +60,7 @@ const result = await brain.run("hôm nay tôi hoàn thành task A", {
 
 Tools define HOW the brain interacts with external services (Slack, Telegram).
 
-### `packages/brain/src/tools.ts`
+### `packages/brain/src/tools/index.ts`
 
 Available tools:
 

@@ -140,7 +140,20 @@ export function createQueryTaskTool(db: Database): Tool {
       try {
         if (taskId) {
           // Look up specific task - note: tasks are stored in messages for now
-          const task = await db.getMessageById(taskId);
+          const message = await db.getMessageById(taskId);
+          const task =
+            message && 'status' in message && 'title' in message
+              ? (message as unknown as Task)
+              : null;
+
+          if (!task) {
+            return {
+              success: true,
+              data: null,
+              message: 'Task not found',
+            };
+          }
+
           return {
             success: true,
             data: task,

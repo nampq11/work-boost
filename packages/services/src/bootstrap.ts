@@ -24,16 +24,13 @@ export function validateRequiredSecrets(options: { strict?: boolean } = {}): {
   missing: string[];
 } {
   const isProduction = env.DENO_ENV === 'production';
-  const required: string[] = ['GOOGLE_API_KEY'];
+  // TelegramService is constructed unconditionally and throws without these, so
+  // they are required in every environment (unlike the Slack secrets)
+  const required: string[] = ['GOOGLE_API_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET'];
 
   // In production or strict mode, require all bot secrets
   if (isProduction || options.strict) {
-    required.push(
-      'SLACK_BOT_TOKEN',
-      'SLACK_SIGNING_SECRET',
-      'TELEGRAM_BOT_TOKEN',
-      'TELEGRAM_WEBHOOK_SECRET',
-    );
+    required.push('SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET');
   }
 
   const missing = required.filter((secret) => !env.get(secret));

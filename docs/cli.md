@@ -317,9 +317,9 @@ deno task cli scheduler:run
 
 The CLI is built with [Commander.js](https://www.npmjs.com/package/commander) and located at `cli/src/main.ts`.
 
-```
+```text
 cli/src/
-└── index.ts          # Main CLI entry point
+└── main.ts          # Main CLI entry point
 ```
 
 ### Command Structure

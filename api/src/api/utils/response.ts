@@ -63,10 +63,10 @@ export function errorResponse(
   if (details !== undefined && details !== null) {
     try {
       if (details instanceof Error) {
+        // Stack traces stay in server logs; only stable fields are exposed to clients
         sanitizedDetails = {
           message: details.message,
           name: details.name,
-          ...(details.stack && { stack: details.stack.split('\n').slice(0, 3).join('\n') }),
         };
       } else if (typeof details === 'object') {
         sanitizedDetails = JSON.parse(

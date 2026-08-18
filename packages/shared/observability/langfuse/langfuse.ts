@@ -7,7 +7,7 @@
  * Graceful degradation: When disabled or misconfigured, tracing becomes a no-op.
  */
 
-import { logger } from '@work-boost/shared/logger/logger.ts';
+import { logger } from '../../logger/logger.ts';
 import type {
   CreateGenerationOptions,
   CreateSpanOptions,
@@ -155,6 +155,8 @@ class LangfuseTraceImpl implements LangfuseTrace {
       const sdkSpan = this.sdkTrace.span({
         name: options.name,
         input: options.input,
+        output: options.output,
+        tags: options.tags,
         metadata: options.metadata,
       });
       return new LangfuseSpanImpl(sdkSpan);
@@ -169,10 +171,25 @@ class LangfuseTraceImpl implements LangfuseTrace {
       const sdkGeneration = this.sdkTrace.generation({
         name: options.name,
         input: options.input,
+        output: options.output,
+        tags: options.tags,
         model: options.model,
         modelParameters: normalizeModelParameters(options.modelParameters),
         startTime: options.startTime ? new Date(options.startTime) : undefined,
         metadata: options.metadata,
+        usageDetails: options.usageDetails
+          ? {
+              promptTokens: options.usageDetails.promptTokens ?? 0,
+              completionTokens: options.usageDetails.completionTokens ?? 0,
+              totalTokens: options.usageDetails.totalTokens ?? 0,
+            }
+          : undefined,
+        costDetails:
+          options.costDetails?.totalCost !== undefined
+            ? {
+                total: options.costDetails.totalCost,
+              }
+            : undefined,
       });
       return new LangfuseGenerationImpl(sdkGeneration);
     } catch (error) {

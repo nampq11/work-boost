@@ -41,7 +41,8 @@ export const PATTERNS = {
 
   // Validation patterns
   safeString: /^[A-Za-z0-9\s\-_.,!?@#$%&*()+=\[\]{}|;:'"<>?/~`]+$/,
-  noControlChars: /^[^\x00-\x1F\x7F]*$/, // No control characters except newline/tab
+  // Rejects control characters except tab (\x09), newline (\x0A), and carriage return (\x0D)
+  noControlChars: /^[^\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]*$/,
 } as const;
 
 /**

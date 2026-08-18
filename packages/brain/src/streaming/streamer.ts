@@ -39,7 +39,13 @@ export class Streamer {
    * Streams chunks as they arrive from the LLM.
    */
   async stream(messages: Message[], tools: Tool[], options: StreamOptions): Promise<StreamResult> {
-    const { onChunk, accumulate = true, minChunkSize = 10, maxChunkDelay = 100 } = options;
+    const {
+      onChunk,
+      accumulate = true,
+      includeToolCalls = true,
+      minChunkSize = 10,
+      maxChunkDelay = 100,
+    } = options;
 
     const streamId = crypto.randomUUID();
     const startTime = Date.now();
@@ -106,7 +112,7 @@ export class Streamer {
             (state.lastSentAt && Date.now() - lastFlush >= maxChunkDelay);
 
           if (shouldFlush) {
-            await this.flushChunk(streamId, onChunk, state);
+            await this.flushChunk(streamId, onChunk, state, accumulate);
             lastFlush = Date.now();
           }
         }
@@ -114,23 +120,25 @@ export class Streamer {
         // Handle function calls in streaming
         if (chunk.functionCalls && chunk.functionCalls.length > 0) {
           // Flush any pending text first
-          await this.flushChunk(streamId, onChunk, state);
+          await this.flushChunk(streamId, onChunk, state, accumulate);
 
-          // Send function call info
-          for (const call of chunk.functionCalls) {
-            const chunkData: StreamChunk = {
-              content: JSON.stringify({ type: 'function_call', data: call }),
-              isFinal: false,
-              index: state.chunksSent++,
-              timestamp: new Date(),
-            };
-            await onChunk(chunkData);
+          if (includeToolCalls) {
+            // Send function call info
+            for (const call of chunk.functionCalls) {
+              const chunkData: StreamChunk = {
+                content: JSON.stringify({ type: 'function_call', data: call }),
+                isFinal: false,
+                index: state.chunksSent++,
+                timestamp: new Date(),
+              };
+              await onChunk(chunkData);
+            }
           }
         }
       }
 
       // Flush any remaining content
-      await this.flushChunk(streamId, onChunk, state);
+      await this.flushChunk(streamId, onChunk, state, accumulate);
 
       // Send final chunk
       const finalChunk: StreamChunk = {
@@ -188,6 +196,7 @@ export class Streamer {
     streamId: string,
     onChunk: StreamCallback,
     state: StreamState,
+    accumulate: boolean,
   ): Promise<void> {
     if (state.pending.length === 0) return;
 
@@ -198,7 +207,9 @@ export class Streamer {
       timestamp: new Date(),
     };
 
-    state.accumulated += state.pending;
+    if (accumulate) {
+      state.accumulated += state.pending;
+    }
     state.pending = '';
     state.lastSentAt = new Date();
 

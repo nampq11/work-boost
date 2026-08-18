@@ -67,7 +67,7 @@ const result = await brain.executePlan(planResult.plan!.id, (progress) => {
 ### Files
 - `packages/brain/src/planning/types.ts` - Type definitions
 - `packages/brain/src/planning/planner.ts` - Planner implementation
-- `packages/brain/src/planning/prompts/plan-prompt.ts` - System prompt for plan generation
+- `packages/brain/src/prompts/planning/plan-prompt.ts` - System prompt for plan generation
 
 ## 2. Memory/Knowledge Layer
 
@@ -149,8 +149,8 @@ const result = await brain.runWithTools(message, {
 ```
 
 ### Files
-- `packages/brain/src/data-access/types.ts` - Parameter types
-- `packages/brain/src/data-access/database-tools.ts` - Tool implementations
+- `packages/brain/src/tools/database/types.ts` - Parameter types
+- `packages/brain/src/tools/database/database-tools.ts` - Tool implementations
 
 ## 4. Streaming Responses
 

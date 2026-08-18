@@ -119,17 +119,11 @@ export interface PlanProgress {
 
 /**
  * Options for plan generation
+ *
+ * Only options honored by the implementation are exposed; approval, step
+ * timeout, and duration controls were previously declared but never enforced.
  */
 export interface PlanOptions {
   /** Maximum number of steps */
   maxSteps?: number;
-
-  /** Whether to ask for user approval before executing */
-  requireApproval?: boolean;
-
-  /** Timeout for each step (ms) */
-  stepTimeout?: number;
-
-  /** Maximum total execution time (ms) */
-  maxDuration?: number;
 }

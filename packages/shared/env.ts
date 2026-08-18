@@ -14,20 +14,19 @@ try {
   console.log('[DEBUG] No .env file found, using environment variables');
 }
 
-if (isMcpMode) {
-  for (const [key, value] of Object.entries(envFile)) {
-    if (Deno.env.get(key) === undefined) {
-      Deno.env.set(key, value);
-    }
-  }
-} else {
-  for (const [key, value] of Object.entries(envFile)) {
+// Process environment always wins over .env file values (matches MCP mode behavior).
+for (const [key, value] of Object.entries(envFile)) {
+  if (Deno.env.get(key) === undefined) {
     Deno.env.set(key, value);
   }
 }
 
+// 'developement' is accepted for backward compatibility but normalized to 'development'
+const normalizeDenoEnv = (value: string | undefined): string =>
+  value === 'developement' ? 'development' : (value ?? 'development');
+
 const envSchema = z.object({
-  DENO_ENV: z.enum(['developement', 'production', 'test']).default('developement'),
+  DENO_ENV: z.enum(['development', 'developement', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   REDACT_SECRETS: z.boolean().default(true),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
@@ -68,12 +67,12 @@ const envProxy = new Proxy(envHandlers, {
     // Handle property access like env.GOOGLE_API_KEY
     switch (prop) {
       case 'DENO_ENV':
-        return Deno.env.get('DENO_ENV') || 'developement';
+        return normalizeDenoEnv(Deno.env.get('DENO_ENV'));
       case 'LOG_LEVEL':
         return Deno.env.get('LOG_LEVEL') || 'info';
       case 'REDACT_SECRETS': {
         const redactValue = Deno.env.get('REDACT_SECRETS');
-        return redactValue === undefined ? true : redactValue === 'false';
+        return redactValue === undefined ? true : redactValue !== 'false';
       }
       case 'LANGFUSE_PUBLIC_KEY':
         return Deno.env.get('LANGFUSE_PUBLIC_KEY');

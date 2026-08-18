@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./logger/*": "./logger/*",
-    "./observability/*": "./observability/*"
+    "./logger": "./logger/index.ts",
+    "./observability": "./observability/index.ts"
   }
 }

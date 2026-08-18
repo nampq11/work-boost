@@ -94,5 +94,7 @@ if (import.meta.main) {
     console.error('Error:', errorMsg);
     if (errorStack) console.error('Stack:', errorStack);
     logger.error('Failed to start API server: ' + errorMsg);
+    // Rethrow so startup failure exits with a non-zero code instead of resolving silently
+    throw error;
   });
 }
