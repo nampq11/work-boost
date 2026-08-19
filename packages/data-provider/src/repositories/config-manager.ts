@@ -1,4 +1,4 @@
-import type { WorkspaceConfig, WorkspaceConfigSchema } from '@work-boost/data-schemas/config.ts';
+import { type WorkspaceConfig, WorkspaceConfigSchema } from '@work-boost/data-schemas/config.ts';
 import type { WorkspaceFS } from '../fs/workspace-fs.ts';
 
 const CONFIG_PATH = '.workboost/config.json';
@@ -29,23 +29,24 @@ export function createConfigManager(fs: WorkspaceFS): ConfigManager {
           workspaceName: 'My WorkBoost',
           createdAt: now,
           updatedAt: now,
-        } as const;
-        
-        // Type assertion for initial config
-        const validated = initial as WorkspaceConfig;
+        };
+
+        const validated = WorkspaceConfigSchema.parse(initial);
         await this.save(validated);
         return validated;
       }
 
       const raw = await fs.readText(CONFIG_PATH);
-      const parsed = JSON.parse(raw);
-      configCache = parsed as WorkspaceConfig;
+      const parsed: unknown = JSON.parse(raw);
+      configCache = WorkspaceConfigSchema.parse(parsed);
       return configCache;
     },
 
     async save(config: WorkspaceConfig): Promise<void> {
-      config.updatedAt = new Date().toISOString();
-      const validated = config as WorkspaceConfig;
+      const validated = WorkspaceConfigSchema.parse({
+        ...config,
+        updatedAt: new Date().toISOString(),
+      });
       await fs.writeTextAtomic(CONFIG_PATH, JSON.stringify(validated, null, 2));
       configCache = validated;
     },

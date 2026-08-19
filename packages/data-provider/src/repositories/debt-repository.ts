@@ -1,11 +1,6 @@
 import { basename, join } from '@std/path';
-import type {
-  DebtDirection,
-  DebtDocument,
-  DebtFrontmatter,
-  DebtStatus,
-  DebtSummary,
-} from '@work-boost/data-schemas/debt.ts';
+import { DebtDirection, DebtFrontmatterSchema, DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import type { DebtDocument, DebtFrontmatter, DebtSummary } from '@work-boost/data-schemas/debt.ts';
 import type { WorkspaceFS } from '../fs/workspace-fs.ts';
 import { parseMarkdown, stringifyMarkdown } from '../markdown/markdown-engine.ts';
 
@@ -35,6 +30,17 @@ export interface DebtRepository {
   listAll(includeArchived?: boolean): Promise<DebtDocument[]>;
   filter(options: DebtFilterOptions): Promise<DebtDocument[]>;
   settle(debtId: string): Promise<DebtDocument | null>;
+  update(debtId: string, updates: {
+    direction?: DebtDirection;
+    amount?: number;
+    currency?: string;
+    personName?: string;
+    reason?: string;
+    status?: DebtStatus;
+    debtDate?: string;
+    paidAt?: string | null;
+  }): Promise<DebtDocument | null>;
+  delete(debtId: string): Promise<boolean>;
   getSummary(): Promise<DebtSummary>;
 }
 
@@ -88,7 +94,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
     },
 
     async getById(debtId: string): Promise<DebtDocument | null> {
-      const allDebts = await this.listAll();
+      const allDebts = await this.listAll(true);
       return allDebts.find((d) => d.frontmatter.id === debtId) || null;
     },
 
@@ -101,14 +107,14 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
       for (const p of allPaths) {
         try {
           const raw = await fs.readText(p);
-          const { frontmatter, body } = parseMarkdown<DebtFrontmatter>(raw);
+          const { frontmatter, body } = parseMarkdown<unknown>(raw);
           results.push({
-            frontmatter: frontmatter as DebtFrontmatter,
+            frontmatter: DebtFrontmatterSchema.parse(frontmatter),
             reason: body,
             filePath: p,
           });
-        } catch {
-          // Skip files with parsing errors
+        } catch (error) {
+          throw new Error(`Failed to read debt file ${p}`, { cause: error });
         }
       }
       return results.sort((a, b) => b.frontmatter.createdAt.localeCompare(a.frontmatter.createdAt));
@@ -120,7 +126,10 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
         const fm = doc.frontmatter;
         if (options.status && fm.status !== options.status) return false;
         if (options.direction && fm.direction !== options.direction) return false;
-        if (options.personName && !fm.personName.toLowerCase().includes(options.personName.toLowerCase())) {
+        if (
+          options.personName &&
+          !fm.personName.toLowerCase().includes(options.personName.toLowerCase())
+        ) {
           return false;
         }
         return true;
@@ -148,6 +157,28 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
       debt.filePath = archivePath;
 
       return debt;
+    },
+
+    async update(debtId, updates) {
+      const debt = await this.getById(debtId);
+      if (!debt) return null;
+
+      const { reason, ...frontmatterUpdates } = updates;
+      for (const [key, value] of Object.entries(frontmatterUpdates)) {
+        if (value !== undefined) Object.assign(debt.frontmatter, { [key]: value });
+      }
+      if (reason !== undefined) debt.reason = reason;
+      debt.frontmatter.updatedAt = new Date().toISOString();
+      debt.frontmatter = DebtFrontmatterSchema.parse(debt.frontmatter);
+      await fs.writeTextAtomic(debt.filePath, stringifyMarkdown(debt.frontmatter, debt.reason));
+      return debt;
+    },
+
+    async delete(debtId) {
+      const debt = await this.getById(debtId);
+      if (!debt) return false;
+      await fs.remove(debt.filePath);
+      return true;
     },
 
     async getSummary(): Promise<DebtSummary> {

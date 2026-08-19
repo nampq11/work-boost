@@ -16,6 +16,7 @@ import {
  */
 export interface DailyWorkRepository {
   save(dateStr: string, report: DailyWorkReport): Promise<DailyWorkDocument>;
+  saveContent(dateStr: string, content: string): Promise<DailyWorkDocument>;
   get(dateStr: string): Promise<DailyWorkDocument | null>;
   listDates(): Promise<string[]>;
 }
@@ -53,6 +54,20 @@ export function createDailyWorkRepository(fs: WorkspaceFS): DailyWorkRepository 
       return { frontmatter, report, customSections, rawMarkdown, filePath };
     },
 
+    async saveContent(dateStr: string, content: string): Promise<DailyWorkDocument> {
+      const filePath = getFilePath(dateStr);
+      const frontmatter: DailyWorkFrontmatter = {
+        id: `daily_${dateStr}`,
+        date: dateStr,
+        status: 'completed',
+        updatedAt: new Date().toISOString(),
+      };
+      const rawMarkdown = stringifyMarkdown(frontmatter, content);
+      await fs.writeTextAtomic(filePath, rawMarkdown);
+      const { report, customSections } = parseDailyReport(content);
+      return { frontmatter, report, customSections, rawMarkdown, filePath };
+    },
+
     async get(dateStr: string): Promise<DailyWorkDocument | null> {
       const filePath = getFilePath(dateStr);
       if (!(await fs.exists(filePath))) return null;
@@ -66,7 +81,7 @@ export function createDailyWorkRepository(fs: WorkspaceFS): DailyWorkRepository 
 
     async listDates(): Promise<string[]> {
       const files = await fs.listFiles('daily');
-      return files.map(f => f.replace(/^daily\/|\.md$/g, ''));
+      return files.map((f) => f.replace(/^daily\/|\.md$/g, ''));
     },
   };
 }

@@ -3,11 +3,12 @@ import { Debt, DebtDirection, DebtReminderSettings, DebtStatus } from '@work-boo
 import { Subscription } from '@work-boost/data-schemas';
 import { Message } from '@work-boost/data-schemas';
 import { User } from '@work-boost/data-schemas';
-import { IndexKeys, PrimaryKeys, listIndexed } from './indexes.ts';
+import { IndexKeys, listIndexed, PrimaryKeys } from './indexes.ts';
 import { createDataLayer } from '../mod.ts';
 import { WorkspaceConfig } from '@work-boost/data-schemas/config.ts';
-import type { DailyWorkRepository, DebtRepository, ConfigManager } from '../mod.ts';
-import type { DailyWorkDocument, DailyWorkReport } from '@work-boost/data-schemas/agent.ts';
+import type { ConfigManager, DailyWorkRepository, DebtRepository } from '../mod.ts';
+import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
+import { parseMarkdown } from './markdown/markdown-engine.ts';
 
 /**
  * Single-user workspace user ID for backward compatibility
@@ -36,6 +37,28 @@ function toDate(isoString: string): Date {
   return new Date(isoString);
 }
 
+function toDebt(document: DebtDocument): Debt {
+  const { frontmatter, reason } = document;
+  return {
+    id: frontmatter.id,
+    userId: SINGLE_USER_ID,
+    direction: frontmatter.direction,
+    amount: frontmatter.amount,
+    currency: frontmatter.currency,
+    personName: frontmatter.personName,
+    reason,
+    status: frontmatter.status,
+    debtDate: new Date(frontmatter.debtDate),
+    paidAt: frontmatter.paidAt ? toDate(frontmatter.paidAt) : undefined,
+    createdAt: toDate(frontmatter.createdAt),
+    updatedAt: toDate(frontmatter.updatedAt),
+  };
+}
+
+function getDailyWorkContent(document: { rawMarkdown: string }): string {
+  return parseMarkdown<unknown>(document.rawMarkdown).body;
+}
+
 export class Database {
   private static instance: Database;
   private _kv: Deno.Kv | null = null;
@@ -45,7 +68,10 @@ export class Database {
   private dailyWork: DailyWorkRepository;
   private debts: DebtRepository;
 
-  private constructor(dataLayer: { config: ConfigManager; dailyWork: DailyWorkRepository; debts: DebtRepository }, kv?: Deno.Kv) {
+  private constructor(
+    dataLayer: { config: ConfigManager; dailyWork: DailyWorkRepository; debts: DebtRepository },
+    kv?: Deno.Kv,
+  ) {
     this.config = dataLayer.config;
     this.dailyWork = dataLayer.dailyWork;
     this.debts = dataLayer.debts;
@@ -165,15 +191,7 @@ export class Database {
   async storeDailyWorkMessage(message: Message): Promise<void> {
     const dateStr = message.date.toISOString().split('T')[0]; // YYYY-MM-DD
 
-    // Message content should be pre-formatted markdown from the agent
-    // For backward compatibility, we'll store it as the daily report
-    const report: DailyWorkReport = {
-      completed: [], // Extract from content if needed
-      incomplete: [],
-      planned: [],
-    };
-
-    await this.dailyWork.save(dateStr, report);
+    await this.dailyWork.saveContent(dateStr, message.content);
   }
 
   /**
@@ -185,13 +203,11 @@ export class Database {
 
     if (!doc) return undefined;
 
-    // Convert DailyWorkDocument back to Message format for backward compatibility
-    // Content is formatted as markdown by the agent
     return {
       id: doc.frontmatter.id,
       userId: SINGLE_USER_ID,
       date: new Date(doc.frontmatter.date),
-      content: `Daily work report for ${doc.frontmatter.date}`, // Placeholder content
+      content: getDailyWorkContent(doc),
     };
   }
 
@@ -309,7 +325,7 @@ export class Database {
           id: doc.frontmatter.id,
           userId: SINGLE_USER_ID,
           date: new Date(doc.frontmatter.date),
-          content: `Daily work report for ${doc.frontmatter.date}`, // Placeholder content
+          content: getDailyWorkContent(doc),
         });
       }
     }
@@ -334,7 +350,7 @@ export class Database {
       id: doc.frontmatter.id,
       userId: SINGLE_USER_ID,
       date: new Date(doc.frontmatter.date),
-      content: `Daily work report for ${doc.frontmatter.date}`, // Placeholder content
+      content: getDailyWorkContent(doc),
     };
   }
 
@@ -380,17 +396,22 @@ export class Database {
   async createDebt(debt: Omit<Debt, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<Debt> {
     // In single-user system, always use SINGLE_USER_ID
     const newDebt = await this.debts.create({
-      ...debt,
-      userId: SINGLE_USER_ID,
+      direction: debt.direction,
+      amount: debt.amount,
+      currency: debt.currency,
+      personName: debt.personName,
+      reason: debt.reason,
+      debtDate: debt.debtDate?.toISOString().slice(0, 10),
     });
-    return newDebt;
+    return toDebt(newDebt);
   }
 
   /**
    * Get a debt by its ID using markdown storage
    */
   async getDebtById(id: string): Promise<Debt | null> {
-    return await this.debts.getById(id);
+    const debt = await this.debts.getById(id);
+    return debt ? toDebt(debt) : null;
   }
 
   /**
@@ -399,7 +420,11 @@ export class Database {
   async getDebtsByUserId(userId: string): Promise<Debt[]> {
     // In single-user system, userId is ignored
     const debts = await this.debts.listAll();
-    return debts.sort((a, b) => new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime());
+    return debts
+      .sort((a, b) =>
+        new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime()
+      )
+      .map(toDebt);
   }
 
   /**
@@ -407,7 +432,11 @@ export class Database {
    */
   async getUnpaidDebtsByUserId(userId: string): Promise<Debt[]> {
     const debts = await this.debts.filter({ status: DebtStatus.PENDING });
-    return debts.sort((a, b) => new Date(a.frontmatter.createdAt).getTime() - new Date(b.frontmatter.createdAt).getTime());
+    return debts
+      .sort((a, b) =>
+        new Date(a.frontmatter.createdAt).getTime() - new Date(b.frontmatter.createdAt).getTime()
+      )
+      .map(toDebt);
   }
 
   /**
@@ -422,7 +451,11 @@ export class Database {
     },
   ): Promise<Debt[]> {
     const debts = await this.debts.filter(options);
-    return debts.sort((a, b) => new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime());
+    return debts
+      .sort((a, b) =>
+        new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime()
+      )
+      .map(toDebt);
   }
 
   /**
@@ -432,21 +465,7 @@ export class Database {
     const updatedDoc = await this.debts.settle(debtId);
     if (!updatedDoc) return null;
 
-    // Convert DebtDocument back to Debt format for backward compatibility
-    return {
-      id: updatedDoc.frontmatter.id,
-      userId: SINGLE_USER_ID,
-      direction: updatedDoc.frontmatter.direction,
-      amount: updatedDoc.frontmatter.amount,
-      currency: updatedDoc.frontmatter.currency,
-      personName: updatedDoc.frontmatter.personName,
-      reason: updatedDoc.frontmatter.reason,
-      status: updatedDoc.frontmatter.status,
-      debtDate: updatedDoc.frontmatter.debtDate,
-      paidAt: updatedDoc.frontmatter.paidAt ? new Date(updatedDoc.frontmatter.paidAt) : undefined,
-      createdAt: new Date(updatedDoc.frontmatter.createdAt),
-      updatedAt: new Date(updatedDoc.frontmatter.updatedAt),
-    };
+    return toDebt(updatedDoc);
   }
 
   /**
@@ -454,22 +473,28 @@ export class Database {
    */
   async updateDebt(
     debtId: string,
-    updates: Partial<Omit<Debt, 'id' | 'userId' | 'createdAt'>>,
+    updates: Partial<Omit<Debt, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>,
   ): Promise<Debt | null> {
-    // DebtRepository doesn't have update method, so we need to implement it
-    // For now, return null as this is not commonly used
-    // TODO: Implement update method in DebtRepository if needed
-    return null;
+    const updatedDoc = await this.debts.update(debtId, {
+      direction: updates.direction,
+      amount: updates.amount,
+      currency: updates.currency,
+      personName: updates.personName,
+      reason: updates.reason,
+      status: updates.status,
+      ...(updates.debtDate === undefined
+        ? {}
+        : { debtDate: updates.debtDate.toISOString().slice(0, 10) }),
+      ...(updates.paidAt === undefined ? {} : { paidAt: updates.paidAt.toISOString() }),
+    });
+    return updatedDoc ? toDebt(updatedDoc) : null;
   }
 
   /**
    * Delete a debt record using markdown storage
    */
   async deleteDebt(debtId: string): Promise<boolean> {
-    // DebtRepository doesn't have delete method (debts are archived instead)
-    // For now, settle the debt as an alternative
-    const result = await this.debts.settle(debtId);
-    return result !== null;
+    return await this.debts.delete(debtId);
   }
 
   /**
@@ -486,7 +511,9 @@ export class Database {
       weeklyDay: config.debtReminder.weeklyDay,
       monthlyDay: config.debtReminder.monthlyDay,
       reminderHour: config.debtReminder.reminderHour,
-      lastReminderSentAt: config.debtReminder.lastSentAt ? new Date(config.debtReminder.lastSentAt) : undefined,
+      lastReminderSentAt: config.debtReminder.lastSentAt
+        ? new Date(config.debtReminder.lastSentAt)
+        : undefined,
       updatedAt: new Date(config.updatedAt),
     };
   }

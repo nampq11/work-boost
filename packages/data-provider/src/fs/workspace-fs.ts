@@ -11,6 +11,7 @@ export interface WorkspaceFS {
   readText(relPath: string): Promise<string>;
   writeTextAtomic(relPath: string, content: string): Promise<void>;
   move(fromRelPath: string, toRelPath: string): Promise<void>;
+  remove(relPath: string): Promise<void>;
   listFiles(relDir: string): Promise<string[]>;
   exists(relPath: string): Promise<boolean>;
 }
@@ -20,11 +21,13 @@ export interface WorkspaceFS {
  * @param customRoot Optional custom root path, defaults to ~/.workboost/workspace/
  */
 export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
-  const rootPath = resolve(customRoot || join(
-    Deno.env.get('HOME') || Deno.env.get('USERPROFILE') || '.',
-    '.workboost',
-    'workspace'
-  ));
+  const rootPath = resolve(
+    customRoot || join(
+      Deno.env.get('HOME') || Deno.env.get('USERPROFILE') || '.',
+      '.workboost',
+      'workspace',
+    ),
+  );
 
   const writeLocks = new Map<string, Promise<void>>();
 
@@ -61,7 +64,9 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
   }
 
   return {
-    get root() { return rootPath; },
+    get root() {
+      return rootPath;
+    },
 
     async init(): Promise<void> {
       await ensureDir(rootPath);
@@ -100,6 +105,10 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       const toFull = assertInside(toRelPath);
       await ensureDir(dirname(toFull));
       await Deno.rename(fromFull, toFull);
+    },
+
+    async remove(relPath: string): Promise<void> {
+      await Deno.remove(assertInside(relPath));
     },
 
     async listFiles(relDir: string): Promise<string[]> {
