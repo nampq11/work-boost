@@ -30,6 +30,7 @@ export function createBrain(deps: BrainDeps): Brain {
 
 export class Brain implements AgentPort {
   private readonly store = createSessionStore();
+  private readonly queues = new Map<string, Promise<unknown>>();
   private readonly models;
   private readonly model: Model<any>;
   private readonly tools;
@@ -81,13 +82,28 @@ export class Brain implements AgentPort {
     options?: { sessionId?: string; signal?: AbortSignal },
   ): Promise<string> {
     const sessionId = options?.sessionId || 'default';
-    const { signal } = options || {};
 
+    const previous = this.queues.get(sessionId) ?? Promise.resolve();
+    const current = previous
+      .catch(() => {})
+      .then(() => this.runTurn(sessionId, message, options?.signal));
+    this.queues.set(sessionId, current);
+
+    try {
+      return await current;
+    } finally {
+      if (this.queues.get(sessionId) === current) {
+        this.queues.delete(sessionId);
+      }
+    }
+  }
+
+  private async runTurn(sessionId: string, message: string, signal?: AbortSignal): Promise<string> {
     const { agent } = this.store.getOrCreate(sessionId, () => this.createAgent());
 
     let accumulatedText = '';
 
-    const unsubscribe = agent.subscribe((event, abortSignal) => {
+    const unsubscribe = agent.subscribe((event) => {
       if (event.type === 'message_end' && event.message.role === 'assistant') {
         const text = event.message.content
           .filter((block): block is { type: 'text'; text: string } => block.type === 'text')

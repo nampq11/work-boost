@@ -2,6 +2,7 @@ import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider/database.ts';
 import type { Subscription } from '@work-boost/data-schemas/subscription.ts';
 import type { SlackService } from '@work-boost/services/slack/slack.ts';
+import { logger } from '@work-boost/shared/logger/logger.ts';
 
 export interface SlackDeps {
   db: Database;
@@ -74,7 +75,10 @@ export async function handleSlackMessages(
   const sessionId = `slack_${userId}`;
 
   try {
-    const response = await deps.agent.stream(text, { sessionId });
+    const response = await deps.agent.stream(text, {
+      sessionId,
+      signal: AbortSignal.timeout(2500),
+    });
 
     return new Response(
       JSON.stringify({
@@ -88,10 +92,14 @@ export async function handleSlackMessages(
     );
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('[handleSlackMessages] agent.stream failed', {
+      error: errorMsg,
+      sessionId,
+    });
     return new Response(
       JSON.stringify({
         response_type: 'ephemeral',
-        text: `Error: ${errorMsg}`,
+        text: 'Sorry, something went wrong. Please try again.',
       }),
       {
         status: 200,

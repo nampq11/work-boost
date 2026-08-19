@@ -147,26 +147,31 @@ export function createGetDebtSummaryTool(debts: DebtRepository): AgentTool<any> 
     execute: async () => {
       const summary = await debts.getSummary();
 
+      const currencyKeys = Object.keys(summary.currencies);
+      const defaultCurrency = currencyKeys.length === 1 ? currencyKeys[0] : 'VND';
+      const formatAmount = (amount: number) =>
+        `${amount.toLocaleString('vi-VN')} ${defaultCurrency}`;
+
       const parts: string[] = [];
       if (summary.totalLent > 0) {
         parts.push(
-          `💰 Bạn được nợ: ${summary.totalLent.toLocaleString('vi-VN')} VND (${summary.pendingLentCount} khoản chưa trả)`,
+          `💰 Bạn được nợ: ${formatAmount(summary.totalLent)} (${summary.pendingLentCount} khoản chưa trả)`,
         );
       }
       if (summary.totalBorrowed > 0) {
         parts.push(
-          `📥 Bạn cần trả: ${summary.totalBorrowed.toLocaleString('vi-VN')} VND (${summary.pendingBorrowedCount} khoản chưa trả)`,
+          `📥 Bạn cần trả: ${formatAmount(summary.totalBorrowed)} (${summary.pendingBorrowedCount} khoản chưa trả)`,
         );
       }
 
       const net = summary.netPosition;
       let netText: string;
       if (net > 0) {
-        netText = `🟢 Bạn là người có quyền lợi: ${net.toLocaleString('vi-VN')} VND`;
+        netText = `🟢 Bạn là người có quyền lợi: ${formatAmount(net)}`;
       } else if (net < 0) {
-        netText = `🔴 Bạn cần thanh toán: ${Math.abs(net).toLocaleString('vi-VN')} VND`;
+        netText = `🔴 Bạn cần thanh toán: ${formatAmount(Math.abs(net))}`;
       } else {
-        netText = '⚪ Mọi khoản đã cân bằng';
+        netText = '⚪ Mỗi khoản đã cân bằng';
       }
       parts.push(netText);
 

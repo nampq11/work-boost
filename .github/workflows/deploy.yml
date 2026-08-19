@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy to Deno Deploy
-        uses: denoland/deployctl@v2
+        uses: denoland/deployctl@v1
         with:
           project: work-boost
           entrypoint: apps/api/src/main.ts

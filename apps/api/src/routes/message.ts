@@ -3,6 +3,8 @@ import { logger } from '@work-boost/shared/logger/logger.ts';
 import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
 import { isValidSessionId, sanitizeInput } from '../utils/security.ts';
 
+const AGENT_TIMEOUT_MS = 120_000;
+
 interface MessageRequestBody {
   message: string;
   sessionId?: string;
@@ -86,7 +88,10 @@ export async function handleMessage(
 
     // Process message asynchronously (don't await)
     agent
-      .stream(message, { sessionId: sessionId || 'default' })
+      .stream(message, {
+        sessionId: sessionId || 'default',
+        signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+      })
       .then(() => {
         logger.info('Async message processing completed', {
           requestId,
@@ -142,7 +147,10 @@ export async function handleMessageSync(
     });
 
     try {
-      const response = await agent.stream(message, { sessionId: sessionId || 'default' });
+      const response = await agent.stream(message, {
+        sessionId: sessionId || 'default',
+        signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+      });
 
       return successResponse(
         {
