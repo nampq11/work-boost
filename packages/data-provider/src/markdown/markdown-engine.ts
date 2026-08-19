@@ -1,4 +1,5 @@
-import { extract, test } from '@std/front-matter/yaml';
+import { test } from '@std/front-matter';
+import { extract } from '@std/front-matter/yaml';
 import { stringify } from '@std/yaml';
 import type { DailyWorkReport, TaskItem } from '@work-boost/data-schemas/agent.ts';
 
@@ -38,12 +39,12 @@ export function stringifyMarkdown<T>(frontmatter: T, body: string): string {
  */
 export function parseDailyReport(body: string): {
   report: DailyWorkReport;
-  customSections: string
+  customSections: string;
 } {
   const report: DailyWorkReport = {
     completed: [],
     incomplete: [],
-    planned: []
+    planned: [],
   };
   const customLines: string[] = [];
 
@@ -70,17 +71,17 @@ export function parseDailyReport(body: string): {
       if (taskText.toLowerCase() === 'n/a' || !taskText) continue;
 
       // Parse "**PROJECT**: Task description" or "PROJECT: Task description"
-      const match = taskText.match(/^\*\*([^*]+)\*\*:\s*(.*)$/) ||
-                  taskText.match(/^([^:]+):\s*(.*)$/);
+      const match =
+        taskText.match(/^\*\*([^*]+)\*\*:\s*(.*)$/) || taskText.match(/^([^:]+):\s*(.*)$/);
       if (match) {
         report[currentSection].push({
           project: match[1].trim(),
-          task: match[2].trim()
+          task: match[2].trim(),
         });
       } else {
         report[currentSection].push({
           project: 'INBOX',
-          task: taskText
+          task: taskText,
         });
       }
     }
@@ -88,7 +89,7 @@ export function parseDailyReport(body: string): {
 
   return {
     report,
-    customSections: customLines.join('\n').trim()
+    customSections: customLines.join('\n').trim(),
   };
 }
 
@@ -98,7 +99,7 @@ export function parseDailyReport(body: string): {
 export function formatDailyReport(report: DailyWorkReport, customSections = ''): string {
   const formatSection = (tasks: TaskItem[]) => {
     if (!tasks || tasks.length === 0) return '- N/A';
-    return tasks.map(t => `- **${t.project || 'INBOX'}**: ${t.task}`).join('\n');
+    return tasks.map((t) => `- **${t.project || 'INBOX'}**: ${t.task}`).join('\n');
   };
 
   let result =

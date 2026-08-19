@@ -1,18 +1,19 @@
 /// <reference lib="deno.unstable" />
+
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { Debt, DebtReminderSettings } from '@work-boost/data-schemas/debt.ts';
-import type { Message } from '@work-boost/data-schemas/agent.ts';
+import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import type { Subscription } from '@work-boost/data-schemas/subscription.ts';
+import type { Message } from '@work-boost/data-schemas/task.ts';
 import type { User } from '@work-boost/data-schemas/user.ts';
-import { createWorkspaceFS, type WorkspaceFS } from './fs/workspace-fs.ts';
+import { type WorkspaceFS, createWorkspaceFS } from './fs/workspace-fs.ts';
+import { parseMarkdown } from './markdown/markdown-engine.ts';
 import { type ConfigManager, createConfigManager } from './repositories/config-manager.ts';
 import {
-  createDailyWorkRepository,
   type DailyWorkRepository,
+  createDailyWorkRepository,
 } from './repositories/daily-work-repository.ts';
-import { createDebtRepository, type DebtRepository } from './repositories/debt-repository.ts';
-import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
-import { parseMarkdown } from './markdown/markdown-engine.ts';
+import { type DebtRepository, createDebtRepository } from './repositories/debt-repository.ts';
 
 /**
  * Single-user workspace user ID for backward compatibility
@@ -68,17 +69,16 @@ export class Database {
   private _kv: Deno.Kv | null = null;
 
   // New markdown-based repositories (Phase 1: Local-First Architecture)
-  private config: ConfigManager;
-  private dailyWork: DailyWorkRepository;
-  private debts: DebtRepository;
+  readonly config: ConfigManager;
+  readonly dailyWork: DailyWorkRepository;
+  readonly debts: DebtRepository;
+  readonly fs: WorkspaceFS;
 
-  private constructor(
-    dataLayer: DataLayer,
-    kv?: Deno.Kv,
-  ) {
+  private constructor(dataLayer: DataLayer, kv?: Deno.Kv) {
     this.config = dataLayer.config;
     this.dailyWork = dataLayer.dailyWork;
     this.debts = dataLayer.debts;
+    this.fs = dataLayer.fs;
     this._kv = kv || null; // Keep KV for backward compatibility during transition
   }
 
@@ -86,20 +86,15 @@ export class Database {
    * Initialize database with markdown-based storage (Phase 1: Local-First Architecture)
    * Markdown storage is the source of truth; initialization errors are fatal.
    */
-  static async init(): Promise<Database> {
+  static async init(providedDataLayer?: DataLayer): Promise<Database> {
     if (this.instance) return this.instance;
 
-    try {
-      const dataLayer = createLocalDataLayer();
-      await dataLayer.fs.init();
-      await dataLayer.config.load();
+    const dataLayer = providedDataLayer || createLocalDataLayer();
+    await dataLayer.fs.init();
+    await dataLayer.config.load();
 
-      this.instance = new Database(dataLayer);
-      return this.instance;
-    } catch (error) {
-      console.error('Failed to initialize markdown storage:', error);
-      throw error;
-    }
+    this.instance = new Database(dataLayer);
+    return this.instance;
   }
 
   /**
@@ -109,7 +104,7 @@ export class Database {
   static async createForTest(rootOrKv?: string | Deno.Kv, kv?: Deno.Kv): Promise<Database> {
     const root = typeof rootOrKv === 'string' ? rootOrKv : undefined;
     const providedKv = typeof rootOrKv === 'string' ? kv : rootOrKv;
-    const testRoot = root || await Deno.makeTempDir({ prefix: 'work-boost-test-' });
+    const testRoot = root || (await Deno.makeTempDir({ prefix: 'work-boost-test-' }));
     const testKv = providedKv || (await Deno.openKv(':memory:'));
     const dataLayer = createLocalDataLayer(testRoot);
     await dataLayer.fs.init();
@@ -119,6 +114,19 @@ export class Database {
 
   get kv(): Deno.Kv | null {
     return this._kv;
+  }
+
+  /**
+   * Direct access to the underlying data layer repositories.
+   * Used by the Brain agent for atomic tool execution.
+   */
+  get dataLayer(): DataLayer {
+    return {
+      fs: this.fs,
+      config: this.config,
+      dailyWork: this.dailyWork,
+      debts: this.debts,
+    };
   }
 
   async close(): Promise<void> {
@@ -399,9 +407,7 @@ export class Database {
    * Create a new debt record using markdown storage
    */
   async createDebt(
-    debt:
-      & Omit<Debt, 'id' | 'createdAt' | 'updatedAt' | 'userId'>
-      & Partial<Pick<Debt, 'userId'>>,
+    debt: Omit<Debt, 'id' | 'createdAt' | 'updatedAt' | 'userId'> & Partial<Pick<Debt, 'userId'>>,
   ): Promise<Debt> {
     // In single-user system, always use SINGLE_USER_ID
     const newDebt = await this.debts.create({
@@ -430,8 +436,9 @@ export class Database {
     // In single-user system, userId is ignored
     const debts = await this.debts.listAll();
     return debts
-      .sort((a, b) =>
-        new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime()
+      .sort(
+        (a, b) =>
+          new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime(),
       )
       .map(toDebt);
   }
@@ -442,8 +449,9 @@ export class Database {
   async getUnpaidDebtsByUserId(userId: string): Promise<Debt[]> {
     const debts = await this.debts.filter({ status: DebtStatus.PENDING });
     return debts
-      .sort((a, b) =>
-        new Date(a.frontmatter.createdAt).getTime() - new Date(b.frontmatter.createdAt).getTime()
+      .sort(
+        (a, b) =>
+          new Date(a.frontmatter.createdAt).getTime() - new Date(b.frontmatter.createdAt).getTime(),
       )
       .map(toDebt);
   }
@@ -461,8 +469,9 @@ export class Database {
   ): Promise<Debt[]> {
     const debts = await this.debts.filter(options);
     return debts
-      .sort((a, b) =>
-        new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime()
+      .sort(
+        (a, b) =>
+          new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime(),
       )
       .map(toDebt);
   }
@@ -538,8 +547,8 @@ export class Database {
     // Update debt reminder settings in workspace config
     config.debtReminder.enabled = settings.enabled;
     config.debtReminder.frequency = settings.frequency;
-    config.debtReminder.weeklyDay = settings.weeklyDay;
-    config.debtReminder.monthlyDay = settings.monthlyDay;
+    config.debtReminder.weeklyDay = settings.weeklyDay ?? 1;
+    config.debtReminder.monthlyDay = settings.monthlyDay ?? 1;
     config.debtReminder.reminderHour = settings.reminderHour;
     if (settings.lastReminderSentAt) {
       config.debtReminder.lastSentAt = settings.lastReminderSentAt.toISOString();
@@ -585,12 +594,15 @@ export class Database {
     totalBorrowedPaid: number;
     pendingLentCount: number;
     pendingBorrowedCount: number;
-    currencies: Record<string, {
-      lent: number;
-      borrowed: number;
-      lentPaid: number;
-      borrowedPaid: number;
-    }>;
+    currencies: Record<
+      string,
+      {
+        lent: number;
+        borrowed: number;
+        lentPaid: number;
+        borrowedPaid: number;
+      }
+    >;
   }> {
     const summary = await this.debts.getSummary();
 

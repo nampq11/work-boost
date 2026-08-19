@@ -1,18 +1,16 @@
-// Shared service initialization for both entrypoints (api and cli)
+// Centralized service initialization for the Work Boost API server.
 
 import { type AgentPort, createBrain } from '@work-boost/brain';
-import { Database } from '@work-boost/data-provider';
-import { createDataLayer } from '@work-boost/data-provider';
+import { Database, createDataLayer } from '@work-boost/data-provider';
+import { SlackService } from '@work-boost/services/slack/slack.ts';
+import { TelegramService } from '@work-boost/services/telegram/telegram.ts';
 import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import { initLangfuse } from '@work-boost/shared/observability/index.ts';
-import { Slack } from './slack/slack.ts';
-import { TelegramService } from './telegram/telegram.ts';
 
 export interface Services {
   db: Database;
   agent: AgentPort;
-  slack: Slack;
+  slack: SlackService;
   telegram: TelegramService;
 }
 
@@ -25,8 +23,6 @@ export function validateRequiredSecrets(options: { strict?: boolean } = {}): {
   missing: string[];
 } {
   const isProduction = env.DENO_ENV === 'production';
-  // TelegramService is constructed unconditionally and throws without these, so
-  // they are required in every environment (unlike the Slack secrets)
   const required: string[] = [
     'GOOGLE_API_KEY',
     'TELEGRAM_BOT_TOKEN',
@@ -34,7 +30,6 @@ export function validateRequiredSecrets(options: { strict?: boolean } = {}): {
     'TELEGRAM_OWNER_ID',
   ];
 
-  // In production or strict mode, require all bot secrets
   if (isProduction || options.strict) {
     required.push('SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET');
   }
@@ -44,8 +39,7 @@ export function validateRequiredSecrets(options: { strict?: boolean } = {}): {
 }
 
 /**
- * Initialize database, Langfuse tracing, agent, and bot services.
- * Updated to use markdown-based storage (Phase 1: Local-First Architecture)
+ * Initialize the singleton DataLayer, Database facade, Brain agent, and bot services.
  */
 export async function initializeServices(options: { strict?: boolean } = {}): Promise<Services> {
   const validation = validateRequiredSecrets(options);
@@ -55,33 +49,21 @@ export async function initializeServices(options: { strict?: boolean } = {}): Pr
 
   logger.info('Initializing services...');
 
-  // Use new markdown-based data layer (Phase 1: Local-First Architecture)
-  // The Database class now internally uses WorkspaceFS with markdown files
-  const db = await Database.init();
+  const dataLayer = createDataLayer();
+  await dataLayer.fs.init();
+  await dataLayer.config.load();
   logger.info('Markdown-based workspace initialized');
 
-  // Initialize Langfuse tracing before Brain (for LLM call tracing)
-  const langfuse = initLangfuse({
-    publicKey: env.LANGFUSE_PUBLIC_KEY,
-    secretKey: env.LANGFUSE_SECRET_KEY,
-    host: env.LANGFUSE_HOST,
-    enabled: env.LANGFUSE_ENABLED,
-  });
-  if (langfuse.isEnabled()) {
-    logger.info('Langfuse tracing enabled');
-  } else {
-    logger.debug('Langfuse tracing disabled');
-  }
+  const db = await Database.init(dataLayer);
 
   const agent = createBrain({
     apiKey: env.get('GOOGLE_API_KEY') || '',
-    db,
-    langfuse,
+    dataLayer,
   });
   logger.info('Agent initialized');
 
-  const slack = new Slack(langfuse);
-  const telegram = new TelegramService(db, agent, langfuse);
+  const slack = new SlackService();
+  const telegram = new TelegramService(db, agent);
   logger.info('Bot services initialized');
 
   return { db, agent, slack, telegram };

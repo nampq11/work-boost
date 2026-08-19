@@ -19,6 +19,7 @@ export const DailyWorkFrontmatterSchema = z.object({
   date: z.iso.date(),
   status: z.enum(['draft', 'completed']).default('completed'),
   updatedAt: z.string().datetime(),
+  updatedBy: z.enum(['telegram', 'slack', 'agent', 'user']).default('agent'),
 });
 
 export type DailyWorkFrontmatter = z.infer<typeof DailyWorkFrontmatterSchema>;

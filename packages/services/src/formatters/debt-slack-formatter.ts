@@ -1,13 +1,11 @@
-import { Debt, DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
+import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 
 /**
  * Formatter for debt messages in Slack using plain text with emoji.
  */
 export class DebtSlackFormatter {
-  /**
-   * Format currency with symbol
-   */
-  private formatCurrency(amount: number, currency: string): string {
+  formatCurrency(amount: number, currency: string): string {
     const symbols: Record<string, string> = {
       USD: '$',
       EUR: '€',
@@ -16,12 +14,9 @@ export class DebtSlackFormatter {
       VND: '₫',
     };
     const symbol = symbols[currency] || currency + ' ';
-    return `${symbol}${amount.toFixed(2)}`;
+    return `${symbol}${amount.toLocaleString('vi-VN')}`;
   }
 
-  /**
-   * Format status with emoji
-   */
   private formatStatus(status: DebtStatus): string {
     switch (status) {
       case DebtStatus.PENDING:
@@ -35,17 +30,16 @@ export class DebtSlackFormatter {
     }
   }
 
-  /**
-   * Format direction with emoji
-   */
+  private escapeMrkdwn(text: string): string {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   private formatDirection(direction: DebtDirection): string {
     return direction === DebtDirection.LENT ? ':moneybag: Lent to' : ':inbox_tray: Borrowed from';
   }
 
-  /**
-   * Format date in readable format
-   */
-  private formatDate(date: Date): string {
+  private formatDate(dateStr: string): string {
+    const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -53,37 +47,34 @@ export class DebtSlackFormatter {
     });
   }
 
-  /**
-   * Format a single debt item
-   */
-  formatDebtItem(debt: Debt, showId = false): string {
+  formatDebtDocument(debt: DebtDocument, showId = false): string {
+    const { frontmatter, reason } = debt;
     const parts: string[] = [];
 
     if (showId) {
-      parts.push(`*#${debt.id.slice(0, 8)}*`);
+      parts.push(`*#${frontmatter.id.slice(0, 8)}*`);
     }
 
-    parts.push(`*${this.formatDirection(debt.direction)}* ${debt.personName}`);
-    parts.push(`*Amount:* ${this.formatCurrency(debt.amount, debt.currency)}`);
-    parts.push(`*Status:* ${this.formatStatus(debt.status)}`);
+    parts.push(
+      `*${this.formatDirection(frontmatter.direction)}* ${this.escapeMrkdwn(frontmatter.personName)}`,
+    );
+    parts.push(`*Amount:* ${this.formatCurrency(frontmatter.amount, frontmatter.currency)}`);
+    parts.push(`*Status:* ${this.formatStatus(frontmatter.status)}`);
 
-    if (debt.reason) {
-      parts.push(`*Reason:* ${debt.reason}`);
+    if (reason) {
+      parts.push(`*Reason:* ${this.escapeMrkdwn(reason)}`);
     }
 
-    parts.push(`*Date:* ${this.formatDate(debt.debtDate || debt.createdAt)}`);
+    parts.push(`*Date:* ${this.formatDate(frontmatter.debtDate)}`);
 
-    if (debt.paidAt) {
-      parts.push(`*Paid on:* ${this.formatDate(debt.paidAt)}`);
+    if (frontmatter.paidAt) {
+      parts.push(`*Paid on:* ${this.formatDate(frontmatter.paidAt)}`);
     }
 
     return parts.join('\n');
   }
 
-  /**
-   * Format a list of debts
-   */
-  formatDebtList(debts: Debt[], title?: string): string[] {
+  formatDebtList(debts: DebtDocument[], title?: string): string[] {
     if (debts.length === 0) {
       return [title ? `${title}\n\nNo debts found.` : 'No debts found.'];
     }
@@ -92,9 +83,8 @@ export class DebtSlackFormatter {
     let current = title ? `${title}\n\n` : '';
 
     for (const debt of debts) {
-      const item = this.formatDebtItem(debt, true) + '\n\n';
+      const item = this.formatDebtDocument(debt, true) + '\n\n';
 
-      // Slack has a higher limit, but we'll still be reasonable
       if (current.length + item.length > 15000) {
         messages.push(current.trim());
         current = item;
@@ -110,9 +100,6 @@ export class DebtSlackFormatter {
     return messages.length > 0 ? messages : ['No debts found.'];
   }
 
-  /**
-   * Format a summary of debts
-   */
   formatDebtSummary(summary: {
     totalLent: number;
     totalBorrowed: number;
@@ -120,12 +107,15 @@ export class DebtSlackFormatter {
     totalBorrowedPaid: number;
     pendingLentCount: number;
     pendingBorrowedCount: number;
-    currencies?: Record<string, {
-      lent: number;
-      borrowed: number;
-      lentPaid: number;
-      borrowedPaid: number;
-    }>;
+    currencies?: Record<
+      string,
+      {
+        lent: number;
+        borrowed: number;
+        lentPaid: number;
+        borrowedPaid: number;
+      }
+    >;
   }): string {
     const currencies = summary.currencies || {
       USD: {
@@ -144,23 +134,25 @@ export class DebtSlackFormatter {
       currency,
       value: totals.lent - totals.borrowed,
     }));
-    const netText = netPositions
-      .map(({ currency, value: netPosition }) => {
-        if (netPosition > 0) return `You're owed ${this.formatCurrency(netPosition, currency)}`;
-        if (netPosition < 0) {
-          return `You owe ${this.formatCurrency(Math.abs(netPosition), currency)}`;
-        }
-        return null;
-      })
-      .filter((text): text is string => text !== null)
-      .join(', ') || 'All settled up!';
+    const netText =
+      netPositions
+        .map(({ currency, value: netPosition }) => {
+          if (netPosition > 0) return `You're owed ${this.formatCurrency(netPosition, currency)}`;
+          if (netPosition < 0) {
+            return `You owe ${this.formatCurrency(Math.abs(netPosition), currency)}`;
+          }
+          return null;
+        })
+        .filter((text): text is string => text !== null)
+        .join(', ') || 'All settled up!';
     const hasPositivePosition = netPositions.some(({ value }) => value > 0);
     const hasNegativePosition = netPositions.some(({ value }) => value < 0);
-    const netEmoji = hasPositivePosition && !hasNegativePosition
-      ? ':large_green_circle:'
-      : hasNegativePosition && !hasPositivePosition
-      ? ':red_circle:'
-      : ':white_circle:';
+    const netEmoji =
+      hasPositivePosition && !hasNegativePosition
+        ? ':large_green_circle:'
+        : hasNegativePosition && !hasPositivePosition
+          ? ':red_circle:'
+          : ':white_circle:';
 
     return (
       `*:moneybag: Debt Summary*\n\n` +

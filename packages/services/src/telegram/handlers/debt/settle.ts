@@ -1,6 +1,6 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
-import { DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { Context } from 'grammy';
 import { DebtTelegramFormatter } from '../../../formatters/debt-telegram-formatter.ts';
 import { debtMenuKeyboard } from '../../keyboards.ts';
@@ -12,12 +12,7 @@ interface SettleHandlerDeps {
 
 const formatter = new DebtTelegramFormatter();
 
-/**
- * Handle /settle command - mark a debt as paid
- * Usage: /settle <debt_id> or from callback
- */
 export async function handleSettleCommand(ctx: Context, deps: SettleHandlerDeps): Promise<void> {
-  // Get debt ID from command argument
   const messageText = ctx.message?.text;
   const debtId = messageText?.split(/\s+/).slice(1).join(' ').trim();
 
@@ -25,7 +20,7 @@ export async function handleSettleCommand(ctx: Context, deps: SettleHandlerDeps)
     await ctx.reply(
       'Please provide a debt ID to settle.\n\n' +
         'Usage: /settle &lt;debt_id&gt;\n\n' +
-        'Or use /debts to view your debts and click "Mark Paid".',
+        'Or use /debts to view debts and click "Mark Paid".',
       { parse_mode: 'HTML' },
     );
     return;
@@ -34,9 +29,6 @@ export async function handleSettleCommand(ctx: Context, deps: SettleHandlerDeps)
   await settleDebt(ctx, deps, debtId, false);
 }
 
-/**
- * Handle settle callback from debt item
- */
 export async function handleSettleCallback(
   ctx: Context,
   deps: SettleHandlerDeps,
@@ -46,17 +38,13 @@ export async function handleSettleCallback(
   await settleDebt(ctx, deps, debtId, true);
 }
 
-/**
- * Settle a debt record (Updated for single-user system - Phase 1: Local-First Architecture)
- */
 async function settleDebt(
   ctx: Context,
   deps: SettleHandlerDeps,
   debtId: string,
   isEdit: boolean,
 ): Promise<void> {
-  // Get the debt
-  const debt = await deps.db.getDebtById(debtId);
+  const debt = await deps.db.debts.getById(debtId);
 
   if (!debt) {
     const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
@@ -67,32 +55,33 @@ async function settleDebt(
     return;
   }
 
-  // Ownership check removed - single-user system (Phase 1: Local-First Architecture)
-
-  // Check if already paid
-  if (debt.status === DebtStatus.PAID) {
-    const message = formatter.formatDebtItem(debt, false);
+  if (debt.frontmatter.status === DebtStatus.PAID) {
+    const message = formatter.formatDebtDocument(debt);
     const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
     await replyFn(message + '\n\nℹ️ This debt is already marked as paid.', {
-      reply_markup: formatter.debtItemKeyboard(debtId, debt.status),
+      reply_markup: formatter.debtItemKeyboard(debtId, debt.frontmatter.status),
       parse_mode: 'HTML',
     });
     return;
   }
 
-  // Update the debt
-  const updated = await deps.db.settleDebt(debtId);
+  const updated = await deps.db.debts.settle(debtId);
 
   if (updated) {
-    const directionText =
-      debt.direction === 'lent'
-        ? `was paid back by ${debt.personName}`
-        : `you paid back to ${debt.personName}`;
+    const escapeHtml = (text: string): string =>
+      text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+    const personName = escapeHtml(debt.frontmatter.personName);
+    const directionText =
+      debt.frontmatter.direction === DebtDirection.LENT
+        ? `was paid back to you by ${personName}`
+        : `you paid back to ${personName}`;
+
+    const amount = new Intl.NumberFormat('vi-VN').format(debt.frontmatter.amount);
     const message =
       `✅ Debt marked as paid!\n\n` +
-      `${formatter.formatCurrency(updated.amount, updated.currency)} ${directionText}` +
-      (updated.reason ? `\nReason: ${updated.reason}` : '');
+      `${amount} ${debt.frontmatter.currency} ${directionText}` +
+      (debt.reason ? `\nReason: ${escapeHtml(debt.reason)}` : '');
 
     const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
     await replyFn(message, {

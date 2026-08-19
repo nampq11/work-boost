@@ -11,10 +11,6 @@ interface DeleteHandlerDeps {
 
 const formatter = new DebtTelegramFormatter();
 
-/**
- * Handle /delete command - delete a debt record
- * Usage: /delete <debt_id> or from callback
- */
 export async function handleDeleteCommand(ctx: Context, deps: DeleteHandlerDeps): Promise<void> {
   const userId = ctx.from?.id.toString();
 
@@ -23,7 +19,6 @@ export async function handleDeleteCommand(ctx: Context, deps: DeleteHandlerDeps)
     return;
   }
 
-  // Get debt ID from command argument
   const messageText = ctx.message?.text;
   const debtId = messageText?.split(/\s+/).slice(1).join(' ').trim();
 
@@ -31,18 +26,15 @@ export async function handleDeleteCommand(ctx: Context, deps: DeleteHandlerDeps)
     await ctx.reply(
       'Please provide a debt ID to delete.\n\n' +
         'Usage: /delete &lt;debt_id&gt;\n\n' +
-        'Or use /debts to view your debts and click "Delete".',
+        'Or use /debts to view debts and click "Delete".',
       { parse_mode: 'HTML' },
     );
     return;
   }
 
-  await confirmDelete(ctx, deps, userId, debtId, false);
+  await confirmDelete(ctx, deps, debtId, false);
 }
 
-/**
- * Handle delete callback from debt item - show confirmation
- */
 export async function handleDeleteCallback(
   ctx: Context,
   deps: DeleteHandlerDeps,
@@ -56,21 +48,16 @@ export async function handleDeleteCallback(
     return;
   }
 
-  await confirmDelete(ctx, deps, userId, debtId, true);
+  await confirmDelete(ctx, deps, debtId, true);
 }
 
-/**
- * Show delete confirmation dialog
- */
 async function confirmDelete(
   ctx: Context,
   deps: DeleteHandlerDeps,
-  userId: string,
   debtId: string,
   isEdit: boolean,
 ): Promise<void> {
-  // Get the debt
-  const debt = await deps.db.getDebtById(debtId);
+  const debt = await deps.db.debts.getById(debtId);
 
   if (!debt) {
     const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
@@ -81,19 +68,9 @@ async function confirmDelete(
     return;
   }
 
-  // Verify ownership
-  if (debt.userId !== userId) {
-    const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
-    await replyFn('❌ You can only delete your own debts.', {
-      reply_markup: debtMenuKeyboard(),
-      parse_mode: 'HTML',
-    });
-    return;
-  }
-
   const message =
     '🗑 <b>Delete Debt?</b>\n\n' +
-    formatter.formatDebtItem(debt, false) +
+    formatter.formatDebtDocument(debt) +
     '\n\n<b>This action cannot be undone.</b>\n\n' +
     'Are you sure you want to delete this debt record?';
 
@@ -104,9 +81,6 @@ async function confirmDelete(
   });
 }
 
-/**
- * Handle delete confirmation callback
- */
 export async function handleDeleteConfirm(
   ctx: Context,
   deps: DeleteHandlerDeps,
@@ -114,33 +88,17 @@ export async function handleDeleteConfirm(
 ): Promise<void> {
   await ctx.answerCallbackQuery();
 
-  const userId = ctx.from?.id.toString();
-  if (!userId) {
-    await ctx.editMessageText('Unable to identify user.');
-    return;
-  }
-
-  // Get the debt to verify ownership
-  const debt = await deps.db.getDebtById(debtId);
+  const debt = await deps.db.debts.getById(debtId);
 
   if (!debt) {
-    await ctx.editMessageText('❌ Debt not found. It may have already been deleted.', {
+    await ctx.editMessageText('❌ Debt not found. It may have been deleted.', {
       reply_markup: debtMenuKeyboard(),
       parse_mode: 'HTML',
     });
     return;
   }
 
-  if (debt.userId !== userId) {
-    await ctx.editMessageText('❌ You can only delete your own debts.', {
-      reply_markup: debtMenuKeyboard(),
-      parse_mode: 'HTML',
-    });
-    return;
-  }
-
-  // Delete the debt
-  const success = await deps.db.deleteDebt(debtId);
+  const success = await deps.db.debts.delete(debtId);
 
   if (success) {
     await ctx.editMessageText('✅ Debt deleted successfully.', {

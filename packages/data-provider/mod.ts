@@ -19,10 +19,14 @@ export {
 } from './src/repositories/daily-work-repository.ts';
 export { createDebtRepository, type DebtRepository } from './src/repositories/debt-repository.ts';
 
-import type { ConfigManager } from './src/repositories/config-manager.ts';
-import type { DailyWorkRepository } from './src/repositories/daily-work-repository.ts';
-import type { DebtRepository } from './src/repositories/debt-repository.ts';
 import type { WorkspaceFS } from './src/fs/workspace-fs.ts';
+import { createWorkspaceFS } from './src/fs/workspace-fs.ts';
+import { type ConfigManager, createConfigManager } from './src/repositories/config-manager.ts';
+import {
+  type DailyWorkRepository,
+  createDailyWorkRepository,
+} from './src/repositories/daily-work-repository.ts';
+import { type DebtRepository, createDebtRepository } from './src/repositories/debt-repository.ts';
 
 export type DataLayer = {
   fs: WorkspaceFS;
@@ -33,8 +37,6 @@ export type DataLayer = {
 
 // Legacy exports (for backward compatibility)
 export * from './src/database.ts';
-export * from './src/indexes.ts';
-export * from './src/migrations/migrate-slack-users.ts';
 
 /**
  * Compatibility layer: create a complete data layer with all repositories

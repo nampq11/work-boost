@@ -1,9 +1,4 @@
-export type {
-  AgentPlatform,
-  AgentPort,
-  AgentStreamChunk,
-  AgentStreamOptions,
-} from './agent.ts';
+export type { AgentPort } from './agent.ts';
 export type {
   MessageButton,
   MessageParseMode,

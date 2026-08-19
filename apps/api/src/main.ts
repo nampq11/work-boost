@@ -1,9 +1,8 @@
-import { runMigrationIfNeeded } from '@work-boost/data-provider';
-import { initializeServices } from '@work-boost/services';
 import { startDailyScheduler } from '@work-boost/services/scheduler/daily-job.ts';
 /// <reference lib="deno.unstable" />
 import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
+import { initializeServices } from './bootstrap.ts';
 import { createServer } from './server.ts';
 
 export interface StartApiModeOptions {
@@ -33,11 +32,6 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
 
   // Initialize services (validates required secrets first)
   const { db, agent, slack, telegram } = await initializeServices();
-
-  // Run migration BEFORE server starts (fail-fast if migration fails)
-  logger.info('Running database migration if needed...');
-  await runMigrationIfNeeded(db);
-
   const server = createServer({
     port,
     host,

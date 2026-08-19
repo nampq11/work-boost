@@ -1,50 +1,26 @@
-import type { ParsedDebtEntry } from '@work-boost/data-schemas/debt.ts';
-
-export type AgentPlatform = 'api' | 'slack' | 'telegram';
-
-export interface AgentStreamChunk {
-  content: string;
-  isFinal: boolean;
-}
-
-export interface AgentStreamResult {
-  /** Complete accumulated content */
-  content: string;
-  /** Number of chunks sent */
-  chunksSent: number;
-  /** Whether the stream completed successfully */
-  success: boolean;
-  /** Error if the stream failed */
-  error?: string;
-  /** Duration of the stream (ms) */
-  duration: number;
-}
-
-export interface AgentStreamOptions {
-  sessionId?: string;
-  platform?: AgentPlatform;
-  chatId?: string;
-}
-
-export interface DailyWorkReportResult {
-  success: boolean;
-  /** The formatted report (Vietnamese), present when success is true */
-  content?: string;
-  error?: string;
-}
-
+/**
+ * Minimal agent interface consumed by all platform services (API, Slack, Telegram).
+ *
+ * The agent processes a user message through its tool-calling loop and returns
+ * the full assistant response as a string.
+ */
 export interface AgentPort {
-  stream(
-    message: string,
-    onChunk: (chunk: AgentStreamChunk) => void | Promise<void>,
-    options?: AgentStreamOptions,
-  ): Promise<AgentStreamResult>;
-  parseDebtEntry(input: string): Promise<ParsedDebtEntry | null>;
-  generateDailyWorkReport(content: string): Promise<DailyWorkReportResult>;
+  /**
+   * Process a user message and return the agent's response text.
+   *
+   * @param message - The user's message (already stripped of command prefixes).
+   * @param options - Optional session and abort control.
+   * @param options.sessionId - Conversation session ID (e.g. Telegram chatId).
+   *   Different session IDs maintain separate conversation histories. If not
+   *   provided, a default singleton session is used.
+   * @param options.signal - Abort signal to cancel the agent loop.
+   * @returns The complete assistant response text.
+   */
+  stream(message: string, options?: { sessionId?: string; signal?: AbortSignal }): Promise<string>;
 
-  createSession(sessionId?: string): Promise<string>;
-  loadSession(sessionId: string): Promise<void>;
-  removeSession(sessionId: string): Promise<boolean>;
-  /** Stop background timers (session cleanup). Intended for tests and shutdown. */
-  dispose(): void;
+  /**
+   * Remove a session, clearing its conversation history.
+   * The next call to `stream` with the same sessionId will start a fresh session.
+   */
+  removeSession(sessionId: string): boolean;
 }

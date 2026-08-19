@@ -30,16 +30,19 @@ export interface DebtRepository {
   listAll(includeArchived?: boolean): Promise<DebtDocument[]>;
   filter(options: DebtFilterOptions): Promise<DebtDocument[]>;
   settle(debtId: string): Promise<DebtDocument | null>;
-  update(debtId: string, updates: {
-    direction?: DebtDirection;
-    amount?: number;
-    currency?: string;
-    personName?: string;
-    reason?: string;
-    status?: DebtStatus;
-    debtDate?: string;
-    paidAt?: string | null;
-  }): Promise<DebtDocument | null>;
+  update(
+    debtId: string,
+    updates: {
+      direction?: DebtDirection;
+      amount?: number;
+      currency?: string;
+      personName?: string;
+      reason?: string;
+      status?: DebtStatus;
+      debtDate?: string;
+      paidAt?: string | null;
+    },
+  ): Promise<DebtDocument | null>;
   delete(debtId: string): Promise<boolean>;
   getSummary(): Promise<DebtSummary>;
 }
@@ -71,12 +74,13 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
   }
 
   const generateSlug = (personName: string, id: string): string => {
-    const cleanName = personName
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'debt';
+    const cleanName =
+      personName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'debt';
     const shortId = id.slice(0, 4);
     return `${cleanName}-${shortId}.md`;
   };

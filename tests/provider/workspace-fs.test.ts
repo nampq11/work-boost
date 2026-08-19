@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from '@std/assert';
-import { createWorkspaceFS } from '@work-boost/data-provider/fs/workspace-fs.ts';
 import { join } from '@std/path';
+import { createWorkspaceFS } from '@work-boost/data-provider/fs/workspace-fs.ts';
 
 // Helper to create a temp directory for testing
 async function withTempDir(fn: (dir: string) => Promise<void>) {
@@ -79,7 +79,10 @@ Deno.test('WorkspaceFS - perform atomic writes', async () => {
 
     // Verify no temporary files were left behind
     const files = await fs.listFiles('.');
-    assertEquals(files.some((f) => f.includes('.tmp')), false);
+    assertEquals(
+      files.some((f) => f.includes('.tmp')),
+      false,
+    );
   });
 });
 
@@ -92,9 +95,8 @@ Deno.test('WorkspaceFS - mutex lock prevents race conditions', async () => {
     let writeCount = 0;
 
     // Launch multiple concurrent writes
-    const writes = Array.from(
-      { length: 5 },
-      (_, i) => fs.writeTextAtomic(testPath, `Content ${i}`),
+    const writes = Array.from({ length: 5 }, (_, i) =>
+      fs.writeTextAtomic(testPath, `Content ${i}`),
     );
 
     // All writes should complete without conflict
@@ -130,6 +132,9 @@ Deno.test('WorkspaceFS - file operations work correctly', async () => {
     await fs.writeTextAtomic('daily/file2.md', 'content2');
     const files = await fs.listFiles('daily');
     assertEquals(files.length, 2);
-    assertEquals(files.every((f) => f.endsWith('.md')), true);
+    assertEquals(
+      files.every((f) => f.endsWith('.md')),
+      true,
+    );
   });
 });

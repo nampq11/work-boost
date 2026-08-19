@@ -1,121 +1,146 @@
-
----
-
-# TÀI LIỆU THIẾT KẾ PHẦN MỀM (SDD)
-## Giai đoạn 1: Chuẩn hóa Domain & Tầng Dữ liệu Markdown-First (Local-First Architecture)
+# TÀI LIỆU THIẾT KẾ PHẦN MỀM (SDD) - GIAI ĐOẠN 2
+## Nâng cấp AI Agent Loop & Chuẩn hóa Kiến trúc Workspace (@work-boost/brain)
 
 * **Dự án:** Work Boost
-* **Kiến trúc:** Local-First, Single-User, Pure Markdown (File-System as Source of Truth)
-* **Thành phần thực thi:** `packages/data-schemas`, `packages/data-provider`, `scripts/migrate-to-files.ts`
+* **Phiên bản:** 2.0 (Markdown-Native & Monorepo Standardized)
+* **Thành phần thực thi:** `packages/brain`, `packages/data-provider`, `packages/data-schemas`, `packages/services`, `apps/api`
 
 ---
 
-## 1. Kiến trúc Tổng quan (Architecture Overview)
+## 1. Mục tiêu & Quyết định Kiến trúc (Architectural Decisions)
 
-Hệ thống lưu trữ chuyển từ Deno KV sang mô hình **Pure File Storage** trên máy tính cá nhân. Mọi dữ liệu (Báo cáo ngày, Khoản nợ, Cấu hình) đều là các file văn bản thuần túy nằm tại thư mục chuẩn của hệ điều hành `~/.workboost/workspace`.
+1. **Bộ công cụ Nguyên tử (Atomic Tools):** Thay thế các mega-tool bằng các tool nhỏ gọn, đơn trách nhiệm (`create_debt`, `settle_debt`, `list_debts`, `get_debt_summary`, `delete_debt`, `save_daily_work`, `get_daily_work`, `list_daily_dates`, `get_current_time`, `read_workspace_file`, `list_workspace_files`).
+2. **Đơn nhất hóa DataLayer (Singleton Instance):** Toàn bộ ứng dụng dùng chung 1 instance `DataLayer` duy nhất; `Database` facade dùng lại instance này để triệt tiêu xung đột Mutex Lock và ghi đĩa.
+3. **Thực thi trực tiếp + Phản hồi chi tiết (Direct Execution):** Agent gọi tool thực thi ngay trên file Markdown, trả về tóm tắt rõ ràng và đường dẫn file để người dùng nắm bắt.
+4. **Hợp nhất kênh tương tác (Unified Agent Interface):** Telegram, Slack và API đều tương tác qua `agent.stream()`. Bỏ các hàm parse legacy (`parseDebtEntry`, `generateDailyWorkReport`).
+5. **Timezone & Thời gian thực:** Bổ sung tool `get_current_time` và cấu hình `timezone` (mặc định `Asia/Ho_Chi_Minh`) trong `.workboost/config.json`.
+6. **Audit Trail trong Frontmatter:** Bổ sung trường `updatedBy: 'telegram' | 'slack' | 'agent' | 'user'` vào `Debt` và `DailyWork`.
+7. **Bảo mật & Tối ưu Token:** `get_daily_work` mặc định trả về JSON gọn gàng; `read_workspace_file` chỉ đọc file `.md`, `.json`, `.txt` dung lượng `< 1MB`.
+8. **Tạm thời gỡ bỏ Langfuse Tracing:** Giảm tải độ phức tạp và tập trung vào hiệu năng Agent Loop.
 
+---
+
+## 2. Quy chuẩn Tổ chức Thư mục & Naming Conventions
+
+### 2.1. Cấu trúc Thư mục Mục tiêu (Target Monorepo Layout)
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│                    Application / Bot Layer                       │
-│             (Telegram / Slack / Agent Brain / CLI)               │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │
-                                 ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                      packages/data-provider                      │
-│  ┌───────────────────────┐ ┌───────────────────┐ ┌─────────────┐ │
-│  │  DailyWorkRepository  │ │   DebtRepository  │ │ConfigManager│ │
-│  └───────────┬───────────┘ └─────────┬─────────┘ └──────┬──────┘ │
-│              │                       │                  │        │
-│              ▼                       ▼                  │        │
-│  ┌─────────────────────────────────────────────┐        │        │
-│  │           Markdown Engine (AST/YAML)        │        │        │
-│  └───────────────────────┬─────────────────────┘        │        │
-│                          │                              │        │
-│                          ▼                              │        │
-│  ┌─────────────────────────────────────────────┐        │        │
-│  │  WorkspaceFS (Mutex Lock + Atomic Writer)   │◄───────┘        │
-│  └───────────────────────┬─────────────────────┘                 │
-│                          │                                       │
-│                          ▼ (Real-time Watcher)                   │
-│  ┌─────────────────────────────────────────────┐                 │
-│  │     WorkspaceWatcher (Deno.watchFs ngầm)    │                 │
-│  └─────────────────────────────────────────────┘                 │
-└──────────────────────────┬───────────────────────────────────────┘
-                           │
-                           ▼ (Direct File I/O)
-     ┌───────────────────────────────────────────────────┐
-     │      Local Disk (~/.workboost/workspace/)         │
-     │      ├── .workboost/config.json                   │
-     │      ├── daily/YYYY-MM-DD.md                      │
-     │      └── debts/ (active & archive)                │
-     └───────────────────────────────────────────────────┘
+work-boost/
+├── 📁 apps/
+│   └── 📁 api/                      # [CHUYỂN TỪ /api VÀO] REST API & Webhooks Server
+│       ├── 📁 src/
+│       │   ├── 📄 bootstrap.ts      # [CHUYỂN VỀ ĐÂY] Wire Dependency Injection
+│       │   ├── 📄 main.ts
+│       │   └── 📄 server.ts
+│       └── 📄 deno.json
+│
+├── 📁 packages/
+│   ├── 📁 brain/                    # AI Agent Core (@work-boost/brain)
+│   │   ├── 📁 src/
+│   │   │   ├── 📁 tools/            # Atomic Workspace Tools
+│   │   │   │   ├── 📄 debt-tools.ts
+│   │   │   │   ├── 📄 daily-work-tools.ts
+│   │   │   │   ├── 📄 workspace-file-tools.ts
+│   │   │   │   ├── 📄 time-tools.ts
+│   │   │   │   └── 📄 index.ts
+│   │   │   ├── 📄 brain.ts
+│   │   │   ├── 📄 sessions.ts
+│   │   │   └── 📄 llm.ts
+│   │   ├── 📄 deno.json
+│   │   └── 📄 mod.ts
+│   │
+│   ├── 📁 data-provider/            # Markdown Engine & Repositories (@work-boost/data-provider)
+│   │   ├── 📁 src/
+│   │   │   ├── 📁 fs/               # WorkspaceFS, Watcher
+│   │   │   ├── 📁 markdown/         # MarkdownEngine
+│   │   │   ├── 📁 repositories/     # DebtRepository, DailyWorkRepository, ConfigManager
+│   │   │   └── 📄 database.ts       # Singleton Compatibility Facade
+│   │   ├── 📄 deno.json
+│   │   └── 📄 mod.ts
+│   │
+│   ├── 📁 data-schemas/             # Zod Schemas & Domain Types (@work-boost/data-schemas)
+│   │   ├── 📁 src/
+│   │   │   ├── 📄 config.ts
+│   │   │   ├── 📄 debt.ts
+│   │   │   ├── 📄 agent.ts
+│   │   │   └── 📄 subscription.ts
+│   │   └── 📄 mod.ts
+│   │
+│   ├── 📁 services/                 # Bots & Platform Integration (@work-boost/services)
+│   │   ├── 📁 src/
+│   │   │   ├── 📁 telegram/         # TelegramService + Handlers
+│   │   │   ├── 📁 slack/            # SlackService
+│   │   │   ├── 📁 formatters/       # Message Formatters
+│   │   │   └── 📁 scheduler/        # Deno Cron Jobs
+│   │   └── 📄 mod.ts
+│   │
+│   └── 📁 shared/                   # Logger, Env Utilities
+│
+├── 📁 tests/                        # Toàn bộ test chuẩn hóa đuôi .test.ts
+│   ├── 📁 entity/
+│   │   └── 📄 debt.test.ts
+│   ├── 📁 provider/
+│   │   ├── 📄 markdown-engine.test.ts
+│   │   └── 📄 workspace-fs.test.ts
+│   └── 📁 services/
+│       ├── 📁 agent/
+│       │   ├── 📄 workspace-tools.test.ts
+│       │   ├── 📄 llm.test.ts
+│       │   └── 📄 sessions.test.ts
+│       └── 📁 formatting/
+│           ├── 📄 debt-slack-formatter.test.ts
+│           └── 📄 debt-telegram-formatter.test.ts
+│
+├── 📁 docs/                         # Tài liệu kiến trúc & SDD
+├── 📄 CONTEXT.md                    # Domain Glossary (Thuật ngữ chuẩn)
+└── 📄 deno.json                     # Root workspace configuration
 ```
 
----
-
-## 2. Đặc tả Cấu trúc Thư mục Workspace (Workspace Specification)
-
-Thư mục mặc định: `~/.workboost/workspace` (Mac/Linux) hoặc `%APPDATA%/workboost/workspace` (Windows).
-
-```text
-~/.workboost/workspace/
-├── .workboost/
-│   └── config.json                   # Cấu hình Workspace, Bot Chat IDs, Reminder Settings
-├── daily/
-│   ├── 2026-08-18.md                 # Báo cáo ngày (Single-user)
-│   └── 2026-08-19.md
-└── debts/
-    ├── john-doe-8f3a.md              # Nợ đang chờ xử lý (Active)
-    ├── sarah-c2d1.md
-    └── archive/
-        └── mike-b9e4.md              # Nợ đã thanh toán (Paid)
-```
+### 2.2. Quy tắc Đặt tên (Naming Rules)
+* **Tên file code:** Luôn dùng `kebab-case.ts` (ví dụ: `daily-work-repository.ts`, `workspace-fs.ts`).
+* **Tên file test:** Luôn dùng `kebab-case.test.ts` (ví dụ: `workspace-fs.test.ts`, `markdown-engine.test.ts`).
+* **Tên Class & Service:** Dùng `PascalCase` và có hậu tố rõ ràng: `SlackService`, `TelegramService`.
+* **Tên Tools của Agent:** Luôn dùng `snake_case` dạng `verb_noun` (ví dụ: `create_debt`, `settle_debt`, `save_daily_work`, `get_current_time`).
 
 ---
 
-## 3. Thiết kế Schemas (`packages/data-schemas`)
+## 3. Cập nhật Schemas (`packages/data-schemas`)
 
-Toàn bộ thời gian được chuẩn hóa sang **ISO 8601 String** (`z.string().datetime()`).
-
-### 3.1. File `packages/data-schemas/src/config.ts`
+### 3.1. `packages/data-schemas/src/config.ts`
 ```typescript
 import { z } from 'zod';
 
 export const WorkspaceConfigSchema = z.object({
   version: z.literal(1).default(1),
   workspaceName: z.string().default('My WorkBoost'),
+  timezone: z.string().default('Asia/Ho_Chi_Minh'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
-  
-  // Tích hợp thông tin nền tảng (Thay thế Subscription trong KV)
   platforms: z.object({
     slack: z.object({
       enabled: z.boolean().default(false),
       channelId: z.string().optional(),
       userId: z.string().optional(),
+      lastSentAt: z.string().datetime().nullable().default(null),
     }).default({ enabled: false }),
     telegram: z.object({
       enabled: z.boolean().default(false),
       chatId: z.string().optional(),
     }).default({ enabled: false }),
-  }).default({}),
-
-  // Cấu hình nhắc nợ tự động
+  }).default({ slack: { enabled: false }, telegram: { enabled: false } }),
   debtReminder: z.object({
     enabled: z.boolean().default(false),
     frequency: z.enum(['weekly', 'monthly', 'never']).default('weekly'),
-    weeklyDay: z.number().min(1).max(7).default(1), // Thứ 2
-    monthlyDay: z.number().min(1).max(28).default(1), // Ngày 1 hàng tháng
+    weeklyDay: z.number().min(1).max(7).default(1),
+    monthlyDay: z.number().min(1).max(28).default(1),
     reminderHour: z.number().min(0).max(23).default(9),
     lastSentAt: z.string().datetime().nullable().default(null),
-  }).default({}),
+  }).default({ enabled: false, frequency: 'weekly', weeklyDay: 1, monthlyDay: 1, reminderHour: 9, lastSentAt: null }),
 });
 
 export type WorkspaceConfig = z.infer<typeof WorkspaceConfigSchema>;
 ```
 
-### 3.2. File `packages/data-schemas/src/debt.ts`
+### 3.2. `packages/data-schemas/src/debt.ts`
 ```typescript
 import { z } from 'zod';
 
@@ -134,34 +159,26 @@ export const DebtFrontmatterSchema = z.object({
   id: z.string().uuid(),
   direction: z.nativeEnum(DebtDirection),
   amount: z.number().positive(),
-  currency: z.string().default('USD'),
+  currency: z.string().default('VND'),
   personName: z.string().min(1),
   status: z.nativeEnum(DebtStatus).default(DebtStatus.PENDING),
-  debtDate: z.string(), // YYYY-MM-DD
+  debtDate: z.iso.date(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   paidAt: z.string().datetime().nullable().default(null),
+  updatedBy: z.enum(['telegram', 'slack', 'agent', 'user']).default('agent'),
 });
 
 export type DebtFrontmatter = z.infer<typeof DebtFrontmatterSchema>;
 
 export interface DebtDocument {
   frontmatter: DebtFrontmatter;
-  reason: string; // Lý do nợ nằm trọn vẹn ở Markdown Body
+  reason: string;
   filePath: string;
-}
-
-export interface DebtSummary {
-  totalLent: number;
-  totalBorrowed: number;
-  pendingLentCount: number;
-  pendingBorrowedCount: number;
-  netPosition: number;
-  currencies: Record<string, { lent: number; borrowed: number }>;
 }
 ```
 
-### 3.3. File `packages/data-schemas/src/agent.ts` (Daily Work)
+### 3.3. `packages/data-schemas/src/agent.ts`
 ```typescript
 import { z } from 'zod';
 
@@ -178,9 +195,10 @@ export interface DailyWorkReport {
 
 export const DailyWorkFrontmatterSchema = z.object({
   id: z.string(), // daily_YYYY-MM-DD
-  date: z.string(), // YYYY-MM-DD
+  date: z.iso.date(),
   status: z.enum(['draft', 'completed']).default('completed'),
   updatedAt: z.string().datetime(),
+  updatedBy: z.enum(['telegram', 'slack', 'agent', 'user']).default('agent'),
 });
 
 export type DailyWorkFrontmatter = z.infer<typeof DailyWorkFrontmatterSchema>;
@@ -188,7 +206,7 @@ export type DailyWorkFrontmatter = z.infer<typeof DailyWorkFrontmatterSchema>;
 export interface DailyWorkDocument {
   frontmatter: DailyWorkFrontmatter;
   report: DailyWorkReport;
-  customSections: string; // Lưu giữ các ghi chú tự do ngoài 3 mục chính
+  customSections: string;
   rawMarkdown: string;
   filePath: string;
 }
@@ -196,623 +214,228 @@ export interface DailyWorkDocument {
 
 ---
 
-## 4. Thiết kế Tầng Data Provider (`packages/data-provider`)
+## 4. Tầng Dữ liệu Singleton (`packages/data-provider`)
 
-### 4.1. Bộ xử lý an toàn Hệ thống Tệp: `WorkspaceFS`
-*Tính năng:* Quản lý đường dẫn chuẩn OS, chống Path Traversal qua `Deno.realPath`, ghi đè nguyên tử (Atomic write), và tích hợp Mutex Lock chống Race Condition.
-
+Trong `packages/data-provider/src/database.ts`:
 ```typescript
-// packages/data-provider/src/fs/workspace-fs.ts
-import { ensureDir } from '@std/fs';
-import { dirname, join, relative, resolve } from '@std/path';
+export class Database {
+  private static instance: Database;
 
-export class WorkspaceFS {
-  private rootPath: string;
-  private writeLocks: Map<string, Promise<void>> = new Map();
+  static async init(providedDataLayer?: DataLayer): Promise<Database> {
+    if (this.instance) return this.instance;
 
-  constructor(customRoot?: string) {
-    if (customRoot) {
-      this.rootPath = resolve(customRoot);
-    } else {
-      const home = Deno.env.get('HOME') || Deno.env.get('USERPROFILE') || '.';
-      this.rootPath = resolve(join(home, '.workboost', 'workspace'));
-    }
-  }
+    const dataLayer = providedDataLayer || createLocalDataLayer();
+    await dataLayer.fs.init();
+    await dataLayer.config.load();
 
-  get root(): string {
-    return this.rootPath;
-  }
-
-  async init(): Promise<void> {
-    await ensureDir(this.rootPath);
-    await ensureDir(join(this.rootPath, '.workboost'));
-    await ensureDir(join(this.rootPath, 'daily'));
-    await ensureDir(join(this.rootPath, 'debts'));
-    await ensureDir(join(this.rootPath, 'debts', 'archive'));
-  }
-
-  assertInside(relPath: string): string {
-    const fullPath = resolve(this.rootPath, relPath);
-    const rel = relative(this.rootPath, fullPath);
-    if (rel.startsWith('..') || resolve(fullPath) !== fullPath) {
-      throw new Error(`Access Denied: Path escape detected -> ${relPath}`);
-    }
-    return fullPath;
-  }
-
-  /**
-   * Mutex lock theo từng đường dẫn file để tránh Race Condition
-   */
-  async withLock<T>(relPath: string, task: () => Promise<T>): Promise<T> {
-    const fullPath = this.assertInside(relPath);
-    while (this.writeLocks.has(fullPath)) {
-      await this.writeLocks.get(fullPath);
-    }
-    let resolveLock!: () => void;
-    const lockPromise = new Promise<void>((r) => (resolveLock = r));
-    this.writeLocks.set(fullPath, lockPromise);
-    try {
-      return await task();
-    } finally {
-      this.writeLocks.delete(fullPath);
-      resolveLock();
-    }
-  }
-
-  async readText(relPath: string): Promise<string> {
-    const fullPath = this.assertInside(relPath);
-    return await Deno.readTextFile(fullPath);
-  }
-
-  async writeTextAtomic(relPath: string, content: string): Promise<void> {
-    return await this.withLock(relPath, async () => {
-      const fullPath = this.assertInside(relPath);
-      await ensureDir(dirname(fullPath));
-
-      const tempPath = `${fullPath}.${crypto.randomUUID()}.tmp`;
-      const bytes = new TextEncoder().encode(content);
-      await Deno.writeFile(tempPath, bytes);
-
-      try {
-        await Deno.rename(tempPath, fullPath);
-      } catch {
-        // Fallback cho Windows nếu file đích đang bị lock bởi OS
-        await Deno.copyFile(tempPath, fullPath);
-        await Deno.remove(tempPath);
-      }
-    });
-  }
-
-  async move(fromRelPath: string, toRelPath: string): Promise<void> {
-    const fromFull = this.assertInside(fromRelPath);
-    const toFull = this.assertInside(toRelPath);
-    await ensureDir(dirname(toFull));
-    await Deno.rename(fromFull, toFull);
-  }
-
-  async listFiles(relDir: string): Promise<string[]> {
-    const fullDir = this.assertInside(relDir);
-    const files: string[] = [];
-    try {
-      for await (const entry of Deno.readDir(fullDir)) {
-        if (entry.isFile && entry.name.endsWith('.md')) {
-          files.push(join(relDir, entry.name));
-        }
-      }
-    } catch {
-      return [];
-    }
-    return files;
-  }
-
-  async exists(relPath: string): Promise<boolean> {
-    try {
-      await Deno.stat(this.assertInside(relPath));
-      return true;
-    } catch {
-      return false;
-    }
+    this.instance = new Database(dataLayer);
+    return this.instance;
   }
 }
 ```
 
 ---
 
-### 4.2. Bộ phân tích Markdown & Bảo toàn Section: `MarkdownEngine`
-*Tính năng:* Tách/ghép YAML Frontmatter, giữ nguyên các section tùy biến ngoài 3 mục chính của báo cáo ngày.
+## 5. Hệ thống Atomic Tools (`packages/brain/src/tools/`)
 
+### 5.1. File `packages/brain/src/tools/time-tools.ts`
 ```typescript
-// packages/data-provider/src/markdown/markdown-engine.ts
-import { extract, test } from '@std/front-matter/yaml';
-import { stringify } from '@std/yaml';
-import type { DailyWorkReport, TaskItem } from '@work-boost/data-schemas';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { Type } from '@earendil-works/pi-ai';
+import type { ConfigManager } from '@work-boost/data-provider';
 
-export class MarkdownEngine {
-  static parse<T>(rawContent: string): { frontmatter: T; body: string } {
-    if (!test(rawContent)) {
-      return { frontmatter: {} as T, body: rawContent.trim() };
-    }
-    const extracted = extract<T>(rawContent);
-    return {
-      frontmatter: extracted.attrs,
-      body: extracted.body.trim(),
-    };
-  }
+export function createGetCurrentTimeTool(configMgr: ConfigManager): AgentTool<any> {
+  return {
+    name: 'get_current_time',
+    label: 'Get Current Time',
+    description: 'Lấy ngày và giờ hiện tại theo Timezone đã cấu hình của Workspace.',
+    parameters: Type.Object({}),
+    execute: async () => {
+      const config = await configMgr.load();
+      const timezone = config.timezone || 'Asia/Ho_Chi_Minh';
+      const now = new Date();
+      
+      const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+      const localTime = new Intl.DateTimeFormat('vi-VN', { timeZone: timezone, timeStyle: 'full', dateStyle: 'full' }).format(now);
 
-  static stringify<T extends Record<string, unknown>>(frontmatter: T, body: string): string {
-    const yaml = stringify(frontmatter).trim();
-    return `---\n${yaml}\n---\n\n${body.trim()}\n`;
-  }
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ currentDate: localDate, fullTime: localTime, timezone }) }],
+        details: { localDate, localTime, timezone },
+      };
+    },
+  };
+}
+```
 
-  /**
-   * Tách và giữ nguyên nội dung bổ sung (custom notes/images) của người dùng
-   */
-  static parseDailyReport(body: string): { report: DailyWorkReport; customSections: string } {
-    const report: DailyWorkReport = { completed: [], incomplete: [], planned: [] };
-    const customLines: string[] = [];
-    
-    const lines = body.split('\n');
-    let currentSection: 'completed' | 'incomplete' | 'planned' | 'custom' = 'custom';
+### 5.2. File `packages/brain/src/tools/debt-tools.ts`
+Chứa 5 tools nguyên tử:
+1. `create_debt`: Nhận `{ personName, amount, currency, direction, reason, debtDate }`.
+2. `list_debts`: Nhận `{ personName, status, direction }`.
+3. `settle_debt`: Nhận `{ debtId }` (Agent gọi `list_debts` trước để lấy ID).
+4. `get_debt_summary`: Tính toán vị thế ròng Net position.
+5. `delete_debt`: Nhận `{ debtId }`.
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('### 1.') || trimmed.toLowerCase().includes('việc hoàn thành')) {
-        currentSection = 'completed';
-      } else if (trimmed.startsWith('### 2.') || trimmed.toLowerCase().includes('chưa hoàn thành')) {
-        currentSection = 'incomplete';
-      } else if (trimmed.startsWith('### 3.') || trimmed.toLowerCase().includes('dự định làm')) {
-        currentSection = 'planned';
-      } else if (trimmed.startsWith('###') && currentSection !== 'custom') {
-        currentSection = 'custom';
-        customLines.push(line);
-      } else if (currentSection === 'custom') {
-        customLines.push(line);
-      } else if (trimmed.startsWith('-') || trimmed.startsWith('•') || trimmed.startsWith('*')) {
-        const taskText = trimmed.replace(/^[-•*]\s*/, '');
-        if (taskText.toLowerCase() === 'n/a' || !taskText) continue;
+### 5.3. File `packages/brain/src/tools/daily-work-tools.ts`
+Chứa 3 tools nguyên tử:
+1. `save_daily_work`: Nhận `{ date, completed, incomplete, planned }`.
+2. `get_daily_work`: Nhận `{ date, includeRaw }` (mặc định trả về JSON).
+3. `list_daily_dates`: Liệt kê các ngày đã có báo cáo.
 
-        // Parse "**PROJECT**: Task description"
-        const match = taskText.match(/^\*\*([^*]+)\*\*:\s*(.*)$/) || taskText.match(/^([^:]+):\s*(.*)$/);
-        if (match) {
-          report[currentSection].push({ project: match[1].trim(), task: match[2].trim() });
-        } else {
-          report[currentSection].push({ project: 'INBOX', task: taskText });
-        }
-      }
-    }
+### 5.4. File `packages/brain/src/tools/workspace-file-tools.ts`
+Chứa 2 tools thao tác file:
+1. `read_workspace_file`: Nhận `{ path }` (kiểm tra đuôi `.md`, `.json`, `.txt` và kích thước `< 1MB`).
+2. `list_workspace_files`: Nhận `{ folder }`.
 
-    return { report, customSections: customLines.join('\n').trim() };
-  }
+### 5.5. File `packages/brain/src/tools/index.ts`
+```typescript
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+import type { DataLayer } from '@work-boost/data-provider';
+import { createGetCurrentTimeTool } from './time-tools.ts';
+import {
+  createCreateDebtTool,
+  createDeleteDebtTool,
+  createGetDebtSummaryTool,
+  createListDebtsTool,
+  createSettleDebtTool,
+} from './debt-tools.ts';
+import {
+  createGetDailyWorkTool,
+  createListDailyDatesTool,
+  createSaveDailyWorkTool,
+} from './daily-work-tools.ts';
+import {
+  createListWorkspaceFilesTool,
+  createReadWorkspaceFileTool,
+} from './workspace-file-tools.ts';
 
-  static formatDailyReport(report: DailyWorkReport, customSections = ''): string {
-    const formatSection = (tasks: TaskItem[]) => {
-      if (!tasks || tasks.length === 0) return '- N/A';
-      return tasks.map((t) => `- **${t.project || 'INBOX'}**: ${t.task}`).join('\n');
-    };
-
-    let result =
-      `### 1. Việc hoàn thành hôm trước?\n${formatSection(report.completed)}\n\n` +
-      `### 2. Việc dự định làm nhưng chưa hoàn thành?\n${formatSection(report.incomplete)}\n\n` +
-      `### 3. Việc dự định làm hôm nay?\n${formatSection(report.planned)}`;
-
-    if (customSections.trim()) {
-      result += `\n\n${customSections.trim()}`;
-    }
-
-    return result;
-  }
+export function getWorkspaceTools(dataLayer: DataLayer): AgentTool<any>[] {
+  return [
+    createGetCurrentTimeTool(dataLayer.config),
+    createCreateDebtTool(dataLayer.debts),
+    createListDebtsTool(dataLayer.debts),
+    createSettleDebtTool(dataLayer.debts),
+    createGetDebtSummaryTool(dataLayer.debts),
+    createDeleteDebtTool(dataLayer.debts),
+    createSaveDailyWorkTool(dataLayer.dailyWork),
+    createGetDailyWorkTool(dataLayer.dailyWork),
+    createListDailyDatesTool(dataLayer.dailyWork),
+    createReadWorkspaceFileTool(dataLayer.fs),
+    createListWorkspaceFilesTool(dataLayer.fs),
+  ];
 }
 ```
 
 ---
 
-### 4.3. Quản lý Cấu hình Workspace: `WorkspaceConfigManager`
+## 6. Nâng cấp Core Brain (`packages/brain/src/brain.ts`)
+
+### 6.1. System Prompt
 ```typescript
-// packages/data-provider/src/repositories/config-manager.ts
-import { WorkspaceConfig, WorkspaceConfigSchema } from '@work-boost/data-schemas';
-import { WorkspaceFS } from '../fs/workspace-fs.ts';
+function buildWorkspaceSystemPrompt(platform?: string, chatId?: string): string {
+  return `You are Work Boost — an intelligent AI assistant operating directly inside the user's Local-First Markdown Workspace.
 
-const CONFIG_PATH = '.workboost/config.json';
+Platform: ${platform || 'unknown'}
+Chat ID: ${chatId || 'unknown'}
 
-export class WorkspaceConfigManager {
-  private configCache: WorkspaceConfig | null = null;
+Operating Principles & Guidelines:
+1. Workspace as Single Source of Truth: All user data (daily work reports, debts) are stored as local Markdown files.
+2. Time Awareness: Always call 'get_current_time' if you need to determine today's date or resolve relative time terms like "hôm nay", "hôm qua", "tuần này".
+3. Debt Management:
+   - Creating debt: Normalize Vietnamese amounts (e.g. "50k" -> 50000, "1 củ" / "1 triệu" -> 1000000, "2 lít" -> 200000). Default currency is 'VND' unless specified otherwise.
+   - Settling debt: If the user says "John đã trả nợ", first call 'list_debts' with personName='John' & status='pending' to find the debtId, then call 'settle_debt' with that debtId.
+4. Daily Work Standup:
+   - When user shares work progress, parse tasks into 3 distinct sections (Completed, Incomplete, Planned) with Project codes (e.g., **B4**, **UI**, **INBOX**) and call 'save_daily_work'.
+5. Response Tone: Friendly, concise, professional Vietnamese. Always summarize the actions performed with Markdown formatting.`;
+}
+```
 
-  constructor(private fs: WorkspaceFS) {}
+### 6.2. Interface `AgentPort` Tinh Gọn
+```typescript
+// packages/brain/src/ports/agent.ts
+export interface AgentPort {
+  stream(
+    message: string,
+    onChunk: (chunk: AgentStreamChunk) => void | Promise<void>,
+    options?: AgentStreamOptions,
+  ): Promise<AgentStreamResult>;
 
-  async load(): Promise<WorkspaceConfig> {
-    if (this.configCache) return this.configCache;
-
-    if (!(await this.fs.exists(CONFIG_PATH))) {
-      const now = new Date().toISOString();
-      const initial = WorkspaceConfigSchema.parse({
-        createdAt: now,
-        updatedAt: now,
-      });
-      await this.save(initial);
-      return initial;
-    }
-
-    const raw = await this.fs.readText(CONFIG_PATH);
-    this.configCache = WorkspaceConfigSchema.parse(JSON.parse(raw));
-    return this.configCache;
-  }
-
-  async save(config: WorkspaceConfig): Promise<void> {
-    config.updatedAt = new Date().toISOString();
-    const validated = WorkspaceConfigSchema.parse(config);
-    await this.fs.writeTextAtomic(CONFIG_PATH, JSON.stringify(validated, null, 2));
-    this.configCache = validated;
-  }
+  createSession(sessionId?: string): Promise<string>;
+  loadSession(sessionId: string): Promise<void>;
+  removeSession(sessionId: string): Promise<boolean>;
+  dispose(): void;
 }
 ```
 
 ---
 
-### 4.4. Kho lưu trữ Báo cáo Ngày: `DailyWorkRepository`
+## 7. Khởi tạo Tập trung tại `apps/api/src/bootstrap.ts`
+
+Chuyển `bootstrap.ts` từ `packages/services` về `apps/api/src/bootstrap.ts`:
 ```typescript
-// packages/data-provider/src/repositories/daily-work-repository.ts
-import { DailyWorkDocument, DailyWorkFrontmatter, DailyWorkFrontmatterSchema, DailyWorkReport } from '@work-boost/data-schemas';
-import { WorkspaceFS } from '../fs/workspace-fs.ts';
-import { MarkdownEngine } from '../markdown/markdown-engine.ts';
+import { createDataLayer, Database } from '@work-boost/data-provider';
+import { createBrain, type AgentPort } from '@work-boost/brain';
+import { env } from '@work-boost/shared';
+import { SlackService, TelegramService } from '@work-boost/services';
 
-export class DailyWorkRepository {
-  constructor(private fs: WorkspaceFS) {}
+export interface Services {
+  db: Database;
+  agent: AgentPort;
+  slack: SlackService;
+  telegram: TelegramService;
+}
 
-  private getFilePath(dateStr: string): string {
-    return `daily/${dateStr}.md`;
-  }
+export async function initializeServices(): Promise<Services> {
+  // 1. Khởi tạo DataLayer duy nhất
+  const dataLayer = createDataLayer();
+  await dataLayer.fs.init();
+  await dataLayer.config.load();
 
-  async save(dateStr: string, report: DailyWorkReport): Promise<DailyWorkDocument> {
-    const filePath = this.getFilePath(dateStr);
-    let customSections = '';
+  // 2. Database facade dùng chung dataLayer
+  const db = await Database.init(dataLayer);
 
-    // Nếu file đã tồn tại, giữ nguyên các section tùy biến của người dùng
-    if (await this.fs.exists(filePath)) {
-      const existing = await this.get(dateStr);
-      if (existing) customSections = existing.customSections;
-    }
+  // 3. Khởi tạo Brain với Workspace Tools (Không Langfuse)
+  const agent = createBrain({
+    apiKey: env.get('GOOGLE_API_KEY') || '',
+    dataLayer,
+  });
 
-    const frontmatter: DailyWorkFrontmatter = {
-      id: `daily_${dateStr}`,
-      date: dateStr,
-      status: 'completed',
-      updatedAt: new Date().toISOString(),
-    };
+  const slack = new SlackService();
+  const telegram = new TelegramService(db, agent);
 
-    const body = MarkdownEngine.formatDailyReport(report, customSections);
-    const rawMarkdown = MarkdownEngine.stringify(frontmatter, body);
-
-    await this.fs.writeTextAtomic(filePath, rawMarkdown);
-
-    return { frontmatter, report, customSections, rawMarkdown, filePath };
-  }
-
-  async get(dateStr: string): Promise<DailyWorkDocument | null> {
-    const filePath = this.getFilePath(dateStr);
-    if (!(await this.fs.exists(filePath))) return null;
-
-    const rawMarkdown = await this.fs.readText(filePath);
-    const { frontmatter, body } = MarkdownEngine.parse<DailyWorkFrontmatter>(rawMarkdown);
-    const validatedFm = DailyWorkFrontmatterSchema.parse(frontmatter);
-    const { report, customSections } = MarkdownEngine.parseDailyReport(body);
-
-    return { frontmatter: validatedFm, report, customSections, rawMarkdown, filePath };
-  }
+  return { db, agent, slack, telegram };
 }
 ```
 
 ---
 
-### 4.5. Kho lưu trữ Sổ nợ: `DebtRepository`
-*Tính năng:* Sinh slug tên file dễ đọc (`debts/john-doe-8f3a.md`), chuyển file sang `debts/archive/` khi thanh toán xong (`settle`), và tính toán `DebtSummary` on-the-fly.
+## 8. Kế hoạch Dọn dẹp & Triển khai (Checklist)
 
-```typescript
-// packages/data-provider/src/repositories/debt-repository.ts
-import { DebtDirection, DebtDocument, DebtFilterOptions, DebtFrontmatter, DebtFrontmatterSchema, DebtStatus, DebtSummary } from '@work-boost/data-schemas';
-import { basename, join } from '@std/path';
-import { WorkspaceFS } from '../fs/workspace-fs.ts';
-import { MarkdownEngine } from '../markdown/markdown-engine.ts';
+### 🧹 Bước 1: Dọn dẹp Code Rác & Chuẩn hóa Naming
+- [ ] Xóa `packages/data-provider/src/indexes.ts`.
+- [ ] Xóa `packages/data-provider/src/migrations/`.
+- [ ] Xóa các file test rác ở root: `tests/test_agent.ts`, `tests/test_database.ts`, `tests/test_slack.ts`.
+- [ ] Đổi tên `class Slack` thành `class SlackService` trong `packages/services/src/slack/slack.ts`.
+- [ ] Đổi toàn bộ tên file trong `tests/` sang dạng `kebab-case.test.ts`.
+- [ ] Chuyển thư mục `api/` thành `apps/api/` (cập nhật `deno.json` workspace).
+- [ ] Chuyển `bootstrap.ts` sang `apps/api/src/bootstrap.ts`.
 
-export class DebtRepository {
-  constructor(private fs: WorkspaceFS) {}
+### ⚙️ Bước 2: Nâng cấp Schemas & Data Layer
+- [ ] Thêm `timezone` vào `WorkspaceConfigSchema`.
+- [ ] Thêm `updatedBy` vào `DebtFrontmatterSchema` và `DailyWorkFrontmatterSchema`.
+- [ ] Sửa `Database.init(dataLayer)` nhận instance từ ngoài vào.
 
-  private generateSlug(personName: string, id: string): string {
-    const cleanName = personName
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'debt';
-    const shortId = id.slice(0, 4);
-    return `${cleanName}-${shortId}.md`;
-  }
+### 🧠 Bước 3: Triển khai Atomic Tools cho Brain
+- [ ] Tạo `packages/brain/src/tools/time-tools.ts`.
+- [ ] Tạo `packages/brain/src/tools/debt-tools.ts`.
+- [ ] Tạo `packages/brain/src/tools/daily-work-tools.ts`.
+- [ ] Tạo `packages/brain/src/tools/workspace-file-tools.ts`.
+- [ ] Tạo `packages/brain/src/tools/index.ts` gom toàn bộ tools lại.
+- [ ] Xóa bỏ thư mục `packages/brain/src/tools/database/` cũ.
 
-  async create(data: {
-    direction: DebtDirection;
-    amount: number;
-    currency?: string;
-    personName: string;
-    reason?: string;
-    debtDate?: string;
-  }): Promise<DebtDocument> {
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const frontmatter: DebtFrontmatter = {
-      id,
-      direction: data.direction,
-      amount: data.amount,
-      currency: data.currency || 'USD',
-      personName: data.personName,
-      status: DebtStatus.PENDING,
-      debtDate: data.debtDate || now.slice(0, 10),
-      createdAt: now,
-      updatedAt: now,
-      paidAt: null,
-    };
+### 🚀 Bước 4: Refactor Brain Core & Services
+- [ ] Cập nhật `packages/brain/src/brain.ts` (gỡ bỏ Langfuse, nạp `dataLayer`, đổi system prompt, tinh gọn `AgentPort`).
+- [ ] Cập nhật các Telegram handlers gọi `agent.stream()`.
 
-    const fileName = this.generateSlug(data.personName, id);
-    const filePath = join('debts', fileName);
-    const rawMarkdown = MarkdownEngine.stringify(frontmatter, data.reason || '');
-
-    await this.fs.writeTextAtomic(filePath, rawMarkdown);
-
-    return { frontmatter, reason: data.reason || '', filePath };
-  }
-
-  async getById(debtId: string): Promise<DebtDocument | null> {
-    const allDebts = await this.listAll();
-    return allDebts.find((d) => d.frontmatter.id === debtId) || null;
-  }
-
-  async listAll(includeArchived = false): Promise<DebtDocument[]> {
-    const activePaths = await this.fs.listFiles('debts');
-    const archivePaths = includeArchived ? await this.fs.listFiles('debts/archive') : [];
-    const allPaths = [...activePaths, ...archivePaths];
-
-    const results: DebtDocument[] = [];
-    for (const p of allPaths) {
-      try {
-        const raw = await this.fs.readText(p);
-        const { frontmatter, body } = MarkdownEngine.parse<DebtFrontmatter>(raw);
-        results.push({
-          frontmatter: DebtFrontmatterSchema.parse(frontmatter),
-          reason: body,
-          filePath: p,
-        });
-      } catch {
-        // Bỏ qua file lỗi định dạng
-      }
-    }
-    return results.sort((a, b) => b.frontmatter.createdAt.localeCompare(a.frontmatter.createdAt));
-  }
-
-  async filter(options: DebtFilterOptions): Promise<DebtDocument[]> {
-    const all = await this.listAll(options.status === DebtStatus.PAID);
-    return all.filter((doc) => {
-      const fm = doc.frontmatter;
-      if (options.status && fm.status !== options.status) return false;
-      if (options.direction && fm.direction !== options.direction) return false;
-      if (options.personName && !fm.personName.toLowerCase().includes(options.personName.toLowerCase())) {
-        return false;
-      }
-      return true;
-    }).slice(0, options.limit || 100);
-  }
-
-  /**
-   * Đánh dấu đã trả và tự động chuyển file vào thư mục debts/archive/
-   */
-  async settle(debtId: string): Promise<DebtDocument | null> {
-    const debt = await this.getById(debtId);
-    if (!debt || debt.frontmatter.status === DebtStatus.PAID) return null;
-
-    const now = new Date().toISOString();
-    debt.frontmatter.status = DebtStatus.PAID;
-    debt.frontmatter.paidAt = now;
-    debt.frontmatter.updatedAt = now;
-
-    const updatedRaw = MarkdownEngine.stringify(debt.frontmatter, debt.reason);
-    
-    // Ghi lại nội dung đã paid
-    await this.fs.writeTextAtomic(debt.filePath, updatedRaw);
-
-    // Di chuyển sang debts/archive/
-    const fileName = basename(debt.filePath);
-    const archivePath = join('debts', 'archive', fileName);
-    await this.fs.move(debt.filePath, archivePath);
-    debt.filePath = archivePath;
-
-    return debt;
-  }
-
-  async getSummary(): Promise<DebtSummary> {
-    const activeDebts = await this.filter({ status: DebtStatus.PENDING });
-    const summary: DebtSummary = {
-      totalLent: 0,
-      totalBorrowed: 0,
-      pendingLentCount: 0,
-      pendingBorrowedCount: 0,
-      netPosition: 0,
-      currencies: {},
-    };
-
-    for (const d of activeDebts) {
-      const { amount, currency, direction } = d.frontmatter;
-      if (!summary.currencies[currency]) {
-        summary.currencies[currency] = { lent: 0, borrowed: 0 };
-      }
-
-      if (direction === DebtDirection.LENT) {
-        summary.totalLent += amount;
-        summary.pendingLentCount++;
-        summary.currencies[currency].lent += amount;
-      } else {
-        summary.totalBorrowed += amount;
-        summary.pendingBorrowedCount++;
-        summary.currencies[currency].borrowed += amount;
-      }
-    }
-
-    summary.netPosition = summary.totalLent - summary.totalBorrowed;
-    return summary;
-  }
-}
-```
-
----
-
-### 4.6. Lắng nghe thay đổi ổ đĩa theo thời gian thực: `WorkspaceWatcher`
-```typescript
-// packages/data-provider/src/fs/workspace-watcher.ts
-import { logger } from '@work-boost/shared/logger/logger.ts';
-import { WorkspaceFS } from './workspace-fs.ts';
-
-export class WorkspaceWatcher {
-  private watcher: Deno.FsWatcher | null = null;
-
-  constructor(
-    private fs: WorkspaceFS,
-    private onChange: (paths: string[]) => void,
-  ) {}
-
-  start(): void {
-    try {
-      this.watcher = Deno.watchFs(this.fs.root, { recursive: true });
-      (async () => {
-        for await (const event of this.watcher!) {
-          if (['create', 'modify', 'remove'].includes(event.kind)) {
-            const mdPaths = event.paths.filter((p) => p.endsWith('.md') || p.endsWith('.json'));
-            if (mdPaths.length > 0) {
-              this.onChange(mdPaths);
-            }
-          }
-        }
-      })();
-      logger.info(`Workspace Watcher started at: ${this.fs.root}`);
-    } catch (err) {
-      logger.error('Failed to start Workspace Watcher', { error: err });
-    }
-  }
-
-  stop(): void {
-    if (this.watcher) {
-      this.watcher.close();
-      this.watcher = null;
-    }
-  }
-}
-```
-
----
-
-## 5. Kế hoạch Di trú Dữ liệu CLI (`scripts/migrate-to-files.ts`)
-
-Lệnh CLI độc lập để chuyển toàn bộ dữ liệu từ Deno KV cũ sang Workspace Markdown mới.
-
-```typescript
-// scripts/migrate-to-files.ts
-import { WorkspaceFS } from '../packages/data-provider/src/fs/workspace-fs.ts';
-import { DailyWorkRepository } from '../packages/data-provider/src/repositories/daily-work-repository.ts';
-import { DebtRepository } from '../packages/data-provider/src/repositories/debt-repository.ts';
-import { WorkspaceConfigManager } from '../packages/data-provider/src/repositories/config-manager.ts';
-import { Debt, DebtStatus, Message, Subscription } from '@work-boost/data-schemas';
-
-async function runMigration() {
-  console.log('🚀 Bắt đầu di trú dữ liệu Deno KV -> Markdown Workspace...');
-
-  const kv = await Deno.openKv();
-  const fs = new WorkspaceFS();
-  await fs.init();
-
-  const configMgr = new WorkspaceConfigManager(fs);
-  const dailyRepo = new DailyWorkRepository(fs);
-  const debtRepo = new DebtRepository(fs);
-
-  // 1. Migrate Subscriptions & Config
-  console.log('📦 Di trú cấu hình và subscriptions...');
-  const subEntries = kv.list<Subscription>({ prefix: ['subscriptions'] });
-  for await (const entry of subEntries) {
-    const sub = entry.value;
-    const config = await configMgr.load();
-    if (sub.platforms.slack) {
-      config.platforms.slack = { enabled: sub.enabled.includes('slack'), userId: sub.platforms.slack };
-    }
-    if (sub.platforms.telegram) {
-      config.platforms.telegram = { enabled: sub.enabled.includes('telegram'), chatId: sub.platforms.telegram };
-    }
-    await configMgr.save(config);
-    break; // Single-user: lấy profile đầu tiên
-  }
-
-  // 2. Migrate Debts
-  console.log('💵 Di trú danh sách nợ...');
-  const debtEntries = kv.list<Debt>({ prefix: ['debts'] });
-  let debtCount = 0;
-  for await (const entry of debtEntries) {
-    const d = entry.value;
-    const doc = await debtRepo.create({
-      direction: d.direction,
-      amount: d.amount,
-      currency: d.currency,
-      personName: d.personName,
-      reason: d.reason,
-      debtDate: d.debtDate ? new Date(d.debtDate).toISOString().slice(0, 10) : undefined,
-    });
-    if (d.status === DebtStatus.PAID) {
-      await debtRepo.settle(doc.frontmatter.id);
-    }
-    debtCount++;
-  }
-  console.log(`✅ Đã di trú ${debtCount} khoản nợ.`);
-
-  // 3. Migrate Daily Messages
-  console.log('📝 Di trú báo cáo hàng ngày...');
-  const msgEntries = kv.list<Message>({ prefix: ['messages'] });
-  let msgCount = 0;
-  for await (const entry of msgEntries) {
-    const msg = entry.value;
-    const dateStr = new Date(msg.date).toISOString().slice(0, 10);
-    await dailyRepo.save(dateStr, {
-      completed: [{ project: 'LEGACY', task: msg.content }],
-      incomplete: [],
-      planned: [],
-    });
-    msgCount++;
-  }
-  console.log(`✅ Đã di trú ${msgCount} báo cáo ngày.`);
-
-  await kv.close();
-  console.log(`🎉 Di trú thành công! Dữ liệu đã sẵn sàng tại: ${fs.root}`);
-}
-
-if (import.meta.main) {
-  await runMigration();
-}
-```
-
-Thêm task vào `deno.json`:
-```json
-"tasks": {
-  "migrate:to-files": "deno run --allow-all --unstable-kv scripts/migrate-to-files.ts"
-}
-```
-
----
-
-## 6. Kế hoạch Kiểm thử Tự động (Unit Tests)
-
-Bộ kiểm thử hoàn chỉnh đảm bảo không có rủi ro bảo mật hay mất dữ liệu:
-
-1. **`tests/provider/workspace_fs_test.ts`**:
-   - Chặn đứng Path Traversal (`../../etc/passwd` ➔ Ném lỗi `Access Denied`).
-   - Kiểm tra `withLock` ngăn chặn ghi đồng thời (Concurrency Test).
-   - Kiểm tra Atomic write trên file tạm.
-2. **`tests/provider/markdown_engine_test.ts`**:
-   - Kiểm tra Round-trip Serialization (Frontmatter Object ➔ String ➔ Parse ngược lại 100% khớp).
-   - Kiểm tra bảo toàn các section tùy biến (`customSections`) khi parse và lưu báo cáo ngày.
-3. **`tests/provider/debt_repository_test.ts`**:
-   - Tạo nợ mới: File xuất hiện đúng dạng `debts/<slug>.md`.
-   - Settle nợ: File tự động di chuyển vào `debts/archive/<slug>.md`.
-   - Kiểm tra tính toán `getSummary()` chuẩn xác theo từng loại tiền tệ.
-4. **`tests/provider/daily_work_repository_test.ts`**:
-   - Lưu báo cáo ngày ➔ Đọc lại đúng file `daily/YYYY-MM-DD.md`.
+### 🧪 Bước 5: Kiểm thử Toàn diện
+- [ ] Viết `tests/services/agent/workspace-tools.test.ts`.
+- [ ] Chạy `deno task test` và `deno task check` đảm bảo **Pass 100%**.
