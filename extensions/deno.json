@@ -1,0 +1,7 @@
+{
+  "name": "@work-boost/extensions",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts"
+  }
+}

@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from '@std/assert';
+import { assertEquals } from '@std/assert';
 import { join } from '@std/path';
 import { createWorkspaceFS } from '@work-boost/data-provider/fs/workspace-fs.ts';
 
@@ -92,7 +92,6 @@ Deno.test('WorkspaceFS - mutex lock prevents race conditions', async () => {
     await fs.init();
 
     const testPath = 'race-test.md';
-    let writeCount = 0;
 
     // Launch multiple concurrent writes
     const writes = Array.from({ length: 5 }, (_, i) =>
@@ -101,7 +100,6 @@ Deno.test('WorkspaceFS - mutex lock prevents race conditions', async () => {
 
     // All writes should complete without conflict
     await Promise.all(writes);
-    writeCount++;
 
     // Verify final state is consistent
     const content = await fs.readText(testPath);

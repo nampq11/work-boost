@@ -6,6 +6,7 @@ export function sanitizeInput(input: string): string {
 
   // Remove null bytes and control characters except newlines and tabs
   // deno-lint-ignore no-control-regex
+  // oxlint-disable-next-line no-control-regex
   return input.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
 }
 

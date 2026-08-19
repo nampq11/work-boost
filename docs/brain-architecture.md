@@ -133,8 +133,8 @@ const result = await brain.run('hôm nay hoàn thành task A', {
 ### With Tool Calling (Slack/Telegram)
 
 ```typescript
-import { Slack } from '@/services/slack/slack.ts';
-import { TelegramService } from '@/services/telegram/telegram.ts';
+import { SlackService } from '@/extensions/slack/slack.ts';
+import { TelegramService } from '@/extensions/telegram/telegram.ts';
 
 // Initialize with services
 const slack = new Slack();

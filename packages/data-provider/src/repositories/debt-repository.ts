@@ -1,6 +1,7 @@
 import { basename, join } from '@std/path';
 import { DebtDirection, DebtFrontmatterSchema, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { DebtDocument, DebtFrontmatter, DebtSummary } from '@work-boost/data-schemas/debt.ts';
+import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { WorkspaceFS } from '../fs/workspace-fs.ts';
 import { parseMarkdown, stringifyMarkdown } from '../markdown/markdown-engine.ts';
 
@@ -25,11 +26,13 @@ export interface DebtRepository {
     personName: string;
     reason?: string;
     debtDate?: string;
+    updatedBy?: DebtFrontmatter['updatedBy'];
   }): Promise<DebtDocument>;
   getById(debtId: string): Promise<DebtDocument | null>;
   listAll(includeArchived?: boolean): Promise<DebtDocument[]>;
   filter(options: DebtFilterOptions): Promise<DebtDocument[]>;
   settle(debtId: string): Promise<DebtDocument | null>;
+  cancel(debtId: string): Promise<DebtDocument | null>;
   update(
     debtId: string,
     updates: {
@@ -40,6 +43,7 @@ export interface DebtRepository {
       reason?: string;
       status?: DebtStatus;
       debtDate?: string;
+      updatedBy?: DebtFrontmatter['updatedBy'];
       paidAt?: string | null;
     },
   ): Promise<DebtDocument | null>;
@@ -93,6 +97,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
       personName: string;
       reason?: string;
       debtDate?: string;
+      updatedBy?: DebtFrontmatter['updatedBy'];
     }): Promise<DebtDocument> {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
@@ -107,6 +112,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
         createdAt: now,
         updatedAt: now,
         paidAt: null,
+        updatedBy: data.updatedBy,
       });
 
       const fileName = generateSlug(data.personName, id);
@@ -127,7 +133,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
       const activePaths = await fs.listFiles('debts');
       const archivePaths = includeArchived ? await fs.listFiles('debts/archive') : [];
       const allPaths = [...activePaths, ...archivePaths];
-      const mdPaths = allPaths.filter(p => p.endsWith('.md'));
+      const mdPaths = allPaths.filter((p) => p.endsWith('.md'));
 
       const results: DebtDocument[] = [];
       for (const p of mdPaths) {
@@ -140,14 +146,22 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
             filePath: p,
           });
         } catch (error) {
-          throw new Error(`Failed to read debt file ${p}`, { cause: error });
+          logger.warn('Corrupted debt file detected', { path: p });
+          logger.debug('Corrupted debt file parse error', {
+            path: p,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
       return results.sort((a, b) => b.frontmatter.createdAt.localeCompare(a.frontmatter.createdAt));
     },
 
     async filter(options: DebtFilterOptions): Promise<DebtDocument[]> {
-      const all = await this.listAll(options.status === DebtStatus.PAID);
+      // Paid and cancelled debts live in debts/archive/, so terminal-status filters must include it
+      const archivedStatuses = [DebtStatus.PAID, DebtStatus.CANCELLED];
+      const all = await this.listAll(
+        options.status !== undefined && archivedStatuses.includes(options.status),
+      );
       const filtered = all.filter((doc) => {
         const fm = doc.frontmatter;
         if (options.status && fm.status !== options.status) return false;
@@ -178,6 +192,25 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
 
         const fileName = basename(debt.filePath);
         const archivePath = join('debts', 'archive', fileName);
+        await fs.move(debt.filePath, archivePath);
+        debt.filePath = archivePath;
+
+        return debt;
+      });
+    },
+
+    async cancel(debtId: string): Promise<DebtDocument | null> {
+      return withDebtLock(debtId, async () => {
+        const debt = await this.getById(debtId);
+        if (!debt || debt.frontmatter.status === DebtStatus.CANCELLED) return null;
+
+        debt.frontmatter.status = DebtStatus.CANCELLED;
+        debt.frontmatter.updatedAt = new Date().toISOString();
+
+        const updatedRaw = stringifyMarkdown(debt.frontmatter, debt.reason);
+        await fs.writeTextAtomic(debt.filePath, updatedRaw);
+
+        const archivePath = join('debts', 'archive', basename(debt.filePath));
         await fs.move(debt.filePath, archivePath);
         debt.filePath = archivePath;
 

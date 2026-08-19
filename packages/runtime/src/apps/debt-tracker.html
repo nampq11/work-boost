@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Sổ Nợ Cá Nhân</title>
+</head>
+<body class="bg-stone-50 text-stone-900 p-6 font-sans antialiased">
+  <div class="max-w-4xl mx-auto space-y-6" x-data="debtTracker()" x-init="init()">
+
+    <header class="flex items-center justify-between border-b border-stone-200 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">💰 Sổ Nợ Work Boost</h1>
+        <p class="text-sm text-stone-500">Tự động đồng bộ với Telegram &amp; File Markdown</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+          <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Live Sync
+        </span>
+        <button @click="loadData()" class="px-3 py-1.5 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg text-sm font-medium shadow-sm">
+          🔄 Làm mới
+        </button>
+      </div>
+    </header>
+
+    <template x-if="error">
+      <div class="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm" x-text="error"></div>
+    </template>
+
+    <!-- Multi-Currency Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+      <template x-for="(totals, curr) in summary.currencies" :key="curr">
+        <div class="p-4 bg-white rounded-xl shadow-sm border border-stone-200 space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="text-xs font-bold uppercase tracking-wider text-stone-400" x-text="curr"></span>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded"
+                  :class="(totals.lent - totals.borrowed) >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'"
+                  x-text="(totals.lent - totals.borrowed) >= 0 ? 'Dương' : 'Âm'"></span>
+          </div>
+          <div class="text-2xl font-black text-stone-900" x-text="formatMoney(totals.lent - totals.borrowed, curr)"></div>
+          <div class="text-xs text-stone-500 flex justify-between border-t pt-2">
+            <span>Được nợ: <b class="text-emerald-600" x-text="formatMoney(totals.lent, curr)"></b></span>
+            <span>Cần trả: <b class="text-rose-600" x-text="formatMoney(totals.borrowed, curr)"></b></span>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="flex gap-2">
+      <template x-for="f in ['all', 'pending', 'paid', 'lent', 'borrowed']" :key="f">
+        <button @click="filter = f; loadDebts()"
+                class="px-3 py-1 text-xs rounded-full uppercase tracking-wider font-bold transition"
+                :class="filter === f ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-600 hover:bg-stone-300'"
+                x-text="f"></button>
+      </template>
+    </div>
+
+    <!-- List -->
+    <div class="bg-white rounded-xl shadow-sm border border-stone-200 divide-y divide-stone-100 overflow-hidden">
+      <template x-if="debts.length === 0">
+        <div class="p-8 text-center text-stone-400">📭 Không có khoản nợ nào.</div>
+      </template>
+      <template x-for="debt in debts" :key="debt.frontmatter.id">
+        <div class="p-4 flex items-center justify-between hover:bg-stone-50 transition">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 text-xs font-bold rounded"
+                    :class="debt.frontmatter.direction === 'lent' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'"
+                    x-text="debt.frontmatter.direction === 'lent' ? 'CHO VAY' : 'VAY'"></span>
+              <span class="font-bold text-stone-900" x-text="debt.frontmatter.personName"></span>
+              <span class="text-xs text-stone-400" x-text="debt.frontmatter.debtDate"></span>
+            </div>
+            <div class="text-sm text-stone-600" x-text="debt.reason || '(Không có lý do)'"></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="text-right">
+              <div class="font-black text-lg text-stone-900" x-text="formatMoney(debt.frontmatter.amount, debt.frontmatter.currency)"></div>
+              <span class="text-xs font-semibold"
+                    :class="debt.frontmatter.status === 'paid' ? 'text-emerald-600' : 'text-amber-600'"
+                    x-text="debt.frontmatter.status === 'paid' ? '✅ Đã trả' : '⏳ Chờ trả'"></span>
+            </div>
+            <template x-if="debt.frontmatter.status === 'pending'">
+              <button @click="settle(debt.frontmatter.id)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition">
+                Đã trả
+              </button>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <script>
+    function debtTracker() {
+      return {
+        filter: 'all',
+        debts: [],
+        summary: { currencies: {} },
+        error: '',
+        async init() {
+          await this.loadData();
+          // Auto reload when the Telegram bot or an agent edits files on disk
+          window.addEventListener('workboost:change', () => this.loadData());
+        },
+        async loadData() {
+          this.error = '';
+          try {
+            await Promise.all([this.loadSummary(), this.loadDebts()]);
+          } catch (err) {
+            this.error = 'Không tải được dữ liệu: ' + (err.message || err);
+          }
+        },
+        async loadSummary() {
+          this.summary = await window.workboost.debts.getSummary();
+        },
+        async loadDebts() {
+          let query = {};
+          if (this.filter === 'pending' || this.filter === 'paid') query.status = this.filter;
+          if (this.filter === 'lent' || this.filter === 'borrowed') query.direction = this.filter;
+          this.debts = await window.workboost.debts.list(query);
+        },
+        async settle(id) {
+          await window.workboost.debts.settle(id);
+          await this.loadData();
+        },
+        formatMoney(amount, currency = 'VND') {
+          try {
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency }).format(amount || 0);
+          } catch {
+            return `${amount || 0} ${currency}`;
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>

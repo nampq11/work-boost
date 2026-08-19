@@ -4,9 +4,6 @@
   "exports": {
     ".": "./mod.ts",
     "./logger": "./src/logger/index.ts",
-    "./observability": "./src/observability/index.ts",
-    "./logger/logger.ts": "./src/logger/logger.ts",
-    "./observability/index.ts": "./src/observability/index.ts",
-    "./observability/langfuse/langfuse.ts": "./src/observability/langfuse/langfuse.ts"
+    "./logger/logger.ts": "./src/logger/logger.ts"
   }
 }

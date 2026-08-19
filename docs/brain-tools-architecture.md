@@ -130,8 +130,8 @@ console.log(result.response); // "Xin chào! Bạn khỏe không?"
 
 ```typescript
 import { Brain } from './core/brain/index.ts';
-import { Slack } from './services/slack/slack.ts';
-import { TelegramService } from './services/telegram/telegram.ts';
+import { SlackService } from './extensions/slack/slack.ts';
+import { TelegramService } from './extensions/telegram/telegram.ts';
 
 // Initialize with services
 const slack = new Slack();

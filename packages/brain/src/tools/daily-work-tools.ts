@@ -2,7 +2,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from '@earendil-works/pi-ai';
 import type { DailyWorkRepository } from '@work-boost/data-provider';
 import { formatDailyReport } from '@work-boost/data-provider';
-import type { DailyWorkDocument, TaskItem } from '@work-boost/data-schemas/agent.ts';
+import type { TaskItem } from '@work-boost/data-schemas/agent.ts';
 import { successResult } from './result.ts';
 
 const TaskItemSchema = Type.Object({

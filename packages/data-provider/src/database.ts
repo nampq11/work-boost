@@ -155,7 +155,7 @@ export class Database {
    * Get single workspace user (backward compatibility)
    * In single-user system, always returns the workspace user
    */
-  async getById(id: string): Promise<User | null> {
+  async getById(_id: string): Promise<User | null> {
     const config = await this.config.load();
 
     // Return single workspace user (User schema has username, not name)
@@ -178,7 +178,7 @@ export class Database {
   /**
    * Delete user (backward compatibility - not applicable in single-user system)
    */
-  async delete(id: string): Promise<void> {
+  async delete(_id: string): Promise<void> {
     // Not applicable in single-user system
     // Workspace cannot be deleted through this method
   }
@@ -227,7 +227,7 @@ export class Database {
    * Get subscription for user (backward compatibility)
    * In single-user system, converts workspace config to subscription format
    */
-  async getSubscriptionByUserId(userId: string): Promise<Subscription | null> {
+  async getSubscriptionByUserId(_userId: string): Promise<Subscription | null> {
     const config = await this.config.load();
 
     // Convert workspace config to subscription format for backward compatibility
@@ -326,7 +326,7 @@ export class Database {
    * Get messages by user using markdown storage (backward compatibility)
    * Returns all daily work reports sorted by date (oldest first)
    */
-  async getMessagesByUserId(userId: string): Promise<Message[]> {
+  async getMessagesByUserId(_userId: string): Promise<Message[]> {
     const dateStrings = await this.dailyWork.listDates();
     const messages: Message[] = [];
 
@@ -432,7 +432,7 @@ export class Database {
   /**
    * Get all debts for workspace user, sorted by creation date (newest first)
    */
-  async getDebtsByUserId(userId: string): Promise<Debt[]> {
+  async getDebtsByUserId(_userId: string): Promise<Debt[]> {
     // In single-user system, userId is ignored
     const debts = await this.debts.listAll();
     return debts
@@ -446,7 +446,7 @@ export class Database {
   /**
    * Get only unpaid (pending) debts using markdown storage
    */
-  async getUnpaidDebtsByUserId(userId: string): Promise<Debt[]> {
+  async getUnpaidDebtsByUserId(_userId: string): Promise<Debt[]> {
     const debts = await this.debts.filter({ status: DebtStatus.PENDING });
     return debts
       .sort(
@@ -518,7 +518,7 @@ export class Database {
   /**
    * Get debt reminder settings using workspace config (backward compatibility)
    */
-  async getDebtReminderSettings(userId: string): Promise<DebtReminderSettings | null> {
+  async getDebtReminderSettings(_userId: string): Promise<DebtReminderSettings | null> {
     const config = await this.config.load();
 
     // Convert workspace config to DebtReminderSettings format for backward compatibility
@@ -578,7 +578,7 @@ export class Database {
   /**
    * Update last reminder sent timestamp using workspace config (backward compatibility)
    */
-  async updateDebtReminderLastSent(userId: string): Promise<void> {
+  async updateDebtReminderLastSent(_userId: string): Promise<void> {
     const config = await this.config.load();
     config.debtReminder.lastSentAt = new Date().toISOString();
     await this.config.save(config);
@@ -587,7 +587,7 @@ export class Database {
   /**
    * Calculate debt summary for workspace user using markdown storage
    */
-  async getDebtSummary(userId: string): Promise<{
+  async getDebtSummary(_userId: string): Promise<{
     totalLent: number;
     totalBorrowed: number;
     totalLentPaid: number;

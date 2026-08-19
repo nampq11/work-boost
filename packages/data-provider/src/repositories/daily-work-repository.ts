@@ -15,8 +15,17 @@ import {
 /**
  * Daily work repository interface
  */
+export interface SaveDailyWorkOptions {
+  customSections?: string;
+  updatedBy?: DailyWorkFrontmatter['updatedBy'];
+}
+
 export interface DailyWorkRepository {
-  save(dateStr: string, report: DailyWorkReport): Promise<DailyWorkDocument>;
+  save(
+    dateStr: string,
+    report: DailyWorkReport,
+    options?: SaveDailyWorkOptions,
+  ): Promise<DailyWorkDocument>;
   saveContent(dateStr: string, content: string): Promise<DailyWorkDocument>;
   get(dateStr: string): Promise<DailyWorkDocument | null>;
   listDates(): Promise<string[]>;
@@ -30,12 +39,16 @@ export function createDailyWorkRepository(fs: WorkspaceFS): DailyWorkRepository 
   const getFilePath = (dateStr: string) => `daily/${dateStr}.md`;
 
   return {
-    async save(dateStr: string, report: DailyWorkReport): Promise<DailyWorkDocument> {
+    async save(
+      dateStr: string,
+      report: DailyWorkReport,
+      options?: SaveDailyWorkOptions,
+    ): Promise<DailyWorkDocument> {
       const filePath = getFilePath(dateStr);
-      let customSections = '';
+      let customSections = options?.customSections ?? '';
 
-      // Preserve custom sections if file exists
-      if (await fs.exists(filePath)) {
+      // Preserve existing custom sections only when the caller did not provide any
+      if (customSections === '' && (await fs.exists(filePath))) {
         const existing = await this.get(dateStr);
         if (existing) customSections = existing.customSections;
       }
@@ -45,6 +58,7 @@ export function createDailyWorkRepository(fs: WorkspaceFS): DailyWorkRepository 
         date: dateStr,
         status: 'completed',
         updatedAt: new Date().toISOString(),
+        updatedBy: options?.updatedBy,
       });
 
       const body = formatDailyReport(report, customSections);

@@ -88,7 +88,7 @@ The webhook secret is validated via the `x-telegram-bot-api-secret-token` header
 ### File Structure
 
 ```
-packages/services/src/telegram/
+extensions/telegram/
 ├── telegram.ts              # Main service class
 ├── keyboards.ts             # Inline keyboard definitions
 ├── sanitizer.ts             # Input sanitization middleware
@@ -110,7 +110,7 @@ packages/services/src/telegram/
         ├── remind.ts        # Reminder settings
         └── callbacks.ts     # Button callbacks
 
-packages/services/src/
+extensions/
 └── debt-telegram-formatter.ts  # Debt message formatting
 ```
 
