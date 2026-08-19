@@ -130,3 +130,44 @@ export interface ParsedDebtEntry {
   /** Currency (default USD) */
   currency?: string;
 }
+
+import { z } from 'zod';
+
+/**
+ * Zod schema for debt document frontmatter (markdown storage)
+ */
+export const DebtFrontmatterSchema = z.object({
+  id: z.string().uuid(),
+  direction: z.nativeEnum(DebtDirection),
+  amount: z.number().positive(),
+  currency: z.string().default('USD'),
+  personName: z.string().min(1),
+  status: z.nativeEnum(DebtStatus).default(DebtStatus.PENDING),
+  debtDate: z.string(), // YYYY-MM-DD
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  paidAt: z.string().datetime().nullable().default(null),
+});
+
+export type DebtFrontmatter = z.infer<typeof DebtFrontmatterSchema>;
+
+/**
+ * Debt document interface for markdown storage
+ */
+export interface DebtDocument {
+  frontmatter: DebtFrontmatter;
+  reason: string; // Debt reason stored in markdown body
+  filePath: string;
+}
+
+/**
+ * Debt summary statistics
+ */
+export interface DebtSummary {
+  totalLent: number;
+  totalBorrowed: number;
+  pendingLentCount: number;
+  pendingBorrowedCount: number;
+  netPosition: number;
+  currencies: Record<string, { lent: number; borrowed: number }>;
+}

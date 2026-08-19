@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./*": "./src/*"
+    "./fs/workspace-fs": "./src/fs/workspace-fs.ts",
+    "./fs/workspace-watcher": "./src/fs/workspace-watcher.ts",
+    "./markdown/markdown-engine": "./src/markdown/markdown-engine.ts",
+    "./repositories/config-manager": "./src/repositories/config-manager.ts",
+    "./repositories/daily-work-repository": "./src/repositories/daily-work-repository.ts",
+    "./repositories/debt-repository": "./src/repositories/debt-repository.ts"
   }
 }
