@@ -147,6 +147,7 @@ export const DebtFrontmatterSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   paidAt: z.string().datetime().nullable().default(null),
+  updatedBy: z.enum(['telegram', 'slack', 'agent', 'user']).default('agent'),
 });
 
 export type DebtFrontmatter = z.infer<typeof DebtFrontmatterSchema>;
@@ -171,10 +172,13 @@ export interface DebtSummary {
   pendingLentCount: number;
   pendingBorrowedCount: number;
   netPosition: number;
-  currencies: Record<string, {
-    lent: number;
-    borrowed: number;
-    lentPaid: number;
-    borrowedPaid: number;
-  }>;
+  currencies: Record<
+    string,
+    {
+      lent: number;
+      borrowed: number;
+      lentPaid: number;
+      borrowedPaid: number;
+    }
+  >;
 }

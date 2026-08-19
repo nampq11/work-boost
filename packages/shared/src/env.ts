@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import process from 'node:process';
 import { load } from '@std/dotenv';
 import { z } from 'zod';
@@ -29,10 +31,6 @@ const envSchema = z.object({
   DENO_ENV: z.enum(['development', 'developement', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   REDACT_SECRETS: z.boolean().default(true),
-  LANGFUSE_PUBLIC_KEY: z.string().optional(),
-  LANGFUSE_SECRET_KEY: z.string().optional(),
-  LANGFUSE_HOST: z.string().optional(),
-  LANGFUSE_ENABLED: z.boolean().optional(),
 });
 
 type EnvSchema = z.infer<typeof envSchema>;
@@ -73,22 +71,6 @@ const envProxy = new Proxy(envHandlers, {
       case 'REDACT_SECRETS': {
         const redactValue = Deno.env.get('REDACT_SECRETS');
         return redactValue === undefined ? true : redactValue !== 'false';
-      }
-      case 'LANGFUSE_PUBLIC_KEY':
-        return Deno.env.get('LANGFUSE_PUBLIC_KEY');
-      case 'LANGFUSE_SECRET_KEY':
-        return Deno.env.get('LANGFUSE_SECRET_KEY');
-      case 'LANGFUSE_ENABLED': {
-        const langfuseEnabled = Deno.env.get('LANGFUSE_ENABLED');
-        return langfuseEnabled === 'true';
-      }
-      case 'LANGFUSE_HOST': {
-        const host = Deno.env.get('LANGFUSE_HOST') || Deno.env.get('LANGFUSE_BASE_URL');
-        return host || 'https://cloud.langfuse.com';
-      }
-      case 'LANGFUSE_BASE_URL': {
-        const host = Deno.env.get('LANGFUSE_BASE_URL') || Deno.env.get('LANGFUSE_HOST');
-        return host || 'https://cloud.langfuse.com';
       }
       default:
         return Deno.env.get(prop);

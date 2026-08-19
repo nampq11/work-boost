@@ -1,9 +1,9 @@
 import { assertEquals } from '@std/assert';
 import {
+  formatDailyReport,
+  parseDailyReport,
   parseMarkdown,
   stringifyMarkdown,
-  parseDailyReport,
-  formatDailyReport,
 } from '@work-boost/data-provider/markdown/markdown-engine.ts';
 
 Deno.test('MarkdownEngine - round-trip serialization', () => {
@@ -80,14 +80,14 @@ Deno.test('MarkdownEngine - parses daily report sections correctly', () => {
   assertEquals(report.completed.length, 2);
   assertEquals(report.completed[0].project, 'PROJ1');
   assertEquals(report.completed[1].project, 'INBOX');
-  
+
   assertEquals(report.incomplete.length, 1);
   assertEquals(report.incomplete[0].project, 'PROJ2');
-  
+
   assertEquals(report.planned.length, 2);
   assertEquals(report.planned[0].project, 'PROJ3');
   assertEquals(report.planned[1].project, 'PROJ4');
-  
+
   assertEquals(customSections, '');
 });
 
@@ -120,8 +120,8 @@ Deno.test('MarkdownEngine - handles empty sections correctly', () => {
   assertEquals(parsed.completed.length, 0);
   assertEquals(parsed.incomplete.length, 0);
   assertEquals(parsed.planned.length, 0);
-  
+
   // Should have N/A markers for empty sections
-  const match = formatted.match(/- N/A/g);
+  const match = formatted.match(/- N\/A/g);
   assertEquals((match || []).length, 3);
 });

@@ -1,3 +1,5 @@
+/// <reference lib="deno.unstable" />
+
 import { logger } from '@work-boost/shared/logger/logger.ts';
 
 const FIVE_MINUTES_IN_SECONDS = 60 * 5;
@@ -84,12 +86,16 @@ export async function validateSlackWebhook(
   // Compute HMAC signature using Web Crypto API
   const key = await crypto.subtle.importKey(
     'raw',
-    encode(signingSecret),
+    encode(signingSecret).buffer as ArrayBuffer,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
   );
-  const signatureBuffer = await crypto.subtle.sign('HMAC', key, encode(baseString));
+  const signatureBuffer = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encode(baseString).buffer as ArrayBuffer,
+  );
   const expectedSignature = `${version}=${bufferToHex(signatureBuffer)}`;
 
   // Constant-time comparison to prevent timing attacks

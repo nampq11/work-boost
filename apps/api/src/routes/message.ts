@@ -3,10 +3,6 @@ import { logger } from '@work-boost/shared/logger/logger.ts';
 import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
 import { isValidSessionId, sanitizeInput } from '../utils/security.ts';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 interface MessageRequestBody {
   message: string;
   sessionId?: string;
@@ -14,10 +10,6 @@ interface MessageRequestBody {
   imageData?: string;
   fileData?: unknown;
 }
-
-// ============================================================================
-// Validation
-// ============================================================================
 
 function validateMessageRequest(body: unknown): {
   valid: boolean;
@@ -49,59 +41,11 @@ function validateMessageRequest(body: unknown): {
     return { valid: false, error: 'Images must be an array' };
   }
 
-  // Sanitize message input
   data.message = sanitizeInput(data.message);
 
   return { valid: true, data };
 }
 
-// ============================================================================
-// Route Handlers
-// ============================================================================
-
-/**
- * Process message asynchronously without blocking the response
- */
-async function processMessageAsync(
-  agent: AgentPort,
-  message: string,
-  options: { sessionId?: string; images?: string[]; imageData?: string; fileData?: unknown },
-  requestId?: string,
-): Promise<void> {
-  try {
-    // If sessionId is provided, ensure that session is loaded
-    if (options.sessionId) {
-      try {
-        await agent.loadSession(options.sessionId);
-      } catch {
-        await agent.createSession(options.sessionId);
-      }
-    }
-
-    // Processing the message through the agent using stream
-    await agent.stream(
-      message,
-      async (_chunk) => {
-        // Process asynchronously
-      },
-      { sessionId: options.sessionId, platform: 'api', chatId: requestId },
-    );
-
-    logger.info('Async message processing completed', {
-      requestId,
-      sessionId: options.sessionId || 'default',
-    });
-  } catch (error) {
-    logger.error('Async message processing failed', {
-      requestId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-/**
- * POST /message — Process a message asynchronously, returns 202 immediately
- */
 export async function handleMessage(
   req: Request,
   agent: AgentPort,
@@ -121,18 +65,14 @@ export async function handleMessage(
       );
     }
 
-    const { message, sessionId, images, imageData, fileData } = validation.data!;
+    const { message, sessionId } = validation.data!;
 
     logger.info('Processing async message request', {
       requestId,
       sessionId,
-      hasImages: Boolean(images && images.length > 0),
-      hasImageData: Boolean(imageData),
-      hasFileData: Boolean(fileData),
       messageLength: message.length,
     });
 
-    // Return 202 immediately for async processing
     const response = successResponse(
       {
         message: 'Message accepted for processing',
@@ -145,14 +85,20 @@ export async function handleMessage(
     );
 
     // Process message asynchronously (don't await)
-    processMessageAsync(
-      agent,
-      message,
-      { sessionId, images, imageData, fileData },
-      requestId,
-    ).catch((error) => {
-      logger.error('Async message processing failed', { requestId, error });
-    });
+    agent
+      .stream(message, { sessionId: sessionId || 'default' })
+      .then(() => {
+        logger.info('Async message processing completed', {
+          requestId,
+          sessionId: sessionId || 'default',
+        });
+      })
+      .catch((error) => {
+        logger.error('Async message processing failed', {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
 
     return response;
   } catch (error) {
@@ -168,9 +114,6 @@ export async function handleMessage(
   }
 }
 
-/**
- * POST /message/sync — Process a message synchronously and return the full response
- */
 export async function handleMessageSync(
   req: Request,
   agent: AgentPort,
@@ -190,54 +133,37 @@ export async function handleMessageSync(
       );
     }
 
-    const { message, sessionId, images } = validation.data!;
+    const { message, sessionId } = validation.data!;
 
     logger.info('Processing sync message request', {
       requestId,
       sessionId: sessionId || 'default',
-      hasImages: Boolean(images && images.length > 0),
       messageLength: message.length,
     });
 
-    // If sessionId is provided, ensure that session is loaded
-    if (sessionId) {
-      try {
-        await agent.loadSession(sessionId);
-      } catch {
-        try {
-          await agent.createSession(sessionId);
-        } catch (createError) {
-          return errorResponse(
-            ERROR_CODES.SESSION_NOT_FOUND,
-            `Failed to create session: ${
-              createError instanceof Error ? createError.message : String(createError)
-            }`,
-            400,
-            undefined,
-            requestId,
-          );
-        }
-      }
+    try {
+      const response = await agent.stream(message, { sessionId: sessionId || 'default' });
+
+      return successResponse(
+        {
+          response,
+          sessionId: sessionId || 'default',
+          timestamp: new Date().toISOString(),
+        },
+        200,
+        requestId,
+      );
+    } catch (streamError) {
+      const errorMsg = streamError instanceof Error ? streamError.message : String(streamError);
+      logger.error('Agent stream failed', { requestId, error: errorMsg });
+      return errorResponse(
+        ERROR_CODES.INTERNAL_ERROR,
+        `Message processing failed: ${errorMsg}`,
+        500,
+        undefined,
+        requestId,
+      );
     }
-
-    // Use stream method which returns accumulated content
-    const result = await agent.stream(
-      message,
-      async (_chunk) => {
-        // Accumulate chunks for final response
-      },
-      { sessionId, platform: 'api', chatId: requestId },
-    );
-
-    return successResponse(
-      {
-        response: result.success ? result.content : 'Failed to process message',
-        sessionId: sessionId || 'default',
-        timestamp: new Date().toISOString(),
-      },
-      200,
-      requestId,
-    );
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error('Message processing failed', { requestId, error: errorMsg });
@@ -251,9 +177,6 @@ export async function handleMessageSync(
   }
 }
 
-/**
- * POST /message/reset — Reset conversation state for the current or specific session
- */
 export async function handleMessageReset(
   req: Request,
   agent: AgentPort,
@@ -269,8 +192,7 @@ export async function handleMessageReset(
     });
 
     if (sessionId) {
-      // Reset specific session
-      const success = await agent.removeSession(sessionId);
+      const success = agent.removeSession(sessionId);
       if (!success) {
         return errorResponse(
           ERROR_CODES.SESSION_NOT_FOUND,
@@ -281,33 +203,26 @@ export async function handleMessageReset(
         );
       }
 
-      // Create new session with the same id
-      const newSessionId = await agent.createSession(sessionId);
-
       return successResponse(
         {
           message: `Session ${sessionId} has been reset`,
-          sessionId: newSessionId,
-        },
-        200,
-        requestId,
-      );
-    } else {
-      await agent.removeSession('default');
-
-      // Create a new default session
-      const newSessionId = await agent.createSession('default');
-
-      return successResponse(
-        {
-          message: 'Default session has been reset',
-          sessionId: newSessionId,
-          timestamp: new Date().toISOString(),
+          sessionId,
         },
         200,
         requestId,
       );
     }
+
+    agent.removeSession('default');
+    return successResponse(
+      {
+        message: 'Default session has been reset',
+        sessionId: 'default',
+        timestamp: new Date().toISOString(),
+      },
+      200,
+      requestId,
+    );
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error('Reset operation failed', { requestId, error: errorMsg });

@@ -14,6 +14,8 @@ export interface WorkspaceFS {
   remove(relPath: string): Promise<void>;
   listFiles(relDir: string): Promise<string[]>;
   exists(relPath: string): Promise<boolean>;
+  stat(relPath: string): Promise<{ size: number }>;
+  listDirs(relDir: string): Promise<string[]>;
 }
 
 /**
@@ -22,11 +24,8 @@ export interface WorkspaceFS {
  */
 export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
   const rootPath = resolve(
-    customRoot || join(
-      Deno.env.get('HOME') || Deno.env.get('USERPROFILE') || '.',
-      '.workboost',
-      'workspace',
-    ),
+    customRoot ||
+      join(Deno.env.get('HOME') || Deno.env.get('USERPROFILE') || '.', '.workboost', 'workspace'),
   );
 
   const writeLocks = new Map<string, Promise<void>>();
@@ -109,7 +108,7 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
     },
 
     async readText(relPath: string): Promise<string> {
-      const fullPath = assertInside(relPath);
+      const fullPath = await assertInside(relPath);
       return await Deno.readTextFile(fullPath);
     },
 
@@ -165,6 +164,27 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       } catch {
         return false;
       }
+    },
+
+    async stat(relPath: string): Promise<{ size: number }> {
+      const fullPath = await assertInside(relPath);
+      const info = await Deno.stat(fullPath);
+      return { size: info.size };
+    },
+
+    async listDirs(relDir: string): Promise<string[]> {
+      const fullDir = await assertInside(relDir);
+      const dirs: string[] = [];
+      try {
+        for await (const entry of Deno.readDir(fullDir)) {
+          if (entry.isDirectory) {
+            dirs.push(entry.name);
+          }
+        }
+      } catch {
+        return [];
+      }
+      return dirs;
     },
   };
 }

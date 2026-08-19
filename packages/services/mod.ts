@@ -1,5 +1,5 @@
-export * from './src/formatters/debt-slack-formatter.ts';
 export * from './src/formatters/debt-telegram-formatter.ts';
+export * from './src/formatters/debt-slack-formatter.ts';
 export * from './src/formatters/slack-formatter.ts';
 export * from './src/formatters/telegram-formatter.ts';
 export * from './src/scheduler/daily-job.ts';
@@ -7,4 +7,3 @@ export * from './src/scheduler/debt-reminder-job.ts';
 export * from './src/slack/slack.ts';
 export * from './src/telegram/telegram.ts';
 export * from './src/bot/bot-service.ts';
-export * from './src/bootstrap.ts';

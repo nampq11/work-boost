@@ -1,6 +1,6 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
-import type { Slack } from '@work-boost/services/slack/slack.ts';
+import type { SlackService } from '@work-boost/services/slack/slack.ts';
 import type { TelegramService } from '@work-boost/services/telegram/telegram.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import {
@@ -32,7 +32,7 @@ export interface ApiServerConfig {
   rateLimitMaxRequests?: number;
   enableWebSocket?: boolean;
   apiPrefix?: string;
-  slack?: Slack;
+  slack?: SlackService;
   telegram?: TelegramService;
   db?: Database;
   agent?: AgentPort;

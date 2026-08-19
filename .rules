@@ -5,11 +5,7 @@
 * Prefer implementing functionality in existing files unless it is a new logical component. Avoid creating many small files.
 * Avoid creative additions unless explicitly requested.
 * Use full words for variable names (no abbreviations like "q" for "queue")
-* Use functional, declarative programming; avoid classes where possible.
 * Prefer iteration and modularization over code duplication.
-* Use descriptive variable names with auxiliary verbs (e.g., is_encrypted, has_valid_signature).
-* Favor named exports for commands and utility functions.
-* Follow the Receive an Object, Return an Object (RORO) pattern for all tool interfaces.
 
 # Pull request hygiene
 

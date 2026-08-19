@@ -14,32 +14,22 @@ interface ProcessResult {
   reason?: string;
 }
 
-/**
- * Get batch size from environment or use default
- */
 function getBatchSize(): number {
   const envBatchSize = Deno.env.get('DAILY_SUMMARY_BATCH_SIZE');
   return envBatchSize ? parseInt(envBatchSize, 10) : 10;
 }
 
-/**
- * Get schedule from environment variable or use default
- */
 function getSchedule(): string {
   const envSchedule = Deno.env.get('DAILY_SUMMARY_SCHEDULE');
   if (envSchedule) {
     return envSchedule;
   }
 
-  // Parse DAILY_SUMMARY_HOUR (0-23) and DAILY_SUMMARY_MINUTE (0-59)
   const hour = Deno.env.get('DAILY_SUMMARY_HOUR') || '9';
   const minute = Deno.env.get('DAILY_SUMMARY_MINUTE') || '0';
   return `${minute} ${hour} * * *`;
 }
 
-/**
- * Process array items in parallel batches
- */
 async function batchProcess<T, R>(
   items: T[],
   batchSize: number,
@@ -57,30 +47,23 @@ async function batchProcess<T, R>(
 }
 
 /**
- * Process daily work summary for single-user system (Phase 1: Local-First Architecture)
+ * Process daily work summary for the workspace user.
  */
 async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> {
   try {
-    // Get workspace user's recent messages (single-user system)
     const messages = await deps.db.getMessagesByUserId(SINGLE_USER_ID);
 
     if (messages.length === 0) {
       return { success: false, reason: 'no_messages' };
     }
 
-    // Generate summary using AI
     const latestMessage = messages[messages.length - 1];
 
-    const result = await deps.agent.generateDailyWorkReport(latestMessage.content);
+    const response = await deps.agent.stream(
+      `Hãy tóng hợp công việc hôm nay dựa trên tin nhắn sau: ${latestMessage.content}`,
+      { sessionId: 'scheduler' },
+    );
 
-    // Check if report generation failed
-    if (!result.success) {
-      return { success: false, reason: result.error || 'report generation failed' };
-    }
-
-    const response = result.content || '';
-
-    // Get workspace config to determine enabled platforms
     const subscription = await deps.db.getSubscriptionByUserId(SINGLE_USER_ID);
     if (!subscription || subscription.enabled.length === 0) {
       return { success: false, reason: 'no_platforms_configured' };
@@ -88,7 +71,6 @@ async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> 
 
     let delivered = 0;
 
-    // Send to each enabled platform (sequentially to avoid rate limits)
     for (const platform of subscription.enabled) {
       try {
         const bot = platform === 'slack' ? deps.slackBot : deps.telegramBot;
@@ -99,7 +81,6 @@ async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> 
           continue;
         }
 
-        // Send formatted response directly (already formatted by capability)
         await bot.sendMessage(chatId, response);
         delivered++;
 
@@ -118,7 +99,6 @@ async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> 
 
 /**
  * Start the daily summary scheduler using Deno.cron
- * Updated for single-user system (Phase 1: Local-First Architecture)
  */
 export async function startDailyScheduler(deps: SchedulerDeps): Promise<void> {
   const schedule = getSchedule();
@@ -129,7 +109,6 @@ export async function startDailyScheduler(deps: SchedulerDeps): Promise<void> {
 
     const result = await processDailySummary(deps);
 
-    // Log summary
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
     if (result.success) {
