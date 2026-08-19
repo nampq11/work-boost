@@ -49,6 +49,27 @@ export interface DebtRepository {
  * @param fs Workspace file system instance
  */
 export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
+  const debtLocks = new Map<string, Promise<void>>();
+
+  async function withDebtLock<T>(debtId: string, task: () => Promise<T>): Promise<T> {
+    while (debtLocks.has(debtId)) {
+      await debtLocks.get(debtId);
+    }
+
+    let release!: () => void;
+    const lock = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    debtLocks.set(debtId, lock);
+
+    try {
+      return await task();
+    } finally {
+      debtLocks.delete(debtId);
+      release();
+    }
+  }
+
   const generateSlug = (personName: string, id: string): string => {
     const cleanName = personName
       .toLowerCase()
@@ -138,48 +159,54 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
     },
 
     async settle(debtId: string): Promise<DebtDocument | null> {
-      const debt = await this.getById(debtId);
-      if (!debt || debt.frontmatter.status === DebtStatus.PAID) return null;
+      return withDebtLock(debtId, async () => {
+        const debt = await this.getById(debtId);
+        if (!debt || debt.frontmatter.status === DebtStatus.PAID) return null;
 
-      const now = new Date().toISOString();
-      debt.frontmatter.status = DebtStatus.PAID;
-      debt.frontmatter.paidAt = now;
-      debt.frontmatter.updatedAt = now;
+        const now = new Date().toISOString();
+        debt.frontmatter.status = DebtStatus.PAID;
+        debt.frontmatter.paidAt = now;
+        debt.frontmatter.updatedAt = now;
 
-      const updatedRaw = stringifyMarkdown(debt.frontmatter, debt.reason);
+        const updatedRaw = stringifyMarkdown(debt.frontmatter, debt.reason);
+        await fs.writeTextAtomic(debt.filePath, updatedRaw);
 
-      // Write updated content
-      await fs.writeTextAtomic(debt.filePath, updatedRaw);
+        const fileName = basename(debt.filePath);
+        const archivePath = join('debts', 'archive', fileName);
+        await fs.move(debt.filePath, archivePath);
+        debt.filePath = archivePath;
 
-      // Move to archive
-      const fileName = basename(debt.filePath);
-      const archivePath = join('debts', 'archive', fileName);
-      await fs.move(debt.filePath, archivePath);
-      debt.filePath = archivePath;
-
-      return debt;
+        return debt;
+      });
     },
 
     async update(debtId, updates) {
-      const debt = await this.getById(debtId);
-      if (!debt) return null;
+      return withDebtLock(debtId, async () => {
+        const debt = await this.getById(debtId);
+        if (!debt) return null;
+        if (updates.status !== undefined && updates.status !== debt.frontmatter.status) {
+          throw new Error('Debt status changes must use settle() to preserve file location');
+        }
 
-      const { reason, ...frontmatterUpdates } = updates;
-      for (const [key, value] of Object.entries(frontmatterUpdates)) {
-        if (value !== undefined) Object.assign(debt.frontmatter, { [key]: value });
-      }
-      if (reason !== undefined) debt.reason = reason;
-      debt.frontmatter.updatedAt = new Date().toISOString();
-      debt.frontmatter = DebtFrontmatterSchema.parse(debt.frontmatter);
-      await fs.writeTextAtomic(debt.filePath, stringifyMarkdown(debt.frontmatter, debt.reason));
-      return debt;
+        const { reason, ...frontmatterUpdates } = updates;
+        for (const [key, value] of Object.entries(frontmatterUpdates)) {
+          if (value !== undefined) Object.assign(debt.frontmatter, { [key]: value });
+        }
+        if (reason !== undefined) debt.reason = reason;
+        debt.frontmatter.updatedAt = new Date().toISOString();
+        debt.frontmatter = DebtFrontmatterSchema.parse(debt.frontmatter);
+        await fs.writeTextAtomic(debt.filePath, stringifyMarkdown(debt.frontmatter, debt.reason));
+        return debt;
+      });
     },
 
     async delete(debtId) {
-      const debt = await this.getById(debtId);
-      if (!debt) return false;
-      await fs.remove(debt.filePath);
-      return true;
+      return withDebtLock(debtId, async () => {
+        const debt = await this.getById(debtId);
+        if (!debt) return false;
+        await fs.remove(debt.filePath);
+        return true;
+      });
     },
 
     async getSummary(): Promise<DebtSummary> {
@@ -225,7 +252,15 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
         }
       }
 
-      summary.netPosition = summary.totalLent - summary.totalBorrowed;
+      if (Object.keys(summary.currencies).length > 1) {
+        summary.totalLent = 0;
+        summary.totalBorrowed = 0;
+        summary.totalLentPaid = 0;
+        summary.totalBorrowedPaid = 0;
+        summary.netPosition = 0;
+      } else {
+        summary.netPosition = summary.totalLent - summary.totalBorrowed;
+      }
       return summary;
     },
   };
