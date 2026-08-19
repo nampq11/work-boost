@@ -77,7 +77,7 @@ export async function handleSlackMessages(
   try {
     const response = await deps.agent.stream(text, {
       sessionId,
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(15000),
     });
 
     return new Response(

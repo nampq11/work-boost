@@ -127,9 +127,10 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
       const activePaths = await fs.listFiles('debts');
       const archivePaths = includeArchived ? await fs.listFiles('debts/archive') : [];
       const allPaths = [...activePaths, ...archivePaths];
+      const mdPaths = allPaths.filter(p => p.endsWith('.md'));
 
       const results: DebtDocument[] = [];
-      for (const p of allPaths) {
+      for (const p of mdPaths) {
         try {
           const raw = await fs.readText(p);
           const { frontmatter, body } = parseMarkdown<unknown>(raw);
