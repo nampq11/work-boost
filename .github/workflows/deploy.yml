@@ -31,10 +31,11 @@ jobs:
       - name: Comment preview URL on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
         with:
           script: |
-            const deployment = steps.deploy.outputs.deployment;
-            const previewUrl = deployment?.url || 'https://work-boost.deno.dev';
+            const previewUrl = process.env.DEPLOYMENT_URL || 'https://work-boost.deno.dev';
 
             const comment = `### 🚀 Preview Deployment
 
