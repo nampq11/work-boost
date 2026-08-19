@@ -71,7 +71,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
     }): Promise<DebtDocument> {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
-      const frontmatter: DebtFrontmatter = {
+      const frontmatter = DebtFrontmatterSchema.parse({
         id,
         direction: data.direction,
         amount: data.amount,
@@ -82,7 +82,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
         createdAt: now,
         updatedAt: now,
         paidAt: null,
-      };
+      });
 
       const fileName = generateSlug(data.personName, id);
       const filePath = join('debts', fileName);
@@ -122,7 +122,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
 
     async filter(options: DebtFilterOptions): Promise<DebtDocument[]> {
       const all = await this.listAll(options.status === DebtStatus.PAID);
-      return all.filter((doc) => {
+      const filtered = all.filter((doc) => {
         const fm = doc.frontmatter;
         if (options.status && fm.status !== options.status) return false;
         if (options.direction && fm.direction !== options.direction) return false;
@@ -133,7 +133,8 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
           return false;
         }
         return true;
-      }).slice(0, options.limit || 100);
+      });
+      return options.limit === undefined ? filtered : filtered.slice(0, options.limit);
     },
 
     async settle(debtId: string): Promise<DebtDocument | null> {
@@ -182,30 +183,45 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
     },
 
     async getSummary(): Promise<DebtSummary> {
-      const activeDebts = await this.filter({ status: DebtStatus.PENDING });
+      const allDebts = await this.listAll(true);
       const summary: DebtSummary = {
         totalLent: 0,
         totalBorrowed: 0,
+        totalLentPaid: 0,
+        totalBorrowedPaid: 0,
         pendingLentCount: 0,
         pendingBorrowedCount: 0,
         netPosition: 0,
         currencies: {},
       };
 
-      for (const d of activeDebts) {
+      for (const d of allDebts) {
         const { amount, currency, direction } = d.frontmatter;
         if (!summary.currencies[currency]) {
-          summary.currencies[currency] = { lent: 0, borrowed: 0 };
+          summary.currencies[currency] = {
+            lent: 0,
+            borrowed: 0,
+            lentPaid: 0,
+            borrowedPaid: 0,
+          };
         }
 
         if (direction === DebtDirection.LENT) {
-          summary.totalLent += amount;
-          summary.pendingLentCount++;
-          summary.currencies[currency].lent += amount;
-        } else {
+          if (d.frontmatter.status === DebtStatus.PENDING) {
+            summary.totalLent += amount;
+            summary.pendingLentCount++;
+            summary.currencies[currency].lent += amount;
+          } else if (d.frontmatter.status === DebtStatus.PAID) {
+            summary.totalLentPaid += amount;
+            summary.currencies[currency].lentPaid += amount;
+          }
+        } else if (d.frontmatter.status === DebtStatus.PENDING) {
           summary.totalBorrowed += amount;
           summary.pendingBorrowedCount++;
           summary.currencies[currency].borrowed += amount;
+        } else if (d.frontmatter.status === DebtStatus.PAID) {
+          summary.totalBorrowedPaid += amount;
+          summary.currencies[currency].borrowedPaid += amount;
         }
       }
 

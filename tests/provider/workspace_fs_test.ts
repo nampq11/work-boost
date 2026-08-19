@@ -38,7 +38,7 @@ Deno.test('WorkspaceFS - should initialize workspace directories', async () => {
 Deno.test('WorkspaceFS - should prevent path traversal attacks', async () => {
   await withTempDir(async (root) => {
     const fs = createWorkspaceFS(root);
-    
+
     // Try various path traversal attempts
     const traversalAttempts = [
       '../../../etc/passwd',
@@ -49,7 +49,7 @@ Deno.test('WorkspaceFS - should prevent path traversal attacks', async () => {
 
     for (const attempt of traversalAttempts) {
       try {
-        await fs.exists(attempt);
+        await fs.readText(attempt);
         throw new Error(`Should have blocked path traversal: ${attempt}`);
       } catch (error) {
         if (error instanceof Error && error.message.includes('Access Denied')) {
@@ -79,7 +79,7 @@ Deno.test('WorkspaceFS - perform atomic writes', async () => {
 
     // Verify no temporary files were left behind
     const files = await fs.listFiles('.');
-    assertEquals(files.some(f => f.includes('.tmp')), false);
+    assertEquals(files.some((f) => f.includes('.tmp')), false);
   });
 });
 
@@ -92,8 +92,9 @@ Deno.test('WorkspaceFS - mutex lock prevents race conditions', async () => {
     let writeCount = 0;
 
     // Launch multiple concurrent writes
-    const writes = Array.from({ length: 5 }, (_, i) =>
-      fs.writeTextAtomic(testPath, `Content ${i}`)
+    const writes = Array.from(
+      { length: 5 },
+      (_, i) => fs.writeTextAtomic(testPath, `Content ${i}`),
     );
 
     // All writes should complete without conflict
@@ -129,6 +130,6 @@ Deno.test('WorkspaceFS - file operations work correctly', async () => {
     await fs.writeTextAtomic('daily/file2.md', 'content2');
     const files = await fs.listFiles('daily');
     assertEquals(files.length, 2);
-    assertEquals(files.every(f => f.endsWith('.md')), true);
+    assertEquals(files.every((f) => f.endsWith('.md')), true);
   });
 });

@@ -143,7 +143,7 @@ export const DebtFrontmatterSchema = z.object({
   currency: z.string().default('USD'),
   personName: z.string().min(1),
   status: z.nativeEnum(DebtStatus).default(DebtStatus.PENDING),
-  debtDate: z.string(), // YYYY-MM-DD
+  debtDate: z.iso.date(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   paidAt: z.string().datetime().nullable().default(null),
@@ -166,8 +166,15 @@ export interface DebtDocument {
 export interface DebtSummary {
   totalLent: number;
   totalBorrowed: number;
+  totalLentPaid: number;
+  totalBorrowedPaid: number;
   pendingLentCount: number;
   pendingBorrowedCount: number;
   netPosition: number;
-  currencies: Record<string, { lent: number; borrowed: number }>;
+  currencies: Record<string, {
+    lent: number;
+    borrowed: number;
+    lentPaid: number;
+    borrowedPaid: number;
+  }>;
 }

@@ -12,6 +12,7 @@ export const WorkspaceConfigSchema = z.object({
       enabled: z.boolean().default(false),
       channelId: z.string().optional(),
       userId: z.string().optional(),
+      lastSentAt: z.string().datetime().nullable().default(null),
     }).default({ enabled: false }),
     telegram: z.object({
       enabled: z.boolean().default(false),

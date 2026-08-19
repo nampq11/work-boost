@@ -1,7 +1,8 @@
-import type {
-  DailyWorkDocument,
-  DailyWorkFrontmatter,
-  DailyWorkReport,
+import {
+  type DailyWorkDocument,
+  type DailyWorkFrontmatter,
+  DailyWorkFrontmatterSchema,
+  type DailyWorkReport,
 } from '@work-boost/data-schemas/agent.ts';
 import type { WorkspaceFS } from '../fs/workspace-fs.ts';
 import {
@@ -39,12 +40,12 @@ export function createDailyWorkRepository(fs: WorkspaceFS): DailyWorkRepository 
         if (existing) customSections = existing.customSections;
       }
 
-      const frontmatter: DailyWorkFrontmatter = {
+      const frontmatter = DailyWorkFrontmatterSchema.parse({
         id: `daily_${dateStr}`,
         date: dateStr,
         status: 'completed',
         updatedAt: new Date().toISOString(),
-      };
+      });
 
       const body = formatDailyReport(report, customSections);
       const rawMarkdown = stringifyMarkdown(frontmatter, body);
@@ -56,12 +57,12 @@ export function createDailyWorkRepository(fs: WorkspaceFS): DailyWorkRepository 
 
     async saveContent(dateStr: string, content: string): Promise<DailyWorkDocument> {
       const filePath = getFilePath(dateStr);
-      const frontmatter: DailyWorkFrontmatter = {
+      const frontmatter = DailyWorkFrontmatterSchema.parse({
         id: `daily_${dateStr}`,
         date: dateStr,
         status: 'completed',
         updatedAt: new Date().toISOString(),
-      };
+      });
       const rawMarkdown = stringifyMarkdown(frontmatter, content);
       await fs.writeTextAtomic(filePath, rawMarkdown);
       const { report, customSections } = parseDailyReport(content);
@@ -73,7 +74,8 @@ export function createDailyWorkRepository(fs: WorkspaceFS): DailyWorkRepository 
       if (!(await fs.exists(filePath))) return null;
 
       const rawMarkdown = await fs.readText(filePath);
-      const { frontmatter, body } = parseMarkdown<DailyWorkFrontmatter>(rawMarkdown);
+      const { frontmatter: rawFrontmatter, body } = parseMarkdown<unknown>(rawMarkdown);
+      const frontmatter = DailyWorkFrontmatterSchema.parse(rawFrontmatter);
       const { report, customSections } = parseDailyReport(body);
 
       return { frontmatter, report, customSections, rawMarkdown, filePath };

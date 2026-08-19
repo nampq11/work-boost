@@ -1,38 +1,42 @@
 /// <reference lib="deno.unstable" />
-import { Debt, DebtDirection, DebtReminderSettings, DebtStatus } from '@work-boost/data-schemas';
-import { Subscription } from '@work-boost/data-schemas';
-import { Message } from '@work-boost/data-schemas';
-import { User } from '@work-boost/data-schemas';
-import { IndexKeys, listIndexed, PrimaryKeys } from './indexes.ts';
-import { createDataLayer } from '../mod.ts';
-import { WorkspaceConfig } from '@work-boost/data-schemas/config.ts';
-import type { ConfigManager, DailyWorkRepository, DebtRepository } from '../mod.ts';
+import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import type { Debt, DebtReminderSettings } from '@work-boost/data-schemas/debt.ts';
+import type { Message } from '@work-boost/data-schemas/agent.ts';
+import type { Subscription } from '@work-boost/data-schemas/subscription.ts';
+import type { User } from '@work-boost/data-schemas/user.ts';
+import { createWorkspaceFS, type WorkspaceFS } from './fs/workspace-fs.ts';
+import { type ConfigManager, createConfigManager } from './repositories/config-manager.ts';
+import {
+  createDailyWorkRepository,
+  type DailyWorkRepository,
+} from './repositories/daily-work-repository.ts';
+import { createDebtRepository, type DebtRepository } from './repositories/debt-repository.ts';
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import { parseMarkdown } from './markdown/markdown-engine.ts';
 
 /**
  * Single-user workspace user ID for backward compatibility
  */
-const SINGLE_USER_ID = 'workspace-user';
+export const SINGLE_USER_ID = 'workspace-user';
 
-function isSameCalendarDay(left: Date, right: Date): boolean {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  );
+interface DataLayer {
+  fs: WorkspaceFS;
+  config: ConfigManager;
+  dailyWork: DailyWorkRepository;
+  debts: DebtRepository;
 }
 
-/**
- * Convert Date to ISO string for markdown storage
- */
-function toISOString(date: Date): string {
-  return date.toISOString();
+function createLocalDataLayer(root?: string): DataLayer {
+  const fs = createWorkspaceFS(root);
+  return {
+    fs,
+    config: createConfigManager(fs),
+    dailyWork: createDailyWorkRepository(fs),
+    debts: createDebtRepository(fs),
+  };
 }
 
-/**
- * Convert ISO string to Date for backward compatibility
- */
+/** Convert an ISO timestamp to a Date for backward compatibility. */
 function toDate(isoString: string): Date {
   return new Date(isoString);
 }
@@ -69,7 +73,7 @@ export class Database {
   private debts: DebtRepository;
 
   private constructor(
-    dataLayer: { config: ConfigManager; dailyWork: DailyWorkRepository; debts: DebtRepository },
+    dataLayer: DataLayer,
     kv?: Deno.Kv,
   ) {
     this.config = dataLayer.config;
@@ -80,28 +84,21 @@ export class Database {
 
   /**
    * Initialize database with markdown-based storage (Phase 1: Local-First Architecture)
-   * Falls back to KV for backward compatibility if needed
+   * Markdown storage is the source of truth; initialization errors are fatal.
    */
   static async init(): Promise<Database> {
     if (this.instance) return this.instance;
 
     try {
-      // Initialize new markdown-based data layer
-      const dataLayer = createDataLayer();
+      const dataLayer = createLocalDataLayer();
       await dataLayer.fs.init();
-
-      // Load workspace config
       await dataLayer.config.load();
 
       this.instance = new Database(dataLayer);
       return this.instance;
     } catch (error) {
-      console.error('Failed to initialize markdown storage, falling back to KV:', error);
-      // Fallback to KV for backward compatibility
-      const kv = await Deno.openKv();
-      const dataLayer = createDataLayer();
-      this.instance = new Database(dataLayer, kv);
-      return this.instance;
+      console.error('Failed to initialize markdown storage:', error);
+      throw error;
     }
   }
 
@@ -109,9 +106,14 @@ export class Database {
    * Create a test database instance with a provided KV store.
    * This is only intended for testing purposes.
    */
-  static async createForTest(kv?: Deno.Kv): Promise<Database> {
-    const testKv = kv || (await Deno.openKv(':memory:'));
-    const dataLayer = createDataLayer();
+  static async createForTest(rootOrKv?: string | Deno.Kv, kv?: Deno.Kv): Promise<Database> {
+    const root = typeof rootOrKv === 'string' ? rootOrKv : undefined;
+    const providedKv = typeof rootOrKv === 'string' ? kv : rootOrKv;
+    const testRoot = root || await Deno.makeTempDir({ prefix: 'work-boost-test-' });
+    const testKv = providedKv || (await Deno.openKv(':memory:'));
+    const dataLayer = createLocalDataLayer(testRoot);
+    await dataLayer.fs.init();
+    await dataLayer.config.load();
     return new Database(dataLayer, testKv);
   }
 
@@ -135,8 +137,8 @@ export class Database {
     // For single-user system, store workspace config instead
     const config = await this.config.load();
     // Update workspace name if provided
-    if (user.name && config.workspaceName !== user.name) {
-      config.workspaceName = user.name;
+    if (user.username && config.workspaceName !== user.username) {
+      config.workspaceName = user.username;
       await this.config.save(config);
     }
   }
@@ -233,7 +235,9 @@ export class Database {
         telegram: config.platforms.telegram.chatId || '',
       },
       subscribedAt: new Date(config.createdAt), // Use workspace creation date
-      lastSentAt: config.platforms.slack.channelId ? new Date() : undefined,
+      lastSentAt: config.platforms.slack.lastSentAt
+        ? new Date(config.platforms.slack.lastSentAt)
+        : undefined,
     };
   }
 
@@ -384,8 +388,9 @@ export class Database {
    * Update last sent timestamp using workspace config (backward compatibility)
    */
   async updateLastSentAt(userId: string, timestamp: Date): Promise<void> {
-    // This was used for subscriptions, now handled in workspace config
-    // Not needed in single-user system
+    const config = await this.config.load();
+    config.platforms.slack.lastSentAt = timestamp.toISOString();
+    await this.config.save(config);
   }
 
   // Debt tracking methods - Updated to use markdown storage (Phase 1: Local-First Architecture)
@@ -393,7 +398,11 @@ export class Database {
   /**
    * Create a new debt record using markdown storage
    */
-  async createDebt(debt: Omit<Debt, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<Debt> {
+  async createDebt(
+    debt:
+      & Omit<Debt, 'id' | 'createdAt' | 'updatedAt' | 'userId'>
+      & Partial<Pick<Debt, 'userId'>>,
+  ): Promise<Debt> {
     // In single-user system, always use SINGLE_USER_ID
     const newDebt = await this.debts.create({
       direction: debt.direction,
@@ -576,6 +585,12 @@ export class Database {
     totalBorrowedPaid: number;
     pendingLentCount: number;
     pendingBorrowedCount: number;
+    currencies: Record<string, {
+      lent: number;
+      borrowed: number;
+      lentPaid: number;
+      borrowedPaid: number;
+    }>;
   }> {
     const summary = await this.debts.getSummary();
 
@@ -586,6 +601,7 @@ export class Database {
       totalBorrowedPaid: summary.totalBorrowedPaid,
       pendingLentCount: summary.pendingLentCount,
       pendingBorrowedCount: summary.pendingBorrowedCount,
+      currencies: summary.currencies,
     };
   }
 

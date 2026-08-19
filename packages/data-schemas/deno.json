@@ -4,10 +4,16 @@
   "exports": {
     ".": "./mod.ts",
     "./agent": "./src/agent.ts",
+    "./agent.ts": "./src/agent.ts",
     "./config": "./src/config.ts",
+    "./config.ts": "./src/config.ts",
     "./debt": "./src/debt.ts",
+    "./debt.ts": "./src/debt.ts",
     "./subscription": "./src/subscription.ts",
+    "./subscription.ts": "./src/subscription.ts",
     "./task": "./src/task.ts",
-    "./user": "./src/user.ts"
+    "./task.ts": "./src/task.ts",
+    "./user": "./src/user.ts",
+    "./user.ts": "./src/user.ts"
   }
 }

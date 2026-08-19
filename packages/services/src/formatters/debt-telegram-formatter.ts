@@ -130,23 +130,55 @@ export class DebtTelegramFormatter {
     totalBorrowedPaid: number;
     pendingLentCount: number;
     pendingBorrowedCount: number;
+    currencies?: Record<string, {
+      lent: number;
+      borrowed: number;
+      lentPaid: number;
+      borrowedPaid: number;
+    }>;
   }): string {
-    const netPosition = summary.totalLent - summary.totalBorrowed;
-    const netEmoji = netPosition > 0 ? '🟢' : netPosition < 0 ? '🔴' : '⚪';
-    const netText =
-      netPosition > 0
-        ? `You're owed ${this.formatCurrency(Math.abs(netPosition), 'USD')}`
-        : netPosition < 0
-          ? `You owe ${this.formatCurrency(Math.abs(netPosition), 'USD')}`
-          : 'All settled up!';
+    const currencies = summary.currencies || {
+      USD: {
+        lent: summary.totalLent,
+        borrowed: summary.totalBorrowed,
+        lentPaid: summary.totalLentPaid,
+        borrowedPaid: summary.totalBorrowedPaid,
+      },
+    };
+    const formatAmounts = (key: 'lent' | 'borrowed' | 'lentPaid' | 'borrowedPaid') =>
+      Object.entries(currencies)
+        .filter(([, totals]) => totals[key] > 0)
+        .map(([currency, totals]) => this.formatCurrency(totals[key], currency))
+        .join(', ') || this.formatCurrency(0, 'USD');
+    const netPositions = Object.entries(currencies).map(([currency, totals]) => ({
+      currency,
+      value: totals.lent - totals.borrowed,
+    }));
+    const netText = netPositions
+      .map(({ currency, value: netPosition }) => {
+        if (netPosition > 0) return `You're owed ${this.formatCurrency(netPosition, currency)}`;
+        if (netPosition < 0) {
+          return `You owe ${this.formatCurrency(Math.abs(netPosition), currency)}`;
+        }
+        return null;
+      })
+      .filter((text): text is string => text !== null)
+      .join(', ') || 'All settled up!';
+    const hasPositivePosition = netPositions.some(({ value }) => value > 0);
+    const hasNegativePosition = netPositions.some(({ value }) => value < 0);
+    const netEmoji = hasPositivePosition && !hasNegativePosition
+      ? '🟢'
+      : hasNegativePosition && !hasPositivePosition
+      ? '🔴'
+      : '⚪';
 
     return (
       `<b>💵 Debt Summary</b>\n\n` +
-      `💰 <b>Owed to you:</b> ${this.formatCurrency(summary.totalLent, 'USD')}\n` +
-      `   (Paid: ${this.formatCurrency(summary.totalLentPaid, 'USD')})\n` +
+      `💰 <b>Owed to you:</b> ${formatAmounts('lent')}\n` +
+      `   (Paid: ${formatAmounts('lentPaid')})\n` +
       `   (${summary.pendingLentCount} pending)\n\n` +
-      `📥 <b>You owe:</b> ${this.formatCurrency(summary.totalBorrowed, 'USD')}\n` +
-      `   (Paid: ${this.formatCurrency(summary.totalBorrowedPaid, 'USD')})\n` +
+      `📥 <b>You owe:</b> ${formatAmounts('borrowed')}\n` +
+      `   (Paid: ${formatAmounts('borrowedPaid')})\n` +
       `   (${summary.pendingBorrowedCount} pending)\n\n` +
       `${netEmoji} <b>Net:</b> ${netText}`
     );

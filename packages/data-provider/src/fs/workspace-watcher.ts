@@ -22,14 +22,15 @@ export function createWorkspaceWatcher(
 
   return {
     start(): void {
+      if (watcher) return;
+
       try {
-        watcher = Deno.watchFs(fs.root, { recursive: true });
+        const currentWatcher = Deno.watchFs(fs.root, { recursive: true });
+        watcher = currentWatcher;
         (async () => {
-          for await (const event of watcher!) {
+          for await (const event of currentWatcher) {
             if (['create', 'modify', 'remove'].includes(event.kind)) {
-              const mdPaths = event.paths.filter(p =>
-                p.endsWith('.md') || p.endsWith('.json')
-              );
+              const mdPaths = event.paths.filter((p) => p.endsWith('.md') || p.endsWith('.json'));
               if (mdPaths.length > 0) {
                 onChange(mdPaths);
               }

@@ -14,7 +14,7 @@
 
 Hệ thống lưu trữ chuyển từ Deno KV sang mô hình **Pure File Storage** trên máy tính cá nhân. Mọi dữ liệu (Báo cáo ngày, Khoản nợ, Cấu hình) đều là các file văn bản thuần túy nằm tại thư mục chuẩn của hệ điều hành `~/.workboost/workspace`.
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────┐
 │                    Application / Bot Layer                       │
 │             (Telegram / Slack / Agent Brain / CLI)               │

@@ -1,5 +1,5 @@
 import type { AgentPort } from '@work-boost/brain';
-import type { Database } from '@work-boost/data-provider';
+import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import type { BotService } from '../bot/bot-service.ts';
 
 interface SchedulerDeps {
@@ -62,7 +62,7 @@ async function batchProcess<T, R>(
 async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> {
   try {
     // Get workspace user's recent messages (single-user system)
-    const messages = await deps.db.getMessagesByUserId('workspace-user');
+    const messages = await deps.db.getMessagesByUserId(SINGLE_USER_ID);
 
     if (messages.length === 0) {
       return { success: false, reason: 'no_messages' };
@@ -81,16 +81,18 @@ async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> 
     const response = result.content || '';
 
     // Get workspace config to determine enabled platforms
-    const config = await deps.db.getSubscriptionByUserId('workspace-user');
-    if (!config) {
+    const subscription = await deps.db.getSubscriptionByUserId(SINGLE_USER_ID);
+    if (!subscription || subscription.enabled.length === 0) {
       return { success: false, reason: 'no_platforms_configured' };
     }
 
+    let delivered = 0;
+
     // Send to each enabled platform (sequentially to avoid rate limits)
-    for (const platform of config.enabled) {
+    for (const platform of subscription.enabled) {
       try {
         const bot = platform === 'slack' ? deps.slackBot : deps.telegramBot;
-        const chatId = config.platforms[platform];
+        const chatId = subscription.platforms[platform];
 
         if (!chatId) {
           console.error(`No chat ID found for ${platform}`);
@@ -99,6 +101,7 @@ async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> 
 
         // Send formatted response directly (already formatted by capability)
         await bot.sendMessage(chatId, response);
+        delivered++;
 
         console.log(`Sent daily summary to workspace via ${platform}`);
       } catch (platformError) {
@@ -106,7 +109,7 @@ async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> 
       }
     }
 
-    return { success: true };
+    return delivered > 0 ? { success: true } : { success: false, reason: 'all_platforms_failed' };
   } catch (error) {
     console.error('Failed to process daily summary:', error);
     return { success: false, reason: 'error' };

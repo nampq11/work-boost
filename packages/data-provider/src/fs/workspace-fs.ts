@@ -1,5 +1,5 @@
 import { ensureDir } from '@std/fs';
-import { dirname, join, relative, resolve } from '@std/path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from '@std/path';
 
 /**
  * Workspace file system abstraction with safety features
@@ -34,12 +34,44 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
   /**
    * Assert that a path is inside the workspace root (prevents path traversal)
    */
-  function assertInside(relPath: string): string {
+  async function canonicalizePath(path: string): Promise<string> {
+    const missingParts: string[] = [];
+    let currentPath = path;
+
+    while (true) {
+      try {
+        const canonicalPath = await Deno.realPath(currentPath);
+        return join(canonicalPath, ...missingParts.reverse());
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) throw error;
+        const parentPath = dirname(currentPath);
+        if (parentPath === currentPath) throw error;
+        missingParts.push(basename(currentPath));
+        currentPath = parentPath;
+      }
+    }
+  }
+
+  async function assertInside(relPath: string): Promise<string> {
     const fullPath = resolve(rootPath, relPath);
     const rel = relative(rootPath, fullPath);
-    if (rel.startsWith('..') || resolve(fullPath) !== fullPath) {
+    if (isAbsolute(rel) || rel === '..' || rel.startsWith('../')) {
       throw new Error(`Access Denied: Path escape detected -> ${relPath}`);
     }
+
+    const [canonicalRoot, canonicalPath] = await Promise.all([
+      canonicalizePath(rootPath),
+      canonicalizePath(fullPath),
+    ]);
+    const canonicalRelativePath = relative(canonicalRoot, canonicalPath);
+    if (
+      isAbsolute(canonicalRelativePath) ||
+      canonicalRelativePath === '..' ||
+      canonicalRelativePath.startsWith('../')
+    ) {
+      throw new Error(`Access Denied: Path escape detected -> ${relPath}`);
+    }
+
     return fullPath;
   }
 
@@ -83,7 +115,7 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
 
     async writeTextAtomic(relPath: string, content: string): Promise<void> {
       return await withLock(relPath, async () => {
-        const fullPath = assertInside(relPath);
+        const fullPath = await assertInside(relPath);
         await ensureDir(dirname(fullPath));
 
         const tempPath = `${fullPath}.${crypto.randomUUID()}.tmp`;
@@ -101,18 +133,18 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
     },
 
     async move(fromRelPath: string, toRelPath: string): Promise<void> {
-      const fromFull = assertInside(fromRelPath);
-      const toFull = assertInside(toRelPath);
+      const fromFull = await assertInside(fromRelPath);
+      const toFull = await assertInside(toRelPath);
       await ensureDir(dirname(toFull));
       await Deno.rename(fromFull, toFull);
     },
 
     async remove(relPath: string): Promise<void> {
-      await Deno.remove(assertInside(relPath));
+      await Deno.remove(await assertInside(relPath));
     },
 
     async listFiles(relDir: string): Promise<string[]> {
-      const fullDir = assertInside(relDir);
+      const fullDir = await assertInside(relDir);
       const files: string[] = [];
       try {
         for await (const entry of Deno.readDir(fullDir)) {
@@ -128,7 +160,7 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
 
     async exists(relPath: string): Promise<boolean> {
       try {
-        await Deno.stat(assertInside(relPath));
+        await Deno.stat(await assertInside(relPath));
         return true;
       } catch {
         return false;

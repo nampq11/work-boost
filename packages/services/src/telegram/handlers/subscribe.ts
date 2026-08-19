@@ -1,5 +1,5 @@
 import type { AgentPort } from '@work-boost/brain';
-import type { Database } from '@work-boost/data-provider';
+import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import type { Subscription } from '@work-boost/data-schemas/subscription.ts';
 import type { Context } from 'grammy';
 import { mainMenuKeyboard } from '../keyboards.ts';
@@ -27,7 +27,7 @@ export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps):
   }
 
   // Check if already subscribed to Telegram (single-user system)
-  const existing = await deps.db.getSubscriptionByUserId('workspace-user');
+  const existing = await deps.db.getSubscriptionByUserId(SINGLE_USER_ID);
   const isSubscribed = existing?.enabled.includes('telegram');
 
   if (isSubscribed) {
@@ -38,17 +38,8 @@ export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps):
     return;
   }
 
-  // Create or update subscription for single-user system
-  await deps.db.upsertSubscription({
-    userId: 'workspace-user', // Single-user system
-    platforms: existing?.platforms || {},
-    enabled: [...(existing?.enabled || []), 'telegram'],
-    timezone: existing?.timezone,
-    subscribedAt: existing?.subscribedAt || new Date(),
-  });
-
-  // Update platform chat ID for workspace user
-  await deps.db.setPlatformChatId('workspace-user', 'telegram', chatId);
+  // setPlatformChatId enables Telegram and stores its chat ID in one write.
+  await deps.db.setPlatformChatId(SINGLE_USER_ID, 'telegram', chatId);
 
   const replyFn = ctx.callbackQuery ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
   await replyFn(

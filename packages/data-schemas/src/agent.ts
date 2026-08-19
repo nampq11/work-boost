@@ -16,7 +16,7 @@ export interface DailyWorkReport {
  */
 export const DailyWorkFrontmatterSchema = z.object({
   id: z.string(), // daily_YYYY-MM-DD
-  date: z.string(), // YYYY-MM-DD
+  date: z.iso.date(),
   status: z.enum(['draft', 'completed']).default('completed'),
   updatedAt: z.string().datetime(),
 });
