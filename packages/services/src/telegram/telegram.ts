@@ -114,7 +114,6 @@ export class TelegramService implements BotService {
 
     // Input sanitization - must be first, before rate limiting
     this.bot.use(createSanitizationMiddleware());
-    this.bot.use(createSanitizationMiddleware());
 
     const ownerId = env.get('TELEGRAM_OWNER_ID');
     this.bot.use(async (ctx, next) => {
