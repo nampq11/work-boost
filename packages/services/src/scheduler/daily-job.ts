@@ -70,20 +70,17 @@ async function processSubscription(sub: Subscription, deps: SchedulerDeps): Prom
       return { success: false, userId: sub.userId, reason: 'no_messages' };
     }
 
-    // Generate summary using AI with daily-work-report capability
+    // Generate summary using AI
     const latestMessage = messages[messages.length - 1];
 
-    // Use run() with capability to get the formatted response
-    const { response } = await deps.agent.run(latestMessage.content, {
-      sessionId: `daily_${sub.userId}`,
-      capability: 'daily-work-report',
-      verbose: false,
-    });
+    const result = await deps.agent.generateDailyWorkReport(latestMessage.content);
 
-    // Check if response contains an error
-    if (response.startsWith('Error:')) {
-      return { success: false, userId: sub.userId, reason: response };
+    // Check if report generation failed
+    if (!result.success) {
+      return { success: false, userId: sub.userId, reason: result.error || 'report generation failed' };
     }
+
+    const response = result.content || '';
 
     // Send to each enabled platform (sequentially per user to avoid rate limits)
     // The response is already formatted by the capability, send directly

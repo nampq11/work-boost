@@ -156,7 +156,6 @@ class LangfuseTraceImpl implements LangfuseTrace {
         name: options.name,
         input: options.input,
         output: options.output,
-        tags: options.tags,
         metadata: options.metadata,
       });
       return new LangfuseSpanImpl(sdkSpan);
@@ -172,7 +171,6 @@ class LangfuseTraceImpl implements LangfuseTrace {
         name: options.name,
         input: options.input,
         output: options.output,
-        tags: options.tags,
         model: options.model,
         modelParameters: normalizeModelParameters(options.modelParameters),
         startTime: options.startTime ? new Date(options.startTime) : undefined,
@@ -399,7 +397,7 @@ export class LangfuseService implements LangfuseTracer {
   /**
    * Get the underlying SDK instance (for advanced usage)
    */
-  getSdkInstance(): typeof import('langfuse').Langfuse | null {
+  getSdkInstance(): LangfuseClient | null {
     return this.sdkInstance;
   }
 }

@@ -4,7 +4,8 @@
  * Prompts for parsing natural language and generating structured work reports.
  */
 
-import { SchemaType } from '../types.ts';
+import { type Static, Type } from '@earendil-works/pi-ai';
+import type { DailyWorkReport, TaskItem } from '@work-boost/data-schemas/agent.ts';
 
 /**
  * System prompt for daily work report generation
@@ -56,69 +57,54 @@ export const HUMAN_PROMPT: string = `
 `;
 
 /**
- * Task item schema for daily work reports
+ * TypeBox schema for a single task item in a daily work report
  */
-const taskItemSchema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    project: {
-      type: SchemaType.STRING,
-      description: 'Project code (e.g., "B4")',
-      nullable: false,
-    },
-    task: {
-      type: SchemaType.STRING,
-      description: 'Task description',
-      nullable: false,
-    },
+const taskItemSchema = Type.Object(
+  {
+    project: Type.String({ description: 'Project code (e.g., "B4")' }),
+    task: Type.String({ description: 'Task description' }),
   },
-  required: ['project', 'task'],
-} as const;
+  { description: 'A single task item' },
+);
 
 /**
- * Task array schema for daily work reports
+ * TypeBox schema for the daily work report response.
+ * The model is steered toward this schema via the response tool in
+ * completeStructured, and validated against it before returning.
  */
-const taskArraySchema = {
-  type: SchemaType.ARRAY,
-  items: taskItemSchema,
-} as const;
-
-/**
- * JSON schema for daily work report response
- */
-export const dailyWorkSchema = {
-  description: 'Daily work report structure',
-  type: SchemaType.OBJECT,
-  properties: {
-    completed: {
-      description: 'Tasks completed from previous day',
-      ...taskArraySchema,
-    },
-    incomplete: {
+export const dailyWorkSchema = Type.Object(
+  {
+    completed: Type.Array(taskItemSchema, { description: 'Tasks completed from previous day' }),
+    incomplete: Type.Array(taskItemSchema, {
       description: 'Planned but incomplete tasks from previous day',
-      ...taskArraySchema,
-    },
-    planned: {
-      description: 'Tasks planned for today',
-      ...taskArraySchema,
-    },
+    }),
+    planned: Type.Array(taskItemSchema, { description: 'Tasks planned for today' }),
   },
-  required: ['completed', 'incomplete', 'planned'],
-} as const;
+  { description: 'Daily work report structure' },
+);
 
 /**
- * Task item interface
+ * Daily work report response type
  */
-export interface TaskItem {
-  project: string;
-  task: string;
-}
+export type DailyWorkReportResponse = Static<typeof dailyWorkSchema>;
 
 /**
- * Daily work report response interface
+ * Format a daily work report for Slack/Telegram
  */
-export interface DailyWorkReportResponse {
-  completed: TaskItem[];
-  incomplete: TaskItem[];
-  planned: TaskItem[];
+export function formatDailyWorkReport(report: DailyWorkReport): string {
+  const formatTasks = (tasks: TaskItem[]) => {
+    if (tasks.length === 0) return ' •  N/A';
+    return tasks
+      .map((task) => {
+        return ` •  ${task.project}: ${task.task}`;
+      })
+      .join('\n');
+  };
+
+  return `1. Việc hoàn thành hôm trước?
+${formatTasks(report.completed)}
+2. Việc dự định làm hôm trước nhưng không hoàn thành?
+${formatTasks(report.incomplete)}
+3. Việc dự định làm hôm nay?
+${formatTasks(report.planned)}`;
 }

@@ -1,7 +1,6 @@
 export type {
   AgentPlatform,
   AgentPort,
-  AgentRunOptions,
   AgentStreamChunk,
   AgentStreamOptions,
 } from './agent.ts';

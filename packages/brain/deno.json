@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./ports/*": "./src/ports/*"
+    "./ports/agent.ts": "./src/ports/agent.ts",
+    "./ports/messaging.ts": "./src/ports/messaging.ts",
+    "./ports/index.ts": "./src/ports/index.ts"
   }
 }

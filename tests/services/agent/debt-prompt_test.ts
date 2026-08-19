@@ -10,7 +10,8 @@ import {
   debtParseSchema,
   toParsedDebtEntry,
 } from '@work-boost/brain';
-import { DebtDirection, type ParsedDebtEntry } from '@work-boost/data-schemas/debt.ts';
+import { DebtDirection } from '@work-boost/data-schemas/debt.ts';
+import { Value } from 'typebox/value';
 
 Deno.test('DEBT_SYSTEM_PROMPT contains required instructions', () => {
   assertExists(DEBT_SYSTEM_PROMPT);
@@ -31,32 +32,40 @@ Deno.test('DEBT_HUMAN_PROMPT wraps input correctly', () => {
   assert(result.includes('Parse the following debt entry'), 'Should include instructions');
 });
 
-Deno.test('debtParseSchema has correct structure', () => {
-  assertEquals(debtParseSchema.type, 'object');
-  assertEquals(debtParseSchema.description, 'Debt entry parsing result');
-
-  assertExists(debtParseSchema.properties);
-  assertExists(debtParseSchema.properties.direction);
-  assertExists(debtParseSchema.properties.amount);
-  assertExists(debtParseSchema.properties.person);
-  assertExists(debtParseSchema.properties.reason);
-  assertExists(debtParseSchema.properties.currency);
-
-  // Check required fields
-  assert(Array.isArray(debtParseSchema.required));
-  assert(debtParseSchema.required.includes('direction'));
-  assert(debtParseSchema.required.includes('amount'));
-  assert(debtParseSchema.required.includes('person'));
+Deno.test('debtParseSchema accepts a full valid payload', () => {
+  const payload = {
+    direction: 'lent',
+    amount: 100,
+    person: 'Alice',
+    reason: 'lunch',
+    currency: 'VND',
+  };
+  assertEquals(Value.Check(debtParseSchema, payload), true);
 });
 
-Deno.test('debtParseSchema direction enum has correct values', () => {
-  const direction = debtParseSchema.properties.direction as unknown as {
-    enum: string[];
-  };
+Deno.test('debtParseSchema accepts a minimal payload', () => {
+  const payload = { direction: 'borrowed', amount: 5.5, person: 'Bob' };
+  assertEquals(Value.Check(debtParseSchema, payload), true);
+});
 
-  assertExists(direction.enum);
-  assert(direction.enum.includes('lent'));
-  assert(direction.enum.includes('borrowed'));
+Deno.test('debtParseSchema accepts null reason', () => {
+  const payload = { direction: 'lent', amount: 1, person: 'C', reason: null };
+  assertEquals(Value.Check(debtParseSchema, payload), true);
+});
+
+Deno.test('debtParseSchema rejects an unknown direction', () => {
+  const payload = { direction: 'gifted', amount: 1, person: 'C' };
+  assertEquals(Value.Check(debtParseSchema, payload), false);
+});
+
+Deno.test('debtParseSchema rejects a missing amount', () => {
+  const payload = { direction: 'lent', person: 'C' };
+  assertEquals(Value.Check(debtParseSchema, payload), false);
+});
+
+Deno.test('debtParseSchema rejects a non-string person', () => {
+  const payload = { direction: 'lent', amount: 1, person: 42 };
+  assertEquals(Value.Check(debtParseSchema, payload), false);
 });
 
 Deno.test('toParsedDebtEntry converts lent direction correctly', () => {

@@ -4,8 +4,8 @@
  * Prompts for parsing natural language debt entries into structured data.
  */
 
-import { DebtDirection, ParsedDebtEntry } from '@work-boost/data-schemas/debt.ts';
-import { SchemaType } from '../types.ts';
+import { type Static, StringEnum, Type } from '@earendil-works/pi-ai';
+import { DebtDirection, type ParsedDebtEntry } from '@work-boost/data-schemas/debt.ts';
 
 /**
  * System prompt for parsing debt entries
@@ -52,52 +52,25 @@ ${input}
 `;
 
 /**
- * JSON schema for debt parsing response
+ * TypeBox schema for the debt parsing response.
+ * The model is steered toward this schema via the response tool in
+ * completeStructured, and validated against it before returning.
  */
-export const debtParseSchema = {
-  description: 'Debt entry parsing result',
-  type: SchemaType.OBJECT,
-  properties: {
-    direction: {
-      type: SchemaType.STRING,
-      description: 'Either "lent" or "borrowed"',
-      enum: ['lent', 'borrowed'],
-      nullable: false,
-    },
-    amount: {
-      type: SchemaType.NUMBER,
-      description: 'The amount of money (positive number)',
-      nullable: false,
-    },
-    person: {
-      type: SchemaType.STRING,
-      description: 'Name of the person involved',
-      nullable: false,
-    },
-    reason: {
-      type: SchemaType.STRING,
-      description: 'Reason for the debt (optional)',
-      nullable: true,
-    },
-    currency: {
-      type: SchemaType.STRING,
-      description: 'Currency code (default: USD)',
-      nullable: true,
-    },
+export const debtParseSchema = Type.Object(
+  {
+    direction: StringEnum(['lent', 'borrowed'], { description: 'Either "lent" or "borrowed"' }),
+    amount: Type.Number({ description: 'The amount of money (positive number)' }),
+    person: Type.String({ description: 'Name of the person involved' }),
+    reason: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    currency: Type.Optional(Type.String({ description: 'Currency code (default: USD)' })),
   },
-  required: ['direction', 'amount', 'person'],
-} as const;
+  { description: 'Debt entry parsing result' },
+);
 
 /**
  * Type for the parsed debt response from AI
  */
-export interface DebtParseResponse {
-  direction: 'lent' | 'borrowed';
-  amount: number;
-  person: string;
-  reason?: string;
-  currency?: string;
-}
+export type DebtParseResponse = Static<typeof debtParseSchema>;
 
 /**
  * Convert AI response to ParsedDebtEntry
@@ -107,7 +80,7 @@ export function toParsedDebtEntry(response: DebtParseResponse): ParsedDebtEntry 
     direction: response.direction === 'lent' ? DebtDirection.LENT : DebtDirection.BORROWED,
     amount: response.amount,
     person: response.person,
-    reason: response.reason,
-    currency: response.currency || 'USD',
+    reason: response.reason ?? undefined,
+    currency: response.currency ?? 'USD',
   };
 }

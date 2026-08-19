@@ -1,6 +1,6 @@
 // Shared service initialization for both entrypoints (api and cli)
 
-import { type Brain, initBrain } from '@work-boost/brain';
+import { createBrain, type AgentPort } from '@work-boost/brain';
 import { Database } from '@work-boost/data-provider';
 import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
@@ -10,7 +10,7 @@ import { TelegramService } from './telegram/telegram.ts';
 
 export interface Services {
   db: Database;
-  agent: Brain;
+  agent: AgentPort;
   slack: Slack;
   telegram: TelegramService;
 }
@@ -63,7 +63,11 @@ export async function initializeServices(options: { strict?: boolean } = {}): Pr
     logger.debug('Langfuse tracing disabled');
   }
 
-  const agent = await initBrain(env.get('GOOGLE_API_KEY') || '', { langfuse });
+  const agent = createBrain({
+    apiKey: env.get('GOOGLE_API_KEY') || '',
+    db,
+    langfuse,
+  });
   logger.info('Agent initialized');
 
   const slack = new Slack(langfuse);

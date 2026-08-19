@@ -1,6 +1,4 @@
 import type { ParsedDebtEntry } from '@work-boost/data-schemas/debt.ts';
-import type { StreamResult } from '../streaming/types.ts';
-import type { BrainRunResult, Capability, Context, Message } from '../types.ts';
 
 export type AgentPlatform = 'api' | 'slack' | 'telegram';
 
@@ -9,10 +7,17 @@ export interface AgentStreamChunk {
   isFinal: boolean;
 }
 
-export interface AgentRunOptions {
-  sessionId?: string;
-  capability?: string;
-  verbose?: boolean;
+export interface AgentStreamResult {
+  /** Complete accumulated content */
+  content: string;
+  /** Number of chunks sent */
+  chunksSent: number;
+  /** Whether the stream completed successfully */
+  success: boolean;
+  /** Error if the stream failed */
+  error?: string;
+  /** Duration of the stream (ms) */
+  duration: number;
 }
 
 export interface AgentStreamOptions {
@@ -21,22 +26,25 @@ export interface AgentStreamOptions {
   chatId?: string;
 }
 
+export interface DailyWorkReportResult {
+  success: boolean;
+  /** The formatted report (Vietnamese), present when success is true */
+  content?: string;
+  error?: string;
+}
+
 export interface AgentPort {
-  run(message: string, options?: AgentRunOptions): Promise<BrainRunResult>;
   stream(
     message: string,
     onChunk: (chunk: AgentStreamChunk) => void | Promise<void>,
     options?: AgentStreamOptions,
-  ): Promise<StreamResult>;
+  ): Promise<AgentStreamResult>;
   parseDebtEntry(input: string): Promise<ParsedDebtEntry | null>;
+  generateDailyWorkReport(content: string): Promise<DailyWorkReportResult>;
 
   createSession(sessionId?: string): Promise<string>;
-  loadSession(sessionId: string): Promise<Context>;
+  loadSession(sessionId: string): Promise<void>;
   removeSession(sessionId: string): Promise<boolean>;
-  listSessions(): string[];
-  getSessionMessages(sessionId: string): Message[];
-  clearSession(sessionId: string): void;
-
-  getCapabilities(): Capability[];
-  getCapability(id: string): Capability | undefined;
+  /** Stop background timers (session cleanup). Intended for tests and shutdown. */
+  dispose(): void;
 }
