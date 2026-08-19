@@ -1,158 +1,365 @@
 /// <reference lib="deno.unstable" />
-import { Debt, DebtDirection, DebtReminderSettings, DebtStatus } from '@work-boost/data-schemas';
-import { Subscription } from '@work-boost/data-schemas';
-import { Message } from '@work-boost/data-schemas';
-import { User } from '@work-boost/data-schemas';
-import { IndexKeys, PrimaryKeys, listIndexed } from './indexes.ts';
+import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import type { Debt, DebtReminderSettings } from '@work-boost/data-schemas/debt.ts';
+import type { Message } from '@work-boost/data-schemas/agent.ts';
+import type { Subscription } from '@work-boost/data-schemas/subscription.ts';
+import type { User } from '@work-boost/data-schemas/user.ts';
+import { createWorkspaceFS, type WorkspaceFS } from './fs/workspace-fs.ts';
+import { type ConfigManager, createConfigManager } from './repositories/config-manager.ts';
+import {
+  createDailyWorkRepository,
+  type DailyWorkRepository,
+} from './repositories/daily-work-repository.ts';
+import { createDebtRepository, type DebtRepository } from './repositories/debt-repository.ts';
+import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
+import { parseMarkdown } from './markdown/markdown-engine.ts';
 
-function isSameCalendarDay(left: Date, right: Date): boolean {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  );
+/**
+ * Single-user workspace user ID for backward compatibility
+ */
+export const SINGLE_USER_ID = 'workspace-user';
+
+interface DataLayer {
+  fs: WorkspaceFS;
+  config: ConfigManager;
+  dailyWork: DailyWorkRepository;
+  debts: DebtRepository;
+}
+
+function createLocalDataLayer(root?: string): DataLayer {
+  const fs = createWorkspaceFS(root);
+  return {
+    fs,
+    config: createConfigManager(fs),
+    dailyWork: createDailyWorkRepository(fs),
+    debts: createDebtRepository(fs),
+  };
+}
+
+/** Convert an ISO timestamp to a Date for backward compatibility. */
+function toDate(isoString: string): Date {
+  return new Date(isoString);
+}
+
+function toDebt(document: DebtDocument): Debt {
+  const { frontmatter, reason } = document;
+  return {
+    id: frontmatter.id,
+    userId: SINGLE_USER_ID,
+    direction: frontmatter.direction,
+    amount: frontmatter.amount,
+    currency: frontmatter.currency,
+    personName: frontmatter.personName,
+    reason,
+    status: frontmatter.status,
+    debtDate: new Date(frontmatter.debtDate),
+    paidAt: frontmatter.paidAt ? toDate(frontmatter.paidAt) : undefined,
+    createdAt: toDate(frontmatter.createdAt),
+    updatedAt: toDate(frontmatter.updatedAt),
+  };
+}
+
+function getDailyWorkContent(document: { rawMarkdown: string }): string {
+  return parseMarkdown<unknown>(document.rawMarkdown).body;
 }
 
 export class Database {
   private static instance: Database;
-  private _kv: Deno.Kv;
+  private _kv: Deno.Kv | null = null;
 
-  private constructor(kv: Deno.Kv) {
-    this._kv = kv;
+  // New markdown-based repositories (Phase 1: Local-First Architecture)
+  private config: ConfigManager;
+  private dailyWork: DailyWorkRepository;
+  private debts: DebtRepository;
+
+  private constructor(
+    dataLayer: DataLayer,
+    kv?: Deno.Kv,
+  ) {
+    this.config = dataLayer.config;
+    this.dailyWork = dataLayer.dailyWork;
+    this.debts = dataLayer.debts;
+    this._kv = kv || null; // Keep KV for backward compatibility during transition
   }
 
+  /**
+   * Initialize database with markdown-based storage (Phase 1: Local-First Architecture)
+   * Markdown storage is the source of truth; initialization errors are fatal.
+   */
   static async init(): Promise<Database> {
     if (this.instance) return this.instance;
 
-    const kv = await Deno.openKv();
-    this.instance = new Database(kv);
-    return this.instance;
+    try {
+      const dataLayer = createLocalDataLayer();
+      await dataLayer.fs.init();
+      await dataLayer.config.load();
+
+      this.instance = new Database(dataLayer);
+      return this.instance;
+    } catch (error) {
+      console.error('Failed to initialize markdown storage:', error);
+      throw error;
+    }
   }
 
   /**
    * Create a test database instance with a provided KV store.
    * This is only intended for testing purposes.
    */
-  static async createForTest(kv?: Deno.Kv): Promise<Database> {
-    const testKv = kv || (await Deno.openKv(':memory:'));
-    return new Database(testKv);
+  static async createForTest(rootOrKv?: string | Deno.Kv, kv?: Deno.Kv): Promise<Database> {
+    const root = typeof rootOrKv === 'string' ? rootOrKv : undefined;
+    const providedKv = typeof rootOrKv === 'string' ? kv : rootOrKv;
+    const testRoot = root || await Deno.makeTempDir({ prefix: 'work-boost-test-' });
+    const testKv = providedKv || (await Deno.openKv(':memory:'));
+    const dataLayer = createLocalDataLayer(testRoot);
+    await dataLayer.fs.init();
+    await dataLayer.config.load();
+    return new Database(dataLayer, testKv);
   }
 
-  get kv(): Deno.Kv {
+  get kv(): Deno.Kv | null {
     return this._kv;
   }
 
   async close(): Promise<void> {
-    await this.kv.close();
+    if (this._kv) {
+      await this._kv.close();
+    }
   }
 
+  // User methods - Updated for single-user system (Phase 1: Local-First Architecture)
+
+  /**
+   * Get single workspace user (backward compatibility)
+   * In single-user system, always returns the workspace user
+   */
   async store(user: User): Promise<void> {
-    await this.kv.set(PrimaryKeys.user(user.id), user);
+    // For single-user system, store workspace config instead
+    const config = await this.config.load();
+    // Update workspace name if provided
+    if (user.username && config.workspaceName !== user.username) {
+      config.workspaceName = user.username;
+      await this.config.save(config);
+    }
   }
 
+  /**
+   * Get single workspace user (backward compatibility)
+   * In single-user system, always returns the workspace user
+   */
   async getById(id: string): Promise<User | null> {
-    const result = await this.kv.get<User>(PrimaryKeys.user(id));
-    return result.value ?? null;
+    const config = await this.config.load();
+
+    // Return single workspace user (User schema has username, not name)
+    return {
+      id: SINGLE_USER_ID,
+      username: config.workspaceName,
+      subscribed: true, // Always subscribed in single-user system
+    };
   }
 
+  /**
+   * Get all subscribed users (backward compatibility)
+   * In single-user system, always returns the workspace user
+   */
   async getAllSubscribedUsers(): Promise<User[]> {
-    const users = await listIndexed<User>(this.kv, ['users']);
-    return users.filter((user) => user.subscribed);
+    const user = await this.getById(SINGLE_USER_ID);
+    return user ? [user] : [];
   }
 
+  /**
+   * Delete user (backward compatibility - not applicable in single-user system)
+   */
   async delete(id: string): Promise<void> {
-    await this.kv.delete(PrimaryKeys.user(id));
+    // Not applicable in single-user system
+    // Workspace cannot be deleted through this method
   }
 
+  /**
+   * List users (backward compatibility)
+   * In single-user system, always returns the workspace user
+   */
   async listUsers(): Promise<User[]> {
-    const users = await listIndexed<User>(this.kv, ['users']);
-    // ['users', userId, '_migrated'] migration markers store booleans — skip them
-    return users.filter((user) => typeof user === 'object' && user !== null);
+    const user = await this.getById(SINGLE_USER_ID);
+    return user ? [user] : [];
   }
 
+  // Daily work methods - Updated to use markdown storage (Phase 1: Local-First Architecture)
+
+  /**
+   * Store daily work message using markdown storage
+   * Note: Message interface has been simplified - stores content as formatted markdown
+   */
   async storeDailyWorkMessage(message: Message): Promise<void> {
-    // Store with primary key and user index for efficient lookups
-    await this.kv
-      .atomic()
-      .set(PrimaryKeys.message(message.id), message)
-      .set(IndexKeys.messageByUser(message.userId, message.id), message)
-      .commit();
+    const dateStr = message.date.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    await this.dailyWork.saveContent(dateStr, message.content);
   }
 
+  /**
+   * Get daily work for a specific date using markdown storage
+   */
   async getDailyWork(userId: string, date: Date): Promise<Message | undefined> {
-    const messages = await this.getMessagesByUserId(userId);
-    return messages.find((message) => isSameCalendarDay(message.date, date));
+    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    const doc = await this.dailyWork.get(dateStr);
+
+    if (!doc) return undefined;
+
+    return {
+      id: doc.frontmatter.id,
+      userId: SINGLE_USER_ID,
+      date: new Date(doc.frontmatter.date),
+      content: getDailyWorkContent(doc),
+    };
   }
 
-  // Subscription methods for multi-platform support
+  // Subscription methods - Updated to use workspace config (Phase 1: Local-First Architecture)
 
+  /**
+   * Get subscription for user (backward compatibility)
+   * In single-user system, converts workspace config to subscription format
+   */
   async getSubscriptionByUserId(userId: string): Promise<Subscription | null> {
-    const result = await this.kv.get(PrimaryKeys.subscription(userId));
-    return result.value as Subscription | null;
+    const config = await this.config.load();
+
+    // Convert workspace config to subscription format for backward compatibility
+    const enabled: Array<'slack' | 'telegram'> = [];
+    if (config.platforms.slack.enabled) enabled.push('slack');
+    if (config.platforms.telegram.enabled) enabled.push('telegram');
+
+    return {
+      userId: SINGLE_USER_ID,
+      enabled,
+      platforms: {
+        slack: config.platforms.slack.channelId || '',
+        telegram: config.platforms.telegram.chatId || '',
+      },
+      subscribedAt: new Date(config.createdAt), // Use workspace creation date
+      lastSentAt: config.platforms.slack.lastSentAt
+        ? new Date(config.platforms.slack.lastSentAt)
+        : undefined,
+    };
   }
 
+  /**
+   * Update subscription (backward compatibility)
+   * In single-user system, updates workspace config instead
+   */
   async upsertSubscription(subscription: Subscription): Promise<void> {
-    const isActive = subscription.enabled.length > 0;
+    const config = await this.config.load();
 
-    // Use atomic operation to update primary data and all indexes
-    const atomic = this.kv
-      .atomic()
-      .set(PrimaryKeys.subscription(subscription.userId), subscription)
-      .set(IndexKeys.subscriptionByUser(subscription.userId), subscription);
-
-    // Maintain active subscriptions index
-    if (isActive) {
-      atomic.set(IndexKeys.activeSubscription(subscription.userId), subscription);
-    } else {
-      atomic.delete(IndexKeys.activeSubscription(subscription.userId));
+    // Update platform settings from subscription
+    config.platforms.slack.enabled = subscription.enabled.includes('slack');
+    if (subscription.platforms.slack) {
+      config.platforms.slack.channelId = subscription.platforms.slack;
     }
 
-    await atomic.commit();
+    config.platforms.telegram.enabled = subscription.enabled.includes('telegram');
+    if (subscription.platforms.telegram) {
+      config.platforms.telegram.chatId = subscription.platforms.telegram;
+    }
+
+    await this.config.save(config);
   }
 
+  /**
+   * Set platform chat ID (backward compatibility)
+   * Updates workspace config instead
+   */
   async setPlatformChatId(
     userId: string,
     platform: 'slack' | 'telegram',
     chatId: string,
   ): Promise<void> {
-    const existing = await this.getSubscriptionByUserId(userId);
-    if (existing) {
-      existing.platforms[platform] = chatId;
-      await this.upsertSubscription(existing);
-    }
-  }
+    const config = await this.config.load();
 
-  async disablePlatform(userId: string, platform: 'slack' | 'telegram'): Promise<void> {
-    const existing = await this.getSubscriptionByUserId(userId);
-    if (existing) {
-      existing.enabled = existing.enabled.filter((p) => p !== platform);
-      await this.upsertSubscription(existing);
+    if (platform === 'slack') {
+      config.platforms.slack.channelId = chatId;
+      config.platforms.slack.enabled = true;
+    } else if (platform === 'telegram') {
+      config.platforms.telegram.chatId = chatId;
+      config.platforms.telegram.enabled = true;
     }
+
+    await this.config.save(config);
   }
 
   /**
-   * Get all active subscriptions using the index for O(1) lookups
+   * Disable platform (backward compatibility)
+   * Updates workspace config instead
+   */
+  async disablePlatform(userId: string, platform: 'slack' | 'telegram'): Promise<void> {
+    const config = await this.config.load();
+
+    if (platform === 'slack') {
+      config.platforms.slack.enabled = false;
+    } else if (platform === 'telegram') {
+      config.platforms.telegram.enabled = false;
+    }
+
+    await this.config.save(config);
+  }
+
+  /**
+   * Get all active subscriptions (backward compatibility)
+   * In single-user system, returns workspace user if any platform is enabled
    */
   async getAllActiveSubscriptions(): Promise<Subscription[]> {
-    const prefix = IndexKeys.activeSubscription('NO_USER').slice(0, -1); // Remove placeholder
-    return listIndexed<Subscription>(this.kv, prefix);
+    const config = await this.config.load();
+    const hasEnabledPlatforms = config.platforms.slack.enabled || config.platforms.telegram.enabled;
+
+    if (!hasEnabledPlatforms) return [];
+
+    const subscription = await this.getSubscriptionByUserId(SINGLE_USER_ID);
+    return subscription ? [subscription] : [];
   }
 
   /**
-   * Get messages by user using indexed lookups, sorted by date (oldest first)
+   * Get messages by user using markdown storage (backward compatibility)
+   * Returns all daily work reports sorted by date (oldest first)
    */
   async getMessagesByUserId(userId: string): Promise<Message[]> {
-    const messages = await listIndexed<Message>(this.kv, IndexKeys.messagesByUserPrefix(userId));
+    const dateStrings = await this.dailyWork.listDates();
+    const messages: Message[] = [];
+
+    for (const dateStr of dateStrings) {
+      const doc = await this.dailyWork.get(dateStr);
+      if (doc) {
+        messages.push({
+          id: doc.frontmatter.id,
+          userId: SINGLE_USER_ID,
+          date: new Date(doc.frontmatter.date),
+          content: getDailyWorkContent(doc),
+        });
+      }
+    }
+
     return messages.sort((a, b) => a.date.getTime() - b.date.getTime());
   }
 
+  /**
+   * Get message by ID using markdown storage (backward compatibility)
+   */
   async getMessageById(id: string): Promise<Message | null> {
-    const result = await this.kv.get<Message>(PrimaryKeys.message(id));
-    return result.value ?? null;
+    // Extract date from ID (format: daily_YYYY-MM-DD)
+    const match = id.match(/daily_(\d{4}-\d{2}-\d{2})/);
+    if (!match) return null;
+
+    const dateStr = match[1];
+    const doc = await this.dailyWork.get(dateStr);
+
+    if (!doc) return null;
+
+    return {
+      id: doc.frontmatter.id,
+      userId: SINGLE_USER_ID,
+      date: new Date(doc.frontmatter.date),
+      content: getDailyWorkContent(doc),
+    };
   }
 
   /**
-   * Get messages since a specific date for a user
+   * Get messages since a specific date using markdown storage (backward compatibility)
    */
   async getMessagesByUserIdSince(userId: string, since: Date): Promise<Message[]> {
     const messages = await this.getMessagesByUserId(userId);
@@ -160,7 +367,7 @@ export class Database {
   }
 
   /**
-   * Get messages from today for a user
+   * Get messages from today using markdown storage (backward compatibility)
    */
   async getTodayMessagesByUserId(userId: string): Promise<Message[]> {
     const today = new Date();
@@ -169,7 +376,7 @@ export class Database {
   }
 
   /**
-   * Get messages from last N days for a user
+   * Get messages from last N days using markdown storage (backward compatibility)
    */
   async getRecentMessagesByUserId(userId: string, days = 1): Promise<Message[]> {
     const cutoff = new Date();
@@ -177,69 +384,72 @@ export class Database {
     return this.getMessagesByUserIdSince(userId, cutoff);
   }
 
-  async updateLastSentAt(userId: string, timestamp: Date): Promise<void> {
-    const existing = await this.getSubscriptionByUserId(userId);
-    if (existing) {
-      existing.lastSentAt = timestamp;
-      await this.upsertSubscription(existing);
-    }
-  }
-
-  // Debt tracking methods
-
   /**
-   * Create a new debt record with atomic index updates
+   * Update last sent timestamp using workspace config (backward compatibility)
    */
-  async createDebt(debt: Omit<Debt, 'id' | 'createdAt' | 'updatedAt'>): Promise<Debt> {
-    const id = crypto.randomUUID();
-    const now = new Date();
-    const newDebt: Debt = {
-      id,
-      ...debt,
-      createdAt: now,
-      updatedAt: now,
-    };
+  async updateLastSentAt(userId: string, timestamp: Date): Promise<void> {
+    const config = await this.config.load();
+    config.platforms.slack.lastSentAt = timestamp.toISOString();
+    await this.config.save(config);
+  }
 
-    const atomic = this.kv
-      .atomic()
-      .set(PrimaryKeys.debt(id), newDebt)
-      .set(IndexKeys.debtByUser(newDebt.userId, id), newDebt);
+  // Debt tracking methods - Updated to use markdown storage (Phase 1: Local-First Architecture)
 
-    // Add to unpaid index if status is pending
-    if (newDebt.status === DebtStatus.PENDING) {
-      atomic.set(IndexKeys.unpaidDebtByUser(newDebt.userId, id), newDebt);
-    }
-
-    await atomic.commit();
-    return newDebt;
+  /**
+   * Create a new debt record using markdown storage
+   */
+  async createDebt(
+    debt:
+      & Omit<Debt, 'id' | 'createdAt' | 'updatedAt' | 'userId'>
+      & Partial<Pick<Debt, 'userId'>>,
+  ): Promise<Debt> {
+    // In single-user system, always use SINGLE_USER_ID
+    const newDebt = await this.debts.create({
+      direction: debt.direction,
+      amount: debt.amount,
+      currency: debt.currency,
+      personName: debt.personName,
+      reason: debt.reason,
+      debtDate: debt.debtDate?.toISOString().slice(0, 10),
+    });
+    return toDebt(newDebt);
   }
 
   /**
-   * Get a debt by its ID
+   * Get a debt by its ID using markdown storage
    */
   async getDebtById(id: string): Promise<Debt | null> {
-    const result = await this.kv.get(PrimaryKeys.debt(id));
-    return result.value as Debt | null;
+    const debt = await this.debts.getById(id);
+    return debt ? toDebt(debt) : null;
   }
 
   /**
-   * Get all debts for a user, sorted by creation date (newest first)
+   * Get all debts for workspace user, sorted by creation date (newest first)
    */
   async getDebtsByUserId(userId: string): Promise<Debt[]> {
-    const debts = await listIndexed<Debt>(this.kv, IndexKeys.debtsByUserPrefix(userId));
-    return debts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    // In single-user system, userId is ignored
+    const debts = await this.debts.listAll();
+    return debts
+      .sort((a, b) =>
+        new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime()
+      )
+      .map(toDebt);
   }
 
   /**
-   * Get only unpaid (pending) debts for a user
+   * Get only unpaid (pending) debts using markdown storage
    */
   async getUnpaidDebtsByUserId(userId: string): Promise<Debt[]> {
-    const debts = await listIndexed<Debt>(this.kv, IndexKeys.unpaidDebtsByUserPrefix(userId));
-    return debts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const debts = await this.debts.filter({ status: DebtStatus.PENDING });
+    return debts
+      .sort((a, b) =>
+        new Date(a.frontmatter.createdAt).getTime() - new Date(b.frontmatter.createdAt).getTime()
+      )
+      .map(toDebt);
   }
 
   /**
-   * Get debts filtered by status, direction, or person
+   * Get debts filtered by status, direction, or person using markdown storage
    */
   async getDebtsByUserIdFiltered(
     userId: string,
@@ -249,143 +459,124 @@ export class Database {
       personName?: string;
     },
   ): Promise<Debt[]> {
-    const debts = await this.getDebtsByUserId(userId);
-    return debts.filter((debt) => {
-      if (options.status && debt.status !== options.status) return false;
-      if (options.direction && debt.direction !== options.direction) return false;
-      if (
-        options.personName &&
-        !debt.personName.toLowerCase().includes(options.personName.toLowerCase())
-      ) {
-        return false;
-      }
-      return true;
-    });
+    const debts = await this.debts.filter(options);
+    return debts
+      .sort((a, b) =>
+        new Date(b.frontmatter.createdAt).getTime() - new Date(a.frontmatter.createdAt).getTime()
+      )
+      .map(toDebt);
   }
 
   /**
-   * Mark a debt as paid (settled)
-   * Removes from unpaid index and updates the debt record
+   * Mark a debt as paid (settled) using markdown storage
    */
   async settleDebt(debtId: string): Promise<Debt | null> {
-    const existing = await this.getDebtById(debtId);
-    if (!existing) return null;
+    const updatedDoc = await this.debts.settle(debtId);
+    if (!updatedDoc) return null;
 
-    const updated: Debt = {
-      ...existing,
-      status: DebtStatus.PAID,
-      paidAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    await this.kv
-      .atomic()
-      .set(PrimaryKeys.debt(debtId), updated)
-      .set(IndexKeys.debtByUser(existing.userId, debtId), updated)
-      .delete(IndexKeys.unpaidDebtByUser(existing.userId, debtId))
-      .commit();
-
-    return updated;
+    return toDebt(updatedDoc);
   }
 
   /**
-   * Update an existing debt (e.g., change amount, reason)
+   * Update an existing debt using markdown storage
    */
   async updateDebt(
     debtId: string,
-    updates: Partial<Omit<Debt, 'id' | 'userId' | 'createdAt'>>,
+    updates: Partial<Omit<Debt, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>,
   ): Promise<Debt | null> {
-    const existing = await this.getDebtById(debtId);
-    if (!existing) return null;
-
-    const wasPending = existing.status === DebtStatus.PENDING;
-    const updated: Debt = {
-      ...existing,
-      ...updates,
-      updatedAt: new Date(),
-    };
-
-    const atomic = this.kv
-      .atomic()
-      .set(PrimaryKeys.debt(debtId), updated)
-      .set(IndexKeys.debtByUser(existing.userId, debtId), updated);
-
-    // Update unpaid index based on status change
-    const isPending = updated.status === DebtStatus.PENDING;
-    if (wasPending && !isPending) {
-      atomic.delete(IndexKeys.unpaidDebtByUser(existing.userId, debtId));
-    } else if (!wasPending && isPending) {
-      atomic.set(IndexKeys.unpaidDebtByUser(existing.userId, debtId), updated);
-    }
-
-    await atomic.commit();
-    return updated;
+    const updatedDoc = await this.debts.update(debtId, {
+      direction: updates.direction,
+      amount: updates.amount,
+      currency: updates.currency,
+      personName: updates.personName,
+      reason: updates.reason,
+      status: updates.status,
+      ...(updates.debtDate === undefined
+        ? {}
+        : { debtDate: updates.debtDate.toISOString().slice(0, 10) }),
+      ...(updates.paidAt === undefined ? {} : { paidAt: updates.paidAt.toISOString() }),
+    });
+    return updatedDoc ? toDebt(updatedDoc) : null;
   }
 
   /**
-   * Delete a debt record completely
-   * Removes from all indexes
+   * Delete a debt record using markdown storage
    */
   async deleteDebt(debtId: string): Promise<boolean> {
-    const existing = await this.getDebtById(debtId);
-    if (!existing) return false;
-
-    await this.kv
-      .atomic()
-      .delete(PrimaryKeys.debt(debtId))
-      .delete(IndexKeys.debtByUser(existing.userId, debtId))
-      .delete(IndexKeys.unpaidDebtByUser(existing.userId, debtId))
-      .commit();
-
-    return true;
+    return await this.debts.delete(debtId);
   }
 
   /**
-   * Get debt reminder settings for a user
+   * Get debt reminder settings using workspace config (backward compatibility)
    */
   async getDebtReminderSettings(userId: string): Promise<DebtReminderSettings | null> {
-    const result = await this.kv.get(IndexKeys.debtReminderSettings(userId));
-    return result.value as DebtReminderSettings | null;
+    const config = await this.config.load();
+
+    // Convert workspace config to DebtReminderSettings format for backward compatibility
+    return {
+      userId: SINGLE_USER_ID,
+      enabled: config.debtReminder.enabled,
+      frequency: config.debtReminder.frequency,
+      weeklyDay: config.debtReminder.weeklyDay,
+      monthlyDay: config.debtReminder.monthlyDay,
+      reminderHour: config.debtReminder.reminderHour,
+      lastReminderSentAt: config.debtReminder.lastSentAt
+        ? new Date(config.debtReminder.lastSentAt)
+        : undefined,
+      updatedAt: new Date(config.updatedAt),
+    };
   }
 
   /**
-   * Create or update debt reminder settings
+   * Create or update debt reminder settings using workspace config (backward compatibility)
    */
   async upsertDebtReminderSettings(
     settings: Omit<DebtReminderSettings, 'updatedAt'>,
   ): Promise<DebtReminderSettings> {
-    const updated: DebtReminderSettings = {
+    const config = await this.config.load();
+
+    // Update debt reminder settings in workspace config
+    config.debtReminder.enabled = settings.enabled;
+    config.debtReminder.frequency = settings.frequency;
+    config.debtReminder.weeklyDay = settings.weeklyDay;
+    config.debtReminder.monthlyDay = settings.monthlyDay;
+    config.debtReminder.reminderHour = settings.reminderHour;
+    if (settings.lastReminderSentAt) {
+      config.debtReminder.lastSentAt = settings.lastReminderSentAt.toISOString();
+    }
+
+    await this.config.save(config);
+
+    return {
       ...settings,
       updatedAt: new Date(),
     };
-    await this.kv.set(IndexKeys.debtReminderSettings(settings.userId), updated);
-    return updated;
   }
 
   /**
-   * Get all users who have debt reminders enabled
+   * Get all users who have debt reminders enabled (backward compatibility)
+   * In single-user system, returns workspace user if debt reminders are enabled
    */
   async getAllDebtReminderUsers(): Promise<DebtReminderSettings[]> {
-    const prefix = IndexKeys.debtReminderSettings('').slice(0, -1);
-    const settings = await listIndexed<DebtReminderSettings>(this.kv, prefix);
-    return settings.filter((setting) => setting.enabled);
+    const config = await this.config.load();
+
+    if (!config.debtReminder.enabled) return [];
+
+    const settings = await this.getDebtReminderSettings(SINGLE_USER_ID);
+    return settings ? [settings] : [];
   }
 
   /**
-   * Update last reminder sent timestamp
+   * Update last reminder sent timestamp using workspace config (backward compatibility)
    */
   async updateDebtReminderLastSent(userId: string): Promise<void> {
-    const existing = await this.getDebtReminderSettings(userId);
-    if (existing) {
-      await this.upsertDebtReminderSettings({
-        ...existing,
-        lastReminderSentAt: new Date(),
-      });
-    }
+    const config = await this.config.load();
+    config.debtReminder.lastSentAt = new Date().toISOString();
+    await this.config.save(config);
   }
 
   /**
-   * Calculate debt summary for a user
+   * Calculate debt summary for workspace user using markdown storage
    */
   async getDebtSummary(userId: string): Promise<{
     totalLent: number;
@@ -394,42 +585,33 @@ export class Database {
     totalBorrowedPaid: number;
     pendingLentCount: number;
     pendingBorrowedCount: number;
+    currencies: Record<string, {
+      lent: number;
+      borrowed: number;
+      lentPaid: number;
+      borrowedPaid: number;
+    }>;
   }> {
-    const debts = await this.getDebtsByUserId(userId);
+    const summary = await this.debts.getSummary();
 
-    const summary = {
-      totalLent: 0,
-      totalBorrowed: 0,
-      totalLentPaid: 0,
-      totalBorrowedPaid: 0,
-      pendingLentCount: 0,
-      pendingBorrowedCount: 0,
+    return {
+      totalLent: summary.totalLent,
+      totalBorrowed: summary.totalBorrowed,
+      totalLentPaid: summary.totalLentPaid,
+      totalBorrowedPaid: summary.totalBorrowedPaid,
+      pendingLentCount: summary.pendingLentCount,
+      pendingBorrowedCount: summary.pendingBorrowedCount,
+      currencies: summary.currencies,
     };
-
-    for (const debt of debts) {
-      if (debt.direction === DebtDirection.LENT) {
-        if (debt.status === DebtStatus.PAID) {
-          summary.totalLentPaid += debt.amount;
-        } else if (debt.status === DebtStatus.PENDING) {
-          summary.totalLent += debt.amount;
-          summary.pendingLentCount++;
-        }
-      } else {
-        if (debt.status === DebtStatus.PAID) {
-          summary.totalBorrowedPaid += debt.amount;
-        } else if (debt.status === DebtStatus.PENDING) {
-          summary.totalBorrowed += debt.amount;
-          summary.pendingBorrowedCount++;
-        }
-      }
-    }
-
-    return summary;
   }
 
+  /**
+   * Health check for markdown storage
+   */
   async healthCheck(): Promise<boolean> {
     try {
-      await this.kv.get(['health']);
+      // Check if workspace is accessible by loading config
+      await this.config.load();
       return true;
     } catch {
       return false;

@@ -1,5 +1,5 @@
 import type { AgentPort } from '@work-boost/brain';
-import type { Database } from '@work-boost/data-provider';
+import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import type { Subscription } from '@work-boost/data-schemas/subscription.ts';
 import type { Context } from 'grammy';
 import { mainMenuKeyboard } from '../keyboards.ts';
@@ -11,7 +11,7 @@ interface SubscribeHandlerDeps {
 
 /**
  * Handle /subscribe command or subscribe button
- * Works for both commands and callback queries
+ * Updated for single-user system (Phase 1: Local-First Architecture)
  */
 export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps): Promise<void> {
   // Answer callback query if this is a button press (required to remove loading state)
@@ -20,15 +20,14 @@ export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps):
   }
 
   const chatId = ctx.chat?.id?.toString();
-  const fromId = ctx.from?.id.toString();
 
-  if (!chatId || !fromId) {
-    await ctx.reply('Unable to identify user. Please try again.');
+  if (!chatId) {
+    await ctx.reply('Unable to identify chat. Please try again.');
     return;
   }
 
-  // Check if already subscribed to Telegram
-  const existing = await deps.db.getSubscriptionByUserId(fromId);
+  // Check if already subscribed to Telegram (single-user system)
+  const existing = await deps.db.getSubscriptionByUserId(SINGLE_USER_ID);
   const isSubscribed = existing?.enabled.includes('telegram');
 
   if (isSubscribed) {
@@ -39,17 +38,8 @@ export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps):
     return;
   }
 
-  // Create or update subscription
-  await deps.db.upsertSubscription({
-    userId: fromId,
-    platforms: existing?.platforms || {},
-    enabled: [...(existing?.enabled || []), 'telegram'],
-    timezone: existing?.timezone,
-    subscribedAt: existing?.subscribedAt || new Date(),
-  });
-
-  // Update platform chat ID
-  await deps.db.setPlatformChatId(fromId, 'telegram', chatId);
+  // setPlatformChatId enables Telegram and stores its chat ID in one write.
+  await deps.db.setPlatformChatId(SINGLE_USER_ID, 'telegram', chatId);
 
   const replyFn = ctx.callbackQuery ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
   await replyFn(

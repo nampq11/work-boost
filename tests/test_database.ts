@@ -115,6 +115,9 @@ Deno.test('Database keeps debt primary, unpaid, and summary indexes consistent',
       totalBorrowedPaid: 0,
       pendingLentCount: 1,
       pendingBorrowedCount: 0,
+      currencies: {
+        USD: { lent: 100, borrowed: 0, lentPaid: 0, borrowedPaid: 0 },
+      },
     });
 
     await db.settleDebt(debt.id);
@@ -127,6 +130,9 @@ Deno.test('Database keeps debt primary, unpaid, and summary indexes consistent',
       totalBorrowedPaid: 0,
       pendingLentCount: 0,
       pendingBorrowedCount: 0,
+      currencies: {
+        USD: { lent: 0, borrowed: 0, lentPaid: 100, borrowedPaid: 0 },
+      },
     });
   });
 });

@@ -1,5 +1,5 @@
 import { autoRetry } from '@grammyjs/auto-retry';
-import { type RateLimiter, limit } from '@grammyjs/ratelimiter';
+import { limit, type RateLimiter } from '@grammyjs/ratelimiter';
 import { stream, type StreamFlavor } from '@grammyjs/stream';
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
@@ -44,7 +44,7 @@ function redactSensitiveData(obj: Record<string, unknown>): Record<string, unkno
   for (const [key, value] of Object.entries(obj)) {
     const keyLower = key.toLowerCase();
     const shouldRedact = sensitiveKeys.some((sensitive) =>
-      keyLower.includes(sensitive.toLowerCase()),
+      keyLower.includes(sensitive.toLowerCase())
     );
 
     if (shouldRedact && typeof value === 'string' && value.length > 0) {
@@ -115,6 +115,16 @@ export class TelegramService implements BotService {
     // Input sanitization - must be first, before rate limiting
     this.bot.use(createSanitizationMiddleware());
 
+    const ownerId = env.get('TELEGRAM_OWNER_ID');
+    this.bot.use(async (ctx, next) => {
+      const senderId = ctx.from?.id.toString();
+      if (!ownerId || !senderId || !timingSafeEqual(senderId, ownerId)) {
+        console.warn('Rejected unauthorized Telegram update');
+        return;
+      }
+      await next();
+    });
+
     // Auto-retry for rate limits and server errors
     this.bot.api.config.use(
       autoRetry({
@@ -177,14 +187,17 @@ export class TelegramService implements BotService {
     });
 
     // Callback query handlers (button presses)
-    this.bot.callbackQuery('action:subscribe', (ctx) =>
-      handlers.handleSubscribeCallback(ctx, deps),
+    this.bot.callbackQuery(
+      'action:subscribe',
+      (ctx) => handlers.handleSubscribeCallback(ctx, deps),
     );
-    this.bot.callbackQuery('action:unsubscribe', (ctx) =>
-      handlers.handleUnsubscribeCallback(ctx, deps),
+    this.bot.callbackQuery(
+      'action:unsubscribe',
+      (ctx) => handlers.handleUnsubscribeCallback(ctx, deps),
     );
-    this.bot.callbackQuery('action:unsubscribe_confirm', (ctx) =>
-      handlers.handleUnsubscribeConfirm(ctx, deps),
+    this.bot.callbackQuery(
+      'action:unsubscribe_confirm',
+      (ctx) => handlers.handleUnsubscribeConfirm(ctx, deps),
     );
     this.bot.callbackQuery('action:status', (ctx) => handlers.handleStatusCallback(ctx, deps));
     this.bot.callbackQuery('action:help', (ctx) => handlers.handleHelpCallback(ctx));
@@ -298,7 +311,7 @@ export class TelegramService implements BotService {
    */
   async sendBulkMessage(chatId: string, content: string): Promise<void> {
     await this.bulkLimiter.control(() =>
-      this.bot.api.sendMessage(chatId, content, { parse_mode: 'HTML' }),
+      this.bot.api.sendMessage(chatId, content, { parse_mode: 'HTML' })
     );
   }
 
@@ -332,8 +345,7 @@ export class TelegramService implements BotService {
     return {
       platform: 'telegram',
       userId: body.message?.from?.id?.toString() || body.callback_query?.from?.id?.toString() || '',
-      chatId:
-        body.message?.chat?.id?.toString() ||
+      chatId: body.message?.chat?.id?.toString() ||
         body.callback_query?.message?.chat?.id?.toString() ||
         '',
       action: 'start', // Default, will be determined by handlers

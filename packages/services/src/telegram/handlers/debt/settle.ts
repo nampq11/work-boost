@@ -17,13 +17,6 @@ const formatter = new DebtTelegramFormatter();
  * Usage: /settle <debt_id> or from callback
  */
 export async function handleSettleCommand(ctx: Context, deps: SettleHandlerDeps): Promise<void> {
-  const userId = ctx.from?.id.toString();
-
-  if (!userId) {
-    await ctx.reply('Unable to identify user. Please try again.');
-    return;
-  }
-
   // Get debt ID from command argument
   const messageText = ctx.message?.text;
   const debtId = messageText?.split(/\s+/).slice(1).join(' ').trim();
@@ -38,7 +31,7 @@ export async function handleSettleCommand(ctx: Context, deps: SettleHandlerDeps)
     return;
   }
 
-  await settleDebt(ctx, deps, userId, debtId, false);
+  await settleDebt(ctx, deps, debtId, false);
 }
 
 /**
@@ -50,23 +43,15 @@ export async function handleSettleCallback(
   debtId: string,
 ): Promise<void> {
   await ctx.answerCallbackQuery();
-
-  const userId = ctx.from?.id.toString();
-  if (!userId) {
-    await ctx.editMessageText('Unable to identify user.');
-    return;
-  }
-
-  await settleDebt(ctx, deps, userId, debtId, true);
+  await settleDebt(ctx, deps, debtId, true);
 }
 
 /**
- * Settle a debt record
+ * Settle a debt record (Updated for single-user system - Phase 1: Local-First Architecture)
  */
 async function settleDebt(
   ctx: Context,
   deps: SettleHandlerDeps,
-  userId: string,
   debtId: string,
   isEdit: boolean,
 ): Promise<void> {
@@ -82,15 +67,7 @@ async function settleDebt(
     return;
   }
 
-  // Verify ownership
-  if (debt.userId !== userId) {
-    const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
-    await replyFn('❌ You can only settle your own debts.', {
-      reply_markup: debtMenuKeyboard(),
-      parse_mode: 'HTML',
-    });
-    return;
-  }
+  // Ownership check removed - single-user system (Phase 1: Local-First Architecture)
 
   // Check if already paid
   if (debt.status === DebtStatus.PAID) {

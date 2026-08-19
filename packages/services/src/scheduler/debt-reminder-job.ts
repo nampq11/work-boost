@@ -1,20 +1,20 @@
 /**
  * Debt reminder cron job
- * Sends periodic reminders to users about their unpaid debts
+ * Updated for single-user system (Phase 1: Local-First Architecture)
  */
 
-import type { Database } from '@work-boost/data-provider/database.ts';
+import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import { DebtTelegramFormatter } from '../formatters/debt-telegram-formatter.ts';
 
 const formatter = new DebtTelegramFormatter();
 
 /**
  * Send weekly debt reminders
- * Runs every Monday at 9 AM
+ * Updated for single-user system (Phase 1: Local-First Architecture)
  */
 export async function sendWeeklyDebtReminders(
   db: Database,
-  sendFn: (userId: string, message: string) => Promise<void>,
+  sendFn: (message: string) => Promise<void>,
 ): Promise<void> {
   const settings = await db.getAllDebtReminderUsers();
 
@@ -37,17 +37,17 @@ export async function sendWeeklyDebtReminders(
       if (daysSinceLastSent < 7) continue;
     }
 
-    await sendDebtReminder(db, sendFn, setting.userId);
+    await sendDebtReminder(db, sendFn);
   }
 }
 
 /**
  * Send monthly debt reminders
- * Runs on the configured day of each month at 9 AM
+ * Updated for single-user system (Phase 1: Local-First Architecture)
  */
 export async function sendMonthlyDebtReminders(
   db: Database,
-  sendFn: (userId: string, message: string) => Promise<void>,
+  sendFn: (message: string) => Promise<void>,
 ): Promise<void> {
   const settings = await db.getAllDebtReminderUsers();
 
@@ -70,27 +70,27 @@ export async function sendMonthlyDebtReminders(
       if (daysSinceLastSent < 25) continue; // At least 25 days since last reminder
     }
 
-    await sendDebtReminder(db, sendFn, setting.userId);
+    await sendDebtReminder(db, sendFn);
   }
 }
 
 /**
- * Send debt reminder to a specific user
+ * Send debt reminder to workspace user
+ * Updated for single-user system (Phase 1: Local-First Architecture)
  */
 async function sendDebtReminder(
   db: Database,
-  sendFn: (userId: string, message: string) => Promise<void>,
-  userId: string,
+  sendFn: (message: string) => Promise<void>,
 ): Promise<void> {
-  // Get unpaid debts
-  const unpaidDebts = await db.getUnpaidDebtsByUserId(userId);
+  // Get unpaid debts for workspace user
+  const unpaidDebts = await db.getUnpaidDebtsByUserId(SINGLE_USER_ID);
 
   if (unpaidDebts.length === 0) {
     return; // No unpaid debts, skip reminder
   }
 
-  // Get summary
-  const summary = await db.getDebtSummary(userId);
+  // Get summary for workspace user
+  const summary = await db.getDebtSummary(SINGLE_USER_ID);
 
   // Build message
   let message = '⏰ <b>Debt Reminder</b>\n\n';
@@ -98,34 +98,54 @@ async function sendDebtReminder(
 
   // Add pending lent (people who owe you)
   if (summary.pendingLentCount > 0) {
-    message += `💰 <b>Owed to you:</b> ${formatter.formatCurrency(summary.totalLent, 'USD')}\n`;
-    message += `   (${summary.pendingLentCount} debt${summary.pendingLentCount > 1 ? 's' : ''})\n\n`;
+    message += '💰 <b>Owed to you:</b>\n';
+    for (const [currency, totals] of Object.entries(summary.currencies)) {
+      if (totals.lent > 0) {
+        message += `   ${formatter.formatCurrency(totals.lent, currency)}\n`;
+      }
+    }
+    message += `   (${summary.pendingLentCount} debt${
+      summary.pendingLentCount > 1 ? 's' : ''
+    })\n\n`;
   }
 
   // Add pending borrowed (people you owe)
   if (summary.pendingBorrowedCount > 0) {
-    message += `📥 <b>You owe:</b> ${formatter.formatCurrency(summary.totalBorrowed, 'USD')}\n`;
-    message += `   (${summary.pendingBorrowedCount} debt${summary.pendingBorrowedCount > 1 ? 's' : ''})\n\n`;
+    message += '📥 <b>You owe:</b>\n';
+    for (const [currency, totals] of Object.entries(summary.currencies)) {
+      if (totals.borrowed > 0) {
+        message += `   ${formatter.formatCurrency(totals.borrowed, currency)}\n`;
+      }
+    }
+    message += `   (${summary.pendingBorrowedCount} debt${
+      summary.pendingBorrowedCount > 1 ? 's' : ''
+    })\n\n`;
   }
 
   message += 'Use /debts to view and manage your debts.';
 
   // Send the reminder
   try {
-    await sendFn(userId, message);
-    await db.updateDebtReminderLastSent(userId);
+    await sendFn(message);
   } catch (error) {
-    console.error(`Failed to send debt reminder to user ${userId}:`, error);
+    console.error('Failed to send debt reminder:', error);
+    throw error;
+  }
+
+  try {
+    await db.updateDebtReminderLastSent(SINGLE_USER_ID);
+  } catch (error) {
+    console.error('Sent debt reminder but failed to record the timestamp:', error);
   }
 }
 
 /**
  * Setup cron jobs for debt reminders
- * Call this from your main entry point
+ * Updated for single-user system (Phase 1: Local-First Architecture)
  */
 export function setupDebtReminderCron(
   db: Database,
-  sendFn: (userId: string, message: string) => Promise<void>,
+  sendFn: (message: string) => Promise<void>,
 ): void {
   // Weekly reminder - every Monday at 9 AM
   Deno.cron('weekly-debt-reminders', '0 9 * * 1', async () => {
@@ -146,14 +166,14 @@ export function setupDebtReminderCron(
 
 /**
  * Manually trigger debt reminders for testing
+ * Updated for single-user system (Phase 1: Local-First Architecture)
  */
 export async function triggerAllDebtReminders(
   db: Database,
-  sendFn: (userId: string, message: string) => Promise<void>,
+  sendFn: (message: string) => Promise<void>,
 ): Promise<void> {
   const settings = await db.getAllDebtReminderUsers();
 
-  for (const setting of settings) {
-    await sendDebtReminder(db, sendFn, setting.userId);
-  }
+  if (settings.length === 0) return;
+  await sendDebtReminder(db, sendFn);
 }

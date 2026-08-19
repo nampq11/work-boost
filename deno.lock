@@ -28,6 +28,7 @@
     "npm:oxlint@*": "0.11.1",
     "npm:oxlint@0.11": "0.11.1",
     "npm:oxlint@~0.11.1": "0.11.1",
+    "npm:typebox@1.3.7": "1.3.7",
     "npm:winston@^3.18.3": "3.19.0",
     "npm:zod@^4.1.12": "4.1.12"
   },
@@ -1138,6 +1139,7 @@
       "jsr:@std/fs@^1.0.22",
       "jsr:@std/path@^1.1.4",
       "jsr:@std/uuid@^1.0.9",
+      "jsr:@std/yaml@^1.0.22",
       "npm:@biomejs/biome@^1.9.4",
       "npm:@earendil-works/pi-agent-core@0.84.2",
       "npm:@earendil-works/pi-ai@0.84.2",
@@ -1150,6 +1152,7 @@
       "npm:grammy@^1.21.1",
       "npm:langfuse@^3.2.1",
       "npm:oxlint@0.11",
+      "npm:typebox@1.3.7",
       "npm:winston@^3.18.3",
       "npm:zod@^4.1.12"
     ],

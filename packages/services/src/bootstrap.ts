@@ -1,7 +1,8 @@
 // Shared service initialization for both entrypoints (api and cli)
 
-import { createBrain, type AgentPort } from '@work-boost/brain';
+import { type AgentPort, createBrain } from '@work-boost/brain';
 import { Database } from '@work-boost/data-provider';
+import { createDataLayer } from '@work-boost/data-provider';
 import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import { initLangfuse } from '@work-boost/shared/observability/index.ts';
@@ -26,7 +27,12 @@ export function validateRequiredSecrets(options: { strict?: boolean } = {}): {
   const isProduction = env.DENO_ENV === 'production';
   // TelegramService is constructed unconditionally and throws without these, so
   // they are required in every environment (unlike the Slack secrets)
-  const required: string[] = ['GOOGLE_API_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET'];
+  const required: string[] = [
+    'GOOGLE_API_KEY',
+    'TELEGRAM_BOT_TOKEN',
+    'TELEGRAM_WEBHOOK_SECRET',
+    'TELEGRAM_OWNER_ID',
+  ];
 
   // In production or strict mode, require all bot secrets
   if (isProduction || options.strict) {
@@ -39,6 +45,7 @@ export function validateRequiredSecrets(options: { strict?: boolean } = {}): {
 
 /**
  * Initialize database, Langfuse tracing, agent, and bot services.
+ * Updated to use markdown-based storage (Phase 1: Local-First Architecture)
  */
 export async function initializeServices(options: { strict?: boolean } = {}): Promise<Services> {
   const validation = validateRequiredSecrets(options);
@@ -47,8 +54,11 @@ export async function initializeServices(options: { strict?: boolean } = {}): Pr
   }
 
   logger.info('Initializing services...');
+
+  // Use new markdown-based data layer (Phase 1: Local-First Architecture)
+  // The Database class now internally uses WorkspaceFS with markdown files
   const db = await Database.init();
-  logger.info('Database connected');
+  logger.info('Markdown-based workspace initialized');
 
   // Initialize Langfuse tracing before Brain (for LLM call tracing)
   const langfuse = initLangfuse({
