@@ -57,12 +57,21 @@ async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> 
       return { success: false, reason: 'no_messages' };
     }
 
+    const today = new Date().toISOString().slice(0, 10);
     const latestMessage = messages[messages.length - 1];
+
+    if (latestMessage.date.toISOString().slice(0, 10) !== today) {
+      return { success: false, reason: 'no_messages_today' };
+    }
 
     const response = await deps.agent.stream(
       `Hãy tóng hợp công việc hôm nay dựa trên tin nhắn sau: ${latestMessage.content}`,
       { sessionId: 'scheduler' },
     );
+
+    if (!response.trim()) {
+      return { success: false, reason: 'empty_response' };
+    }
 
     const subscription = await deps.db.getSubscriptionByUserId(SINGLE_USER_ID);
     if (!subscription || subscription.enabled.length === 0) {

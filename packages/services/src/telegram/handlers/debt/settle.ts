@@ -68,17 +68,20 @@ async function settleDebt(
   const updated = await deps.db.debts.settle(debtId);
 
   if (updated) {
+    const escapeHtml = (text: string): string =>
+      text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const personName = escapeHtml(debt.frontmatter.personName);
     const directionText =
       debt.frontmatter.direction === DebtDirection.LENT
-        ? `was paid back to you by ${debt.frontmatter.personName}`
-        : `you paid back to ${debt.frontmatter.personName}`;
+        ? `was paid back to you by ${personName}`
+        : `you paid back to ${personName}`;
 
     const amount = new Intl.NumberFormat('vi-VN').format(debt.frontmatter.amount);
-
     const message =
       `✅ Debt marked as paid!\n\n` +
       `${amount} ${debt.frontmatter.currency} ${directionText}` +
-      (debt.reason ? `\nReason: ${debt.reason}` : '');
+      (debt.reason ? `\nReason: ${escapeHtml(debt.reason)}` : '');
 
     const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
     await replyFn(message, {

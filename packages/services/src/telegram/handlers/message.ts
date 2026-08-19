@@ -48,7 +48,11 @@ export async function handleMessage(ctx: Context, deps: MessageHandlerDeps): Pro
     if (response) {
       const parts = splitMessage(response);
       for (const part of parts) {
-        await ctx.api.sendMessage(chatId, part, { parse_mode: 'HTML' });
+        try {
+          await ctx.api.sendMessage(chatId, part, { parse_mode: 'HTML' });
+        } catch {
+          await ctx.api.sendMessage(chatId, part);
+        }
       }
     }
   } catch (error) {

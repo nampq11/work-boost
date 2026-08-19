@@ -25,7 +25,7 @@ jobs:
         uses: denoland/deployctl@v1
         with:
           project: work-boost
-          entrypoint: api/src/main.ts
+          entrypoint: apps/api/src/main.ts
 
       - name: Comment preview URL on PR
         if: github.event_name == 'pull_request'

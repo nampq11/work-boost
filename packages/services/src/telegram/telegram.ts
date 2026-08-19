@@ -28,15 +28,43 @@ function timingSafeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
+/**
+ * Simple sliding-window rate limiter for bulk message sending.
+ * Replaces @grammyjs/ratelimiter's limit() middleware which returns grammY
+ * middleware, not an object with control().
+ */
+class BulkLimiter {
+  private maxRequests: number;
+  private timeFrame: number;
+  private timestamps: number[] = [];
+
+  constructor(maxRequests: number, timeFrame: number) {
+    this.maxRequests = maxRequests;
+    this.timeFrame = timeFrame;
+  }
+
+  async control<T>(fn: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    this.timestamps = this.timestamps.filter((t) => now - t < this.timeFrame);
+    if (this.timestamps.length >= this.maxRequests) {
+      const waitTime = this.timeFrame - (now - this.timestamps[0]);
+      if (waitTime > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        return this.control(fn);
+      }
+    }
+    this.timestamps.push(now);
+    return fn();
+  }
+}
+
 function redactSensitiveData(obj: Record<string, unknown>): Record<string, unknown> {
-  const sensitiveKeys = ['token', 'password', 'secret', 'apiKey', 'botToken', 'error'];
+  const sensitiveKeys = ['token', 'password', 'secret', 'apiKey', 'botToken'];
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
     const keyLower = key.toLowerCase();
-    const shouldRedact = sensitiveKeys.some((sensitive) =>
-      keyLower.includes(sensitive.toLowerCase()),
-    );
+    const shouldRedact = sensitiveKeys.some((sensitive) => keyLower === sensitive.toLowerCase());
 
     if (shouldRedact && typeof value === 'string' && value.length > 0) {
       result[key] = '[REDACTED]';
@@ -66,7 +94,7 @@ export class TelegramService implements BotService {
   private db: Database;
   private agent: AgentPort;
   private webhookSecret: string;
-  private bulkLimiter: any;
+  private bulkLimiter: BulkLimiter;
 
   constructor(db: Database, agent: AgentPort) {
     const token = env.get('TELEGRAM_BOT_TOKEN');
@@ -79,13 +107,7 @@ export class TelegramService implements BotService {
     this.agent = agent;
     this.bot = new Bot<TelegramContext>(token);
 
-    this.bulkLimiter = limit({
-      timeFrame: 1000,
-      limit: getRateLimit('bulk'),
-      onLimitExceeded: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      },
-    });
+    this.bulkLimiter = new BulkLimiter(getRateLimit('bulk'), 1000);
 
     this.setupMiddleware();
     this.setupHandlers();

@@ -30,6 +30,10 @@ export class DebtSlackFormatter {
     }
   }
 
+  private escapeMrkdwn(text: string): string {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   private formatDirection(direction: DebtDirection): string {
     return direction === DebtDirection.LENT ? ':moneybag: Lent to' : ':inbox_tray: Borrowed from';
   }
@@ -51,12 +55,14 @@ export class DebtSlackFormatter {
       parts.push(`*#${frontmatter.id.slice(0, 8)}*`);
     }
 
-    parts.push(`*${this.formatDirection(frontmatter.direction)}* ${frontmatter.personName}`);
+    parts.push(
+      `*${this.formatDirection(frontmatter.direction)}* ${this.escapeMrkdwn(frontmatter.personName)}`,
+    );
     parts.push(`*Amount:* ${this.formatCurrency(frontmatter.amount, frontmatter.currency)}`);
     parts.push(`*Status:* ${this.formatStatus(frontmatter.status)}`);
 
     if (reason) {
-      parts.push(`*Reason:* ${reason}`);
+      parts.push(`*Reason:* ${this.escapeMrkdwn(reason)}`);
     }
 
     parts.push(`*Date:* ${this.formatDate(frontmatter.debtDate)}`);

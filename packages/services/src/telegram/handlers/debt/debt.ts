@@ -43,7 +43,7 @@ export async function handleDebt(ctx: Context, deps: DebtHandlerDeps): Promise<v
     const sessionId = `telegram_${userId}`;
     const response = await deps.agent.stream(inputText, { sessionId });
 
-    await ctx.reply(response, {
+    await ctx.reply(response || 'Done.', {
       reply_markup: debtMenuKeyboard(),
       parse_mode: 'HTML',
     });
@@ -111,11 +111,17 @@ export async function handleDebtInput(
   const directionText = pending.direction === 'lent' ? 'cho vay' : 'vay';
   const contextMessage = `Hướng nợ: ${directionText}. Nhập: ${inputText}`;
   const sessionId = `telegram_${userId}`;
-  const response = await deps.agent.stream(contextMessage, { sessionId });
-
   pendingDebts.delete(userId);
 
-  await ctx.reply(response, {
+  let response: string;
+  try {
+    response = await deps.agent.stream(contextMessage, { sessionId });
+  } catch {
+    await ctx.reply('Sorry, I could not record that debt. Please try again.');
+    return true;
+  }
+
+  await ctx.reply(response || 'Done.', {
     reply_markup: debtMenuKeyboard(),
     parse_mode: 'HTML',
   });

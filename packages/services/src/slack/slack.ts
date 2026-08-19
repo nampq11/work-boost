@@ -2,6 +2,17 @@ import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../bot/bot-service.ts';
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 export class SlackService implements BotService {
   readonly platform: Platform = 'slack';
   private baseUrl: string = 'https://slack.com';
@@ -37,12 +48,16 @@ export class SlackService implements BotService {
           Accept: 'application/json',
         },
         body: payload,
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error status: ${response.status}`);
       }
       const responseJson = await response.json();
+      if (responseJson.ok === false) {
+        throw new Error(`Slack API error: ${responseJson.error || 'unknown error'}`);
+      }
       logger.debug('Slack message sent', { response: responseJson });
     } catch (error) {
       logger.error('Failed to send Slack message', { error });
@@ -72,7 +87,27 @@ export class SlackService implements BotService {
       return false;
     }
 
-    return true;
+    const bodyText = await request.text();
+    const signatureBase = `v0:${timestampHeader}:${bodyText}`;
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(this.signingSecret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+    const signatureBuffer = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      new TextEncoder().encode(signatureBase),
+    );
+    const expectedSignature =
+      'v0=' +
+      Array.from(new Uint8Array(signatureBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+    return timingSafeEqual(signatureHeader, expectedSignature);
   }
 
   async parseUpdate(request: Request): Promise<BotUpdate> {
