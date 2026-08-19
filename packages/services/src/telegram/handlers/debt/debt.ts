@@ -9,6 +9,22 @@ interface DebtHandlerDeps {
   agent: AgentPort;
 }
 
+/**
+ * Reply with HTML parse mode, falling back to plain text if Telegram rejects
+ * the agent's free-form output as malformed HTML.
+ */
+async function safeReplyHtml(
+  ctx: Context,
+  text: string,
+  extra: { reply_markup?: unknown } = {},
+): Promise<void> {
+  try {
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: extra.reply_markup as any });
+  } catch {
+    await ctx.reply(text, { reply_markup: extra.reply_markup as any });
+  }
+}
+
 const pendingDebts = new Map<
   string,
   {
@@ -43,9 +59,8 @@ export async function handleDebt(ctx: Context, deps: DebtHandlerDeps): Promise<v
     const sessionId = `telegram_${userId}`;
     const response = await deps.agent.stream(inputText, { sessionId });
 
-    await ctx.reply(response || 'Done.', {
+    await safeReplyHtml(ctx, response || 'Done.', {
       reply_markup: debtMenuKeyboard(),
-      parse_mode: 'HTML',
     });
   } else {
     await ctx.reply('📝 <b>Record a Debt</b>\n\nChoose how you want to record this debt:', {
@@ -121,9 +136,8 @@ export async function handleDebtInput(
     return true;
   }
 
-  await ctx.reply(response || 'Done.', {
+  await safeReplyHtml(ctx, response || 'Done.', {
     reply_markup: debtMenuKeyboard(),
-    parse_mode: 'HTML',
   });
   return true;
 }

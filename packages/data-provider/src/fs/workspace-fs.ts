@@ -147,7 +147,7 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       const files: string[] = [];
       try {
         for await (const entry of Deno.readDir(fullDir)) {
-          if (entry.isFile && entry.name.endsWith('.md')) {
+          if (entry.isFile && /\.(md|json|txt)$/.test(entry.name)) {
             files.push(join(relDir, entry.name));
           }
         }

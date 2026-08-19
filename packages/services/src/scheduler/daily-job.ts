@@ -90,7 +90,7 @@ async function processDailySummary(deps: SchedulerDeps): Promise<ProcessResult> 
           continue;
         }
 
-        await bot.sendMessage(chatId, response);
+        await bot.sendMessage(chatId, response, { parseMode: 'None' });
         delivered++;
 
         console.log(`Sent daily summary to workspace via ${platform}`);
