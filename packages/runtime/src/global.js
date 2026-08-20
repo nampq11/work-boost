@@ -1,5 +1,5 @@
 (function () {
-  const API_BASE = '/api/workspace';
+  const API_BASE = window.__WORKBOOST_API_BASE__ || '/api/workspace';
 
   async function request(endpoint, options = {}) {
     const res = await fetch(`${API_BASE}${endpoint}`, {

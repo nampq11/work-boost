@@ -1,7 +1,7 @@
 import type { DataLayer } from '@work-boost/data-provider';
 import {
-  type WorkspaceChangeEvent,
   createWorkspaceWatcher,
+  type WorkspaceChangeEvent,
 } from '@work-boost/data-provider/fs/workspace-watcher.ts';
 import {
   parseMarkdown,
@@ -29,7 +29,18 @@ const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '::ffff:127
 const SENSITIVE_SEGMENTS = new Set(['..', '.env', '.git']);
 const ALLOWED_EXTENSIONS = ['.md', '.json', '.txt', '.html'];
 const APPS_BASE = '/workspace-apps';
-const CSP_SANDBOX = 'sandbox allow-scripts allow-forms allow-same-origin';
+const CSP_POLICY = [
+  'sandbox allow-scripts allow-forms allow-same-origin',
+  "default-src 'none'",
+  "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+  "connect-src 'self'",
+  "img-src 'self' data:",
+  "font-src 'self' data:",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+].join('; ');
 
 function isPathForbidden(path: string): boolean {
   const segments = path.split(/[\\/]+/).filter(Boolean);
@@ -177,16 +188,17 @@ function safeParseMarkdown(
 
 interface EventHub {
   subscribe(listener: (event: WorkspaceChangeEvent) => void): () => void;
+  registerStream(controller: ReadableStreamDefaultController<Uint8Array>): () => void;
   stop(): void;
 }
 
 function createEventHub(fs: DataLayer['fs']): EventHub {
   const listeners = new Set<(event: WorkspaceChangeEvent) => void>();
+  const streams = new Set<ReadableStreamDefaultController<Uint8Array>>();
   let watcherStarted = false;
   let watcher: ReturnType<typeof createWorkspaceWatcher> | undefined;
 
-  // Start lazily so server processes that never open an SSE stream do not
-  // hold an FS watcher. `stop()` closes the watcher (used in tests/shutdown).
+  // Start lazily so server processes that never open an SSE stream do not hold an FS watcher.
   function ensureWatcher(): void {
     if (watcherStarted) return;
     watcherStarted = true;
@@ -202,13 +214,30 @@ function createEventHub(fs: DataLayer['fs']): EventHub {
       ensureWatcher();
       return () => {
         listeners.delete(listener);
+        if (listeners.size === 0) {
+          watcher?.stop();
+          watcher = undefined;
+          watcherStarted = false;
+        }
       };
+    },
+    registerStream(controller) {
+      streams.add(controller);
+      return () => streams.delete(controller);
     },
     stop() {
       watcher?.stop();
       watcher = undefined;
       watcherStarted = false;
       listeners.clear();
+      for (const stream of streams) {
+        try {
+          stream.close();
+        } catch {
+          // The client may have already closed the stream.
+        }
+      }
+      streams.clear();
     },
   };
 }
@@ -218,6 +247,7 @@ function sseResponse(hub: EventHub): Response {
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const pendingEvents: WorkspaceChangeEvent[] = [];
   let closed = false;
+  let unregisterStream: (() => void) | undefined;
   const unsubscribe = hub.subscribe((event) => {
     if (!controller) {
       pendingEvents.push(event);
@@ -231,20 +261,23 @@ function sseResponse(hub: EventHub): Response {
     }
   });
 
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    unsubscribe();
+    unregisterStream?.();
+  };
+
   const stream = new ReadableStream<Uint8Array>({
     start(streamController) {
       controller = streamController;
+      unregisterStream = hub.registerStream(streamController);
       controller.enqueue(encoder.encode('retry: 3000\n\n'));
       for (const event of pendingEvents.splice(0)) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       }
     },
-    cancel() {
-      if (!closed) {
-        closed = true;
-        unsubscribe();
-      }
-    },
+    cancel: cleanup,
   });
 
   return new Response(stream, {
@@ -318,13 +351,16 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
 
     const rawHtml = await fs.readText(filename);
     const runtime = await readBrokerRuntime();
-    const html = injectHtmlAppRuntime(rawHtml, runtime.js, runtime.themeCss);
+    const runtimeBundleJs = `window.__WORKBOOST_API_BASE__=${
+      JSON.stringify(workspaceBase)
+    };\n${runtime.js}`;
+    const html = injectHtmlAppRuntime(rawHtml, runtimeBundleJs, runtime.themeCss);
 
     return new Response(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store, no-cache, must-revalidate',
-        'Content-Security-Policy': CSP_SANDBOX,
+        'Content-Security-Policy': CSP_POLICY,
       },
     });
   }
@@ -407,8 +443,9 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
             );
           }
         }
-        const rawMarkdown =
-          frontmatter !== undefined ? stringifyMarkdown(frontmatter, body.content) : body.content;
+        const rawMarkdown = frontmatter !== undefined
+          ? stringifyMarkdown(frontmatter, body.content)
+          : body.content;
         await fs.writeTextAtomic(path, rawMarkdown);
         return ok(await readWorkspaceFile(path));
       }

@@ -23,7 +23,8 @@ const pendingDebt = (
   currency: string,
   personName: string,
   id: string = crypto.randomUUID(),
-) => `---
+) =>
+  `---
 id: ${id}
 direction: ${direction}
 amount: ${amount}
@@ -69,7 +70,7 @@ function routerFor(dataLayer: DataLayer) {
   return async (pathname: string, init?: RequestInit, info?: LoopbackInfo) => {
     const url = WORKSPACE(pathname);
     const req = new Request(url, init);
-    return await router.handle(req, info);
+    return await router.handle(req, info as unknown as Deno.ServeHandlerInfo);
   };
 }
 
@@ -83,14 +84,27 @@ Deno.test('Workspace router - serves a seeded HTML app with CSP + injected runti
     assertEquals(res.headers.get('content-type'), 'text/html; charset=utf-8');
     assertEquals(
       res.headers.get('content-security-policy'),
-      'sandbox allow-scripts allow-forms allow-same-origin',
+      "sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     );
     assertEquals(res.headers.get('cache-control'), 'no-store, no-cache, must-revalidate');
     const text = await bodyText(res);
-    assertEquals(text.includes('cdn.tailwindcss.com'), true);
-    assertEquals(text.includes('cdn.jsdelivr.net/npm/alpinejs'), true);
+    assertEquals(text.includes('cdn.tailwindcss.com/3.4.17'), true);
+    assertEquals(text.includes('cdn.jsdelivr.net/npm/alpinejs@3.16.2'), true);
     assertEquals(text.includes('window.workboost'), true);
     assertEquals(text.includes('Sổ Nợ Work Boost'), true);
+  });
+});
+
+Deno.test('Workspace router - injects the configured API prefix into the broker runtime', async () => {
+  await withTempWorkspace(async ({ dataLayer }) => {
+    const router = createWorkspaceRouter({ dataLayer, apiPrefix: '/custom' });
+    const res = await router.handle(
+      new Request('http://localhost/workspace-apps/debt-tracker.html'),
+      loopbackInfo() as unknown as Deno.ServeHandlerInfo,
+    );
+    const text = await res.text();
+    assertEquals(text.includes('window.__WORKBOOST_API_BASE__="/custom/workspace"'), true);
+    router.stop();
   });
 });
 

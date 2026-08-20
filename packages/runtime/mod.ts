@@ -42,10 +42,8 @@ export async function readBrokerRuntime(): Promise<BrokerRuntime> {
 export async function seedHtmlApps(fs: WorkspaceFS): Promise<string[]> {
   const seeded: string[] = [];
   for (const appName of HTML_APPS) {
-    if (await fs.exists(appName)) continue;
     const template = await readAsset(`./src/apps/${appName}`);
-    await fs.writeTextAtomic(appName, template);
-    seeded.push(appName);
+    if (await fs.writeTextIfAbsent(appName, template)) seeded.push(appName);
   }
   return seeded;
 }

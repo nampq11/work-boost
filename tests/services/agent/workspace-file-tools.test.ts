@@ -17,8 +17,10 @@ function createFakeFS(files: Record<string, { content: string; size: number }> =
       return Promise.resolve(files[path].content);
     },
     writeTextAtomic: () => Promise.resolve(),
+    writeTextIfAbsent: () => Promise.resolve(true),
     move: () => Promise.resolve(),
     remove: () => Promise.resolve(),
+    listByGlob: () => Promise.resolve([]),
     listFiles: (dir) => {
       const matching = Object.keys(files).filter((p) => p.startsWith(dir));
       return Promise.resolve(matching);
@@ -26,7 +28,7 @@ function createFakeFS(files: Record<string, { content: string; size: number }> =
     exists: (path) => Promise.resolve(path in files),
     stat: (path) => {
       if (!(path in files)) throw new Error(`File not found: ${path}`);
-      return Promise.resolve({ size: files[path].size });
+      return Promise.resolve({ size: files[path].size, modifiedAt: '' });
     },
     listDirs: () => Promise.resolve([]),
   };

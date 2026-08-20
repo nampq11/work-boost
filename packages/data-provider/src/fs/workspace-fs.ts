@@ -10,6 +10,7 @@ export interface WorkspaceFS {
   init(): Promise<void>;
   readText(relPath: string): Promise<string>;
   writeTextAtomic(relPath: string, content: string): Promise<void>;
+  writeTextIfAbsent(relPath: string, content: string): Promise<boolean>;
   move(fromRelPath: string, toRelPath: string): Promise<void>;
   remove(relPath: string): Promise<void>;
   listFiles(relDir: string): Promise<string[]>;
@@ -129,6 +130,23 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
           await Deno.copyFile(tempPath, fullPath);
           await Deno.remove(tempPath);
         }
+      });
+    },
+
+    async writeTextIfAbsent(relPath: string, content: string): Promise<boolean> {
+      return await withLock(relPath, async () => {
+        const fullPath = await assertInside(relPath);
+        await ensureDir(dirname(fullPath));
+        const file = await Deno.open(fullPath, { createNew: true, write: true });
+        try {
+          await file.write(new TextEncoder().encode(content));
+        } finally {
+          file.close();
+        }
+        return true;
+      }).catch((error) => {
+        if (error instanceof Deno.errors.AlreadyExists) return false;
+        throw error;
       });
     },
 

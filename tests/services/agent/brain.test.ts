@@ -16,11 +16,12 @@ function createFakeDataLayer(): DataLayer {
   };
   const fs: Partial<WorkspaceFS> = {
     init: () => Promise.resolve(),
-    stat: () => Promise.resolve({ size: 0 }),
+    stat: () => Promise.resolve({ size: 0, modifiedAt: '' }),
     listFiles: () => Promise.resolve([]),
     listDirs: () => Promise.resolve([]),
     readText: () => Promise.resolve(''),
     writeTextAtomic: () => Promise.resolve(),
+    writeTextIfAbsent: () => Promise.resolve(true),
     move: () => Promise.resolve(),
     remove: () => Promise.resolve(),
     exists: () => Promise.resolve(false),

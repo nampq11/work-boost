@@ -49,13 +49,19 @@ export async function processDailySummary(
     if (messages.length === 0) return { success: false, reason: 'no_messages' };
 
     const today = new Date().toISOString().slice(0, 10);
-    const latestMessage = messages[messages.length - 1];
-    if (latestMessage.date.toISOString().slice(0, 10) !== today) {
+    const todaysMessages = messages.filter(
+      (message) => message.date.toISOString().slice(0, 10) === today,
+    );
+    if (todaysMessages.length === 0) {
       return { success: false, reason: 'no_messages_today' };
     }
 
     const response = await dependencies.agent.stream(
-      `Hãy tóng hợp công việc hôm nay dựa trên tin nhắn sau: ${latestMessage.content}`,
+      `Hãy tổng hợp công việc hôm nay dựa trên các tin nhắn sau: ${
+        todaysMessages
+          .map((message) => message.content)
+          .join('\n')
+      }`,
       { sessionId: 'scheduler' },
     );
     if (!response.trim()) return { success: false, reason: 'empty_response' };
@@ -98,7 +104,11 @@ export function createPlatformSender(
       const sender = messaging?.[platform];
       const chatId = subscription.platforms[platform];
       if (!sender || !chatId) continue;
-      await sendToPlatform(sender, chatId, message, platform === 'telegram' ? 'HTML' : 'None');
+      try {
+        await sendToPlatform(sender, chatId, message, platform === 'telegram' ? 'HTML' : 'None');
+      } catch (error) {
+        console.error(`[Scheduler] Failed to send reminder to ${platform}`, error);
+      }
     }
   };
 }

@@ -54,27 +54,63 @@ export async function handleSlackMessages(
   body: Record<string, string>,
   deps: SlackExtensionDependencies,
 ): Promise<Response> {
+  // Slack requires an acknowledgement within three seconds. Continue the agent request after responding.
+  void processSlackMessage(body, deps);
+  return jsonResponse({
+    response_type: 'ephemeral',
+    text: 'Đang xử lý yêu cầu của bạn...',
+  });
+}
+
+async function processSlackMessage(
+  body: Record<string, string>,
+  deps: SlackExtensionDependencies,
+): Promise<void> {
   const userId = body.user_id || '';
   try {
     const response = await deps.agent.stream(body.text || '', {
       sessionId: `slack_${userId}`,
       signal: AbortSignal.timeout(15000),
     });
-
-    return jsonResponse({
+    await sendSlackFollowup(body.response_url, {
       response_type: 'in_channel',
       text: response && response.trim() ? response : "Sorry, I couldn't process that.",
     });
   } catch (error) {
     logger.error('[SlackExtension] Agent processing failed', {
-      error,
+      message: error instanceof Error ? error.message : String(error),
       sessionId: `slack_${userId}`,
     });
-    return jsonResponse({
-      response_type: 'ephemeral',
-      text: 'Sorry, something went wrong. Please try again.',
-    });
+    try {
+      await sendSlackFollowup(body.response_url, {
+        response_type: 'ephemeral',
+        text: 'Sorry, something went wrong. Please try again.',
+      });
+    } catch (followupError) {
+      logger.error('[SlackExtension] Failed to send follow-up response', {
+        message: followupError instanceof Error ? followupError.message : String(followupError),
+        sessionId: `slack_${userId}`,
+      });
+    }
   }
+}
+
+async function sendSlackFollowup(
+  responseUrl: string | undefined,
+  body: Record<string, unknown>,
+): Promise<void> {
+  if (!responseUrl) return;
+  const url = new URL(responseUrl);
+  if (url.hostname !== 'hooks.slack.com') {
+    throw new Error('Slack response URL has an unexpected host');
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`Slack response URL returned HTTP ${response.status}`);
 }
 
 function jsonResponse(body: Record<string, unknown>): Response {

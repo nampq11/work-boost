@@ -72,6 +72,10 @@ Deno.test('WorkspaceFS - perform atomic writes', async () => {
 
     // Write file atomically
     await fs.writeTextAtomic(testPath, testContent);
+    assertEquals(await fs.writeTextIfAbsent(testPath, 'replacement'), false);
+    assertEquals(await fs.readText(testPath), testContent);
+    assertEquals(await fs.writeTextIfAbsent('new.md', 'created'), true);
+    assertEquals(await fs.readText('new.md'), 'created');
 
     // Verify content was written correctly
     const readContent = await fs.readText(testPath);
@@ -94,8 +98,9 @@ Deno.test('WorkspaceFS - mutex lock prevents race conditions', async () => {
     const testPath = 'race-test.md';
 
     // Launch multiple concurrent writes
-    const writes = Array.from({ length: 5 }, (_, i) =>
-      fs.writeTextAtomic(testPath, `Content ${i}`),
+    const writes = Array.from(
+      { length: 5 },
+      (_, i) => fs.writeTextAtomic(testPath, `Content ${i}`),
     );
 
     // All writes should complete without conflict

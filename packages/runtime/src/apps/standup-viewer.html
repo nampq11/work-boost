@@ -16,13 +16,17 @@
       </button>
     </header>
 
-    <template x-if="!doc">
+    <template x-if="error">
+      <div class="p-4 text-center text-rose-700 bg-rose-50 rounded-xl border border-rose-200" x-text="error"></div>
+    </template>
+
+    <template x-if="!error && !doc">
       <div class="p-8 text-center text-stone-400 bg-white rounded-xl border border-stone-200">
         📭 Chưa có báo cáo cho hôm nay.
       </div>
     </template>
 
-    <div class="space-y-4" x-show="doc">
+    <div class="space-y-4" x-show="doc && !error">
       <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
         <h2 class="font-bold text-emerald-700">✅ 1. Việc đã hoàn thành hôm trước</h2>
         <ul class="space-y-1.5">
@@ -66,12 +70,19 @@
       return {
         currentDate: '',
         doc: null,
+        error: '',
         async init() {
-          this.currentDate = await window.workboost.time.getCurrentDate();
-          this.doc = await window.workboost.daily.getToday();
-          window.addEventListener('workboost:change', async () => {
+          window.addEventListener('workboost:change', () => this.load());
+          await this.load();
+        },
+        async load() {
+          this.error = '';
+          try {
+            this.currentDate = await window.workboost.time.getCurrentDate();
             this.doc = await window.workboost.daily.getToday();
-          });
+          } catch (error) {
+            this.error = 'Không tải được báo cáo: ' + (error.message || error);
+          }
         },
         copyMarkdown() {
           if (!this.doc?.rawMarkdown) return;

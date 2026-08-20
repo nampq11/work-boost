@@ -67,6 +67,12 @@ function createFakeDebtRepository(debts: DebtDocument[]): DebtRepository {
       debt.frontmatter.updatedAt = new Date().toISOString();
       return debt;
     },
+    async cancel(id) {
+      const debt = debts.find((d) => d.frontmatter.id === id);
+      if (!debt || debt.frontmatter.status !== DebtStatus.PENDING) return null;
+      debt.frontmatter.status = DebtStatus.CANCELLED;
+      return debt;
+    },
     async update(id, updates) {
       const debt = debts.find((d) => d.frontmatter.id === id);
       if (!debt) return null;
@@ -270,6 +276,7 @@ Deno.test('getWorkspaceTools returns all 10 tools', () => {
     init: () => Promise.resolve(),
     readText: () => Promise.resolve(''),
     writeTextAtomic: () => Promise.resolve(),
+    writeTextIfAbsent: () => Promise.resolve(true),
     move: () => Promise.resolve(),
     remove: () => Promise.resolve(),
     listFiles: () => Promise.resolve([]),

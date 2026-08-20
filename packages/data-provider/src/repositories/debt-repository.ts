@@ -78,13 +78,12 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
   }
 
   const generateSlug = (personName: string, id: string): string => {
-    const cleanName =
-      personName
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '') || 'debt';
+    const cleanName = personName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'debt';
     const shortId = id.slice(0, 4);
     return `${cleanName}-${shortId}.md`;
   };
@@ -180,7 +179,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
     async settle(debtId: string): Promise<DebtDocument | null> {
       return withDebtLock(debtId, async () => {
         const debt = await this.getById(debtId);
-        if (!debt || debt.frontmatter.status === DebtStatus.PAID) return null;
+        if (!debt || debt.frontmatter.status !== DebtStatus.PENDING) return null;
 
         const now = new Date().toISOString();
         debt.frontmatter.status = DebtStatus.PAID;
@@ -202,7 +201,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
     async cancel(debtId: string): Promise<DebtDocument | null> {
       return withDebtLock(debtId, async () => {
         const debt = await this.getById(debtId);
-        if (!debt || debt.frontmatter.status === DebtStatus.CANCELLED) return null;
+        if (!debt || debt.frontmatter.status !== DebtStatus.PENDING) return null;
 
         debt.frontmatter.status = DebtStatus.CANCELLED;
         debt.frontmatter.updatedAt = new Date().toISOString();

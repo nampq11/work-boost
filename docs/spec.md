@@ -202,9 +202,9 @@ Tất cả các endpoint đều trả về header `Cache-Control: no-store, no-c
 
 1. **Localhost Access Guard:** Middleware chặn toàn bộ request gọi vào `/api/workspace/*` nếu không xuất phát từ `127.0.0.1`, `::1` hoặc `localhost`.
 2. **Rate Limit Exemption:** Miễn trừ rate limiting cho router `/api/workspace/*` để Dashboard không bị dính HTTP 429.
-3. **CSP Sandbox:** Mọi file HTML App khi serve đều có header:
+3. **CSP Sandbox:** Mọi file HTML App khi serve đều có sandbox và chính sách tài nguyên hạn chế:
    ```http
-   Content-Security-Policy: sandbox allow-scripts allow-forms allow-same-origin;
+   Content-Security-Policy: sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self';
    ```
 4. **Fault-Tolerant Frontmatter Reader:** 
    Trong `DebtRepository.listAll()`, nếu gặp file bị lỗi định dạng YAML do chỉnh sửa tay:
@@ -220,8 +220,8 @@ Tất cả các endpoint đều trả về header `Cache-Control: no-store, no-c
 Tái hiện chính xác cơ chế của Hubble.md:
 
 ```typescript
-const TAILWIND_CDN = '<script src="https://cdn.tailwindcss.com"></script>';
-const ALPINE_CDN = '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>';
+const TAILWIND_CDN = '<script src="https://cdn.tailwindcss.com/3.4.17" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K" crossorigin="anonymous"></script>';
+const ALPINE_CDN = '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.16.2/dist/cdn.min.js" integrity="sha384-hTDKg8MgHALzleab34+W1b6UpW6tektVmHXleL5Ztz8x2WFIJeaJp6ixjNBjbrDY" crossorigin="anonymous"></script>';
 
 function styleTag(css: string): string {
   return `<style data-workboost-injected="theme">\n${css}\n</style>`;
@@ -258,7 +258,7 @@ File script JS này sẽ được inject tự động vào mọi HTML App:
 
 ```javascript
 (function () {
-  const API_BASE = '/api/workspace';
+  const API_BASE = window.__WORKBOOST_API_BASE__ || '/api/workspace';
 
   async function request(endpoint, options = {}) {
     const res = await fetch(`${API_BASE}${endpoint}`, {
