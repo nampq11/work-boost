@@ -43,6 +43,14 @@ export function addCorsHeaders(
 ): Response {
   const origin = request.headers.get('origin');
   const headers = new Headers(response.headers);
+  const vary = new Set(
+    (headers.get('Vary') ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  vary.add('Origin');
+  headers.set('Vary', [...vary].join(', '));
 
   const allowed = corsOrigins || ['http://localhost:3000'];
   let allowOrigin: string | undefined;
@@ -55,7 +63,8 @@ export function addCorsHeaders(
         originUrl.protocol === 'http:' &&
         (originUrl.hostname === 'localhost' ||
           originUrl.hostname === '127.0.0.1' ||
-          originUrl.hostname === '::1')
+          originUrl.hostname === '::1' ||
+          originUrl.hostname === '[::1]')
       ) {
         allowOrigin = origin;
       }
@@ -67,7 +76,6 @@ export function addCorsHeaders(
   if (allowOrigin) {
     headers.set('Access-Control-Allow-Origin', allowOrigin);
     headers.set('Access-Control-Allow-Credentials', 'true');
-    headers.set('Vary', 'Origin');
   } else {
     headers.delete('Access-Control-Allow-Origin');
     headers.delete('Access-Control-Allow-Credentials');

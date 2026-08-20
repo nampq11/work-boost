@@ -438,12 +438,12 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
     } catch (error) {
       try {
         await fs.move(trashPath, path);
+        await fs.remove(journalPath).catch(() => undefined);
       } catch {
         // Keep the journal when compensation fails for a later restore attempt.
       }
       throw error;
     }
-    await fs.remove(journalPath).catch(() => undefined);
     return { trashId, originalPath: path };
   }
 
@@ -454,7 +454,14 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
     const recordPath = (await fs.exists(metadataPath)) ? metadataPath : journalPath;
     if (!(await fs.exists(recordPath))) throw new Deno.errors.NotFound('Trash item not found');
     const metadata = JSON.parse(await fs.readText(recordPath)) as Partial<TrashRecord>;
-    if (!metadata.originalPath || !metadata.trashPath) throw new Error('Invalid trash metadata');
+    if (
+      !metadata.originalPath ||
+      !metadata.trashPath ||
+      isPathForbidden(metadata.originalPath) ||
+      !hasAllowedExtension(metadata.originalPath)
+    ) {
+      throw new Error('Invalid trash metadata');
+    }
     if (await fs.exists(metadata.originalPath)) {
       if (!(await fs.exists(metadata.trashPath))) {
         await fs.remove(metadataPath).catch(() => undefined);
@@ -468,7 +475,7 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
     await fs.writeTextAtomic(journalPath, JSON.stringify(metadata));
     await fs.move(metadata.trashPath, metadata.originalPath);
     try {
-      await fs.remove(metadataPath);
+      if (await fs.exists(metadataPath)) await fs.remove(metadataPath);
     } catch (error) {
       try {
         await fs.move(metadata.originalPath, metadata.trashPath);
@@ -594,6 +601,24 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
               400,
             );
           }
+        }
+        if (body.createOnly === true) {
+          const rawMarkdown = path.toLowerCase().endsWith('.md')
+            ? stringifyMarkdown(
+                (frontmatter as Record<string, unknown> | undefined) ?? {},
+                body.content,
+              )
+            : body.content;
+          if (!(await fs.writeTextIfAbsent(path, rawMarkdown))) {
+            return fail(
+              ERROR_CODES.CONFLICT,
+              'The file already exists. Choose a different path.',
+              409,
+              undefined,
+              { path },
+            );
+          }
+          return ok(await readWorkspaceFile(path));
         }
         const result = await fs.conditionalUpdate(path, expectedModifiedAt, (current) => {
           if (frontmatter === undefined) return body.content as string;

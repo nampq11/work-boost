@@ -202,15 +202,16 @@ export interface DebtInspectorData {
           └──────────────────────────> │   SAVING     │──> POST /api/workspace/fs/patch (expectedModifiedAt)
                                        └──────────────┘
                                                │
-                                 ┌─────────────┴─────────────┐
-                                 ▼                           ▼
-                         [HTTP 200 OK]                [Network Error]
-                                 │                           │
-                                 ▼                           ▼
-                        ┌──────────────┐            ┌─────────────────┐
-                        │    CLEAN     │            │ OFFLINE CACHED  │
-                        └──────────────┘            │ (localStorage)  │
-                                                    └─────────────────┘
+                                 ┌─────────────┼─────────────┐
+                                 ▼             ▼             ▼
+                         [HTTP 200 OK] [HTTP 409 CONFLICT] [Transient error]
+                                 │             │             │
+                                 ▼             ▼             ▼
+                        ┌──────────────┐ ┌───────────────┐ ┌─────────────────┐
+                        │    CLEAN     │ │ ConflictToast │ │ OFFLINE CACHED  │
+                        └──────────────┘ │ Keep draft    │ │ (localStorage)  │
+                                         │ Reload/force  │ └─────────────────┘
+                                         └───────────────┘
 ```
 
 ---

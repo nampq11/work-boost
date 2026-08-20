@@ -1,4 +1,5 @@
 import { assertEquals } from '@std/assert';
+import { join } from '@std/path';
 import { createWorkspaceRouter } from '@work-boost/api/routes/workspace.ts';
 import { createDataLayer } from '@work-boost/data-provider';
 
@@ -54,6 +55,27 @@ Deno.test('workspace shell can trash and restore a file', async () => {
     );
     assertEquals((restored.data as { body: string }).body, 'draft');
     assertEquals((restored.data as { frontmatter: { custom: string } }).frontmatter.custom, 'keep');
+  });
+});
+
+Deno.test('workspace restore recovers from a journal without metadata', async () => {
+  await withWorkspace(async (root, handle) => {
+    await handle('/api/workspace/fs/write', {
+      method: 'POST',
+      body: JSON.stringify({ path: 'daily/journal.md', content: 'journal content' }),
+    });
+    const deleted = await json(
+      await handle('/api/workspace/fs/delete?path=daily%2Fjournal.md', { method: 'DELETE' }),
+    );
+    const trashId = (deleted.data as { trashId: string }).trashId;
+    await Deno.remove(join(root, '.workboost', 'trash', `${trashId}.json`));
+
+    const restored = await handle('/api/workspace/fs/restore', {
+      method: 'POST',
+      body: JSON.stringify({ trashId }),
+    });
+    assertEquals(restored.status, 200);
+    assertEquals((await json(restored)).data.body, 'journal content');
   });
 });
 
@@ -142,4 +164,23 @@ Deno.test('workspace trash transitions remain recoverable when metadata cleanup 
     router.stop();
     await Deno.remove(root, { recursive: true });
   }
+});
+
+Deno.test('workspace create-only writes do not overwrite existing files', async () => {
+  await withWorkspace(async (_root, handle) => {
+    const first = await handle('/api/workspace/fs/write', {
+      method: 'POST',
+      body: JSON.stringify({ path: 'daily/create-only.md', content: 'first', createOnly: true }),
+    });
+    const second = await handle('/api/workspace/fs/write', {
+      method: 'POST',
+      body: JSON.stringify({ path: 'daily/create-only.md', content: 'second', createOnly: true }),
+    });
+    assertEquals(first.status, 200);
+    assertEquals(second.status, 409);
+    assertEquals(
+      (await json(await handle('/api/workspace/fs/read?path=daily%2Fcreate-only.md'))).data.body,
+      'first',
+    );
+  });
 });

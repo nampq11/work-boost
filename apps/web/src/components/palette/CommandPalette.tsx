@@ -41,7 +41,7 @@ export function CommandPalette() {
     ].join('-');
     const path = `daily/${date}.md`;
     try {
-      await api.writeFile(path, '', { date, type: 'daily' });
+      await api.createFile(path, '', { date, type: 'daily' });
       await loadFiles();
       await selectFile(path, true);
       close();

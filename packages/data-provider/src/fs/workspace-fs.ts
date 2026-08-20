@@ -122,8 +122,11 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       await Deno.rename(tempPath, fullPath);
     } catch {
       // Fallback for Windows if file is locked by OS
-      await Deno.copyFile(tempPath, fullPath);
-      await Deno.remove(tempPath);
+      try {
+        await Deno.copyFile(tempPath, fullPath);
+      } finally {
+        await Deno.remove(tempPath).catch(() => undefined);
+      }
     }
   }
   return {

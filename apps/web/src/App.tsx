@@ -49,7 +49,10 @@ export function App() {
           .then(({ trashId, originalPath }) => {
             showToast(`Moved ${originalPath} to trash.`, {
               label: 'Undo',
-              run: () => void restore(trashId),
+              run: () =>
+                void restore(trashId).catch((error) => {
+                  showToast(error instanceof Error ? error.message : 'Unable to restore file.');
+                }),
             });
           })
           .catch((error) => {

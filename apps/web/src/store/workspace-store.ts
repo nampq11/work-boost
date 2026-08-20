@@ -112,6 +112,12 @@ function flattenFilePaths(nodes: FileNode[]): string[] {
   );
 }
 
+function flattenFolderPaths(nodes: FileNode[]): string[] {
+  return nodes.flatMap((node) =>
+    node.kind === 'folder' ? [node.path, ...flattenFolderPaths(node.children ?? [])] : [],
+  );
+}
+
 function clearDraft(path: string): void {
   try {
     localStorage.removeItem(draftKey(path));
@@ -120,6 +126,8 @@ function clearDraft(path: string): void {
   }
 }
 
+let selectionToken = 0;
+let inFlightSave: { path: string; revision: number; promise: Promise<void> } | null = null;
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   nodes: [],
   activePath: null,
@@ -147,10 +155,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
   async selectFile(path, force = false) {
+    const requestToken = ++selectionToken;
     const state = get();
     const previousPath = state.activePath;
     if (state.isDirty && !force) await state.save();
     if (!force && get().activePath !== previousPath) return false;
+    if (requestToken !== selectionToken) return false;
     if (path.toLowerCase().endsWith('.html')) {
       set((current) => ({
         activePath: path,
@@ -163,6 +173,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     try {
       const document = await api.readFile(path);
+      if (requestToken !== selectionToken) return false;
       const raw = stringifyMarkdown(document.frontmatter, document.body);
       const cachedDraft = getDraft(path);
       const frontmatter = cachedDraft?.frontmatter ?? document.frontmatter;
@@ -207,45 +218,71 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       documentRevision: current.documentRevision + 1,
     }));
   },
-  async save() {
-    const { activeDocument, activePath, draft, documentRevision } = get();
-    if (!activeDocument || !activePath || !get().isDirty) return;
-    const savePath = activePath;
-    const saveRevision = documentRevision;
-    const saveDocument = activeDocument;
-    const saveDraft = draft;
-    set({ syncStatus: 'saving' });
-    try {
-      const saved = await api.patchFile(
-        savePath,
-        { body: saveDraft, frontmatter: saveDocument.frontmatter },
-        saveDocument.modifiedAt,
-      );
-      const current = get();
-      if (current.activePath !== savePath || current.documentRevision !== saveRevision) return;
-      clearDraft(savePath);
-      set({
-        activeDocument: {
-          ...saved,
-          rawMarkdown: stringifyMarkdown(saved.frontmatter, saved.body),
-          isDirty: false,
-          lastSavedAt: new Date(),
-        },
-        draft: saved.body,
-        isDirty: false,
-        syncStatus: 'connected',
-        error: null,
-      });
-    } catch (error) {
-      const message =
-        error instanceof ApiError && error.code === 'CONFLICT'
-          ? 'File changed outside the editor. Reload it or keep your local draft.'
-          : error instanceof Error
-            ? error.message
-            : 'Save failed';
-      if (get().activePath === savePath) set({ syncStatus: 'offline', error: message });
-      throw error;
+  save() {
+    const current = get();
+    if (!current.activeDocument || !current.activePath || !current.isDirty) {
+      return Promise.resolve();
     }
+    const savePath = current.activePath;
+    const saveRevision = current.documentRevision;
+    const saveDocument = current.activeDocument;
+    const saveDraft = current.draft;
+    if (inFlightSave) {
+      if (inFlightSave.path === savePath && inFlightSave.revision === saveRevision) {
+        return inFlightSave.promise;
+      }
+      return inFlightSave.promise.then(
+        () => (get().isDirty ? get().save() : undefined),
+        () => (get().isDirty ? get().save() : undefined),
+      );
+    }
+
+    const promise = (async () => {
+      set({ syncStatus: 'saving' });
+      try {
+        const saved = await api.patchFile(
+          savePath,
+          { body: saveDraft, frontmatter: saveDocument.frontmatter },
+          saveDocument.modifiedAt,
+        );
+        const latest = get();
+        if (latest.activePath !== savePath || latest.documentRevision !== saveRevision) return;
+        clearDraft(savePath);
+        set({
+          activeDocument: {
+            ...saved,
+            rawMarkdown: stringifyMarkdown(saved.frontmatter, saved.body),
+            isDirty: false,
+            lastSavedAt: new Date(),
+          },
+          draft: saved.body,
+          isDirty: false,
+          syncStatus: 'connected',
+          error: null,
+        });
+      } catch (error) {
+        const latest = get();
+        if (latest.activePath !== savePath || latest.documentRevision !== saveRevision) return;
+        const message =
+          error instanceof ApiError && error.code === 'CONFLICT'
+            ? 'File changed outside the editor. Reload it or keep your local draft.'
+            : error instanceof Error
+              ? error.message
+              : 'Save failed';
+        set({ syncStatus: 'offline', error: message });
+        throw error;
+      }
+    })();
+    inFlightSave = { path: savePath, revision: saveRevision, promise };
+    void promise.then(
+      () => {
+        if (inFlightSave?.promise === promise) inFlightSave = null;
+      },
+      () => {
+        if (inFlightSave?.promise === promise) inFlightSave = null;
+      },
+    );
+    return promise;
   },
   async handleEvent(event) {
     await get().loadFiles();
@@ -273,6 +310,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
   async createFolder(path) {
     await api.createFolder(path);
-    set({ nodes: buildFileTree(flattenFilePaths(get().nodes), [path]) });
+    const nodes = get().nodes;
+    set({ nodes: buildFileTree(flattenFilePaths(nodes), [...flattenFolderPaths(nodes), path]) });
   },
 }));

@@ -59,6 +59,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path, content, frontmatter, expectedModifiedAt }),
     }),
+  createFile: (path: string, content: string, frontmatter: Record<string, unknown>) =>
+    request<ActiveDocument>(`${workspaceBase}/fs/write`, {
+      method: 'POST',
+      body: JSON.stringify({ path, content, frontmatter, createOnly: true }),
+    }),
   patchFile: (
     path: string,
     patch: { body?: string; frontmatter?: Record<string, unknown> },

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ApiError } from '../lib/api-client.ts';
 import { useWorkspaceStore } from '../store/workspace-store.ts';
 
 export function useAutosave() {
@@ -9,14 +10,17 @@ export function useAutosave() {
     if (!isDirty) return;
     let timer: number | undefined;
     let cancelled = false;
-    const schedule = () => {
+    let retryDelay = 300;
+    const schedule = (delay: number) => {
       timer = window.setTimeout(() => {
-        void save().catch(() => {
-          if (!cancelled) schedule();
+        void save().catch((error) => {
+          if (cancelled || (error instanceof ApiError && error.code === 'CONFLICT')) return;
+          retryDelay = Math.min(retryDelay * 2, 5000);
+          schedule(retryDelay);
         });
-      }, 300);
+      }, delay);
     };
-    schedule();
+    schedule(300);
     return () => {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
