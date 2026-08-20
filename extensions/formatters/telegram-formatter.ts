@@ -41,6 +41,10 @@ export class TelegramFormatter {
 }
 
 export function splitMessage(text: string, maxLength = 4096): string[] {
+  if (!Number.isSafeInteger(maxLength) || maxLength <= 0) {
+    throw new RangeError('maxLength must be a positive integer');
+  }
+
   const messages: string[] = [];
   while (text.length > maxLength) {
     const splitAt = text.lastIndexOf('\n', maxLength);

@@ -105,10 +105,11 @@ export async function handleSetReminderFrequency(
   await deps.db.config.save(config);
 
   const frequencyText = getFrequencyLabel(frequency);
+  const frequencySuffix = frequency === 'never' ? '' : ` ${frequencyText.toLowerCase()}`;
 
   await ctx.editMessageText(
     `✅ Reminder settings updated!\n\n` +
-      `You will ${getReminderVerb(frequency)} debt reminders ${frequencyText.toLowerCase()}.`,
+      `You will ${getReminderVerb(frequency)} debt reminders${frequencySuffix}.`,
     { reply_markup: debtMenuKeyboard(), parse_mode: 'HTML' },
   );
 }

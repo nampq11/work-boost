@@ -8,7 +8,12 @@ export interface DebtCurrencyTotals {
 export type DebtCurrencies = Record<string, DebtCurrencyTotals>;
 
 export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  const dateParts = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = dateParts
+    ? new Date(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3]))
+    : new Date(dateString);
+
+  return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

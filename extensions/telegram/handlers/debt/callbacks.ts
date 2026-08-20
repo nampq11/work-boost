@@ -7,6 +7,10 @@ interface CallbackHandlerDeps {
   agent: AgentPort;
 }
 
+async function answerInvalidAction(ctx: Context): Promise<void> {
+  await ctx.answerCallbackQuery({ text: 'Invalid action' });
+}
+
 /**
  * Main callback handler for all debt-related actions
  * Routes callbacks to specific handlers based on action type
@@ -56,38 +60,45 @@ export async function handleDebtCallback(ctx: Context, deps: CallbackHandlerDeps
       if (direction === 'lent' || direction === 'borrowed') {
         return handleDirectionSelect(callbackContext, dependencies, direction);
       }
-      return Promise.resolve();
+      return answerInvalidAction(callbackContext);
     },
     list: (callbackContext, dependencies) => handleListCallback(callbackContext, dependencies),
     filter: (callbackContext, dependencies, callbackParams) => {
       const filter = callbackParams[0];
-      return filter
-        ? handleFilterCallback(callbackContext, dependencies, filter)
-        : Promise.resolve();
+      if (
+        filter === 'all' ||
+        filter === 'pending' ||
+        filter === 'paid' ||
+        filter === 'lent' ||
+        filter === 'borrowed'
+      ) {
+        return handleFilterCallback(callbackContext, dependencies, filter);
+      }
+      return answerInvalidAction(callbackContext);
     },
     show: (callbackContext, dependencies, callbackParams) => {
       const debtId = callbackParams[0];
       return debtId
         ? handleShowDebtDetails(callbackContext, dependencies, debtId)
-        : Promise.resolve();
+        : answerInvalidAction(callbackContext);
     },
     settle: (callbackContext, dependencies, callbackParams) => {
       const debtId = callbackParams[0];
       return debtId
         ? handleSettleCallback(callbackContext, dependencies, debtId)
-        : Promise.resolve();
+        : answerInvalidAction(callbackContext);
     },
     delete: (callbackContext, dependencies, callbackParams) => {
       const debtId = callbackParams[0];
       return debtId
         ? handleDeleteCallback(callbackContext, dependencies, debtId)
-        : Promise.resolve();
+        : answerInvalidAction(callbackContext);
     },
     confirm: (callbackContext, dependencies, callbackParams) => {
       const [confirmationAction, debtId] = callbackParams;
       return confirmationAction === 'delete' && debtId
         ? handleDeleteConfirm(callbackContext, dependencies, debtId)
-        : Promise.resolve();
+        : answerInvalidAction(callbackContext);
     },
     summary: (callbackContext, dependencies) =>
       handleSummaryCallback(callbackContext, dependencies),
@@ -97,7 +108,7 @@ export async function handleDebtCallback(ctx: Context, deps: CallbackHandlerDeps
       if (frequency === 'weekly' || frequency === 'monthly' || frequency === 'never') {
         return handleSetReminderFrequency(callbackContext, dependencies, frequency);
       }
-      return Promise.resolve();
+      return answerInvalidAction(callbackContext);
     },
   };
 

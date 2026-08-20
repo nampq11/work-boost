@@ -60,12 +60,12 @@ class BulkLimiter {
 }
 
 function getRateLimit(type: 'interactive' | 'bulk'): number {
-  if (type === 'interactive') {
-    const limitString = env.get('TELEGRAM_RATE_LIMIT_INTERACTIVE');
-    return limitString ? parseInt(limitString, 10) : 3;
-  }
-  const limitString = env.get('TELEGRAM_RATE_LIMIT_BULK');
-  return limitString ? parseInt(limitString, 10) : 25;
+  const key =
+    type === 'interactive' ? 'TELEGRAM_RATE_LIMIT_INTERACTIVE' : 'TELEGRAM_RATE_LIMIT_BULK';
+  const fallback = type === 'interactive' ? 3 : 25;
+  const parsed = Number(env.get(key));
+
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export class TelegramService implements BotService {

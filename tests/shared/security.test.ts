@@ -8,4 +8,5 @@ Deno.test('timingSafeEqual returns true for identical strings', () => {
 Deno.test('timingSafeEqual returns false for different strings', () => {
   assertFalse(timingSafeEqual('same-value', 'different-value'));
   assertFalse(timingSafeEqual('short', 'shorter'));
+  assertFalse(timingSafeEqual('abc', 'abd'));
 });
