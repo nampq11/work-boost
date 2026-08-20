@@ -1,6 +1,10 @@
 name: Deploy
 
 on:
+  pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -13,9 +17,36 @@ jobs:
       - name: Clone repository
         uses: actions/checkout@v4
 
-      - name: Check deployment entrypoint
+      - name: Set up Deno
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
-      - run: deno check apps/api/src/main.ts
+      - name: Check deployment entrypoint
+        run: deno check apps/api/src/main.ts
+
+  deploy:
+    name: Deploy to Deno Deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Deploy with Deno Deploy CLI
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$DENO_DEPLOY_TOKEN" ]; then
+            echo "DENO_DEPLOY_TOKEN is not configured; production deployment is managed by the Deno Deploy GitHub integration."
+            exit 0
+          fi
+          deno deploy --org nampq11 --app work-boost --prod apps/api/src/main.ts

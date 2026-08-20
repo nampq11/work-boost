@@ -97,6 +97,7 @@ Deno.test({
       // Close active SSE streams and the FS watcher before HTTP shutdown.
       router?.stop();
       await server?.shutdown();
+      await Deno.remove(tempRoot, { recursive: true });
     }
   },
   sanitizeResources: false,

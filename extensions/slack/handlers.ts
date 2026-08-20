@@ -67,6 +67,7 @@ async function processSlackMessage(
   deps: SlackExtensionDependencies,
 ): Promise<void> {
   const userId = body.user_id || '';
+  const correlationId = crypto.randomUUID();
   try {
     const response = await deps.agent.stream(body.text || '', {
       sessionId: `slack_${userId}`,
@@ -78,8 +79,8 @@ async function processSlackMessage(
     });
   } catch (error) {
     logger.error('[SlackExtension] Agent processing failed', {
-      message: error instanceof Error ? error.message : String(error),
-      sessionId: `slack_${userId}`,
+      correlationId,
+      errorType: error instanceof Error ? error.name : 'unknown',
     });
     try {
       await sendSlackFollowup(body.response_url, {
@@ -88,8 +89,8 @@ async function processSlackMessage(
       });
     } catch (followupError) {
       logger.error('[SlackExtension] Failed to send follow-up response', {
-        message: followupError instanceof Error ? followupError.message : String(followupError),
-        sessionId: `slack_${userId}`,
+        correlationId,
+        errorType: followupError instanceof Error ? followupError.name : 'unknown',
       });
     }
   }

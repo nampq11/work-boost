@@ -62,7 +62,10 @@ export async function processDailySummary(
           .map((message) => message.content)
           .join('\n')
       }`,
-      { sessionId: 'scheduler' },
+      {
+        sessionId: 'scheduler',
+        signal: AbortSignal.timeout(60_000),
+      },
     );
     if (!response.trim()) return { success: false, reason: 'empty_response' };
 

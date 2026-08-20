@@ -204,7 +204,7 @@ Tất cả các endpoint đều trả về header `Cache-Control: no-store, no-c
 2. **Rate Limit Exemption:** Miễn trừ rate limiting cho router `/api/workspace/*` để Dashboard không bị dính HTTP 429.
 3. **CSP Sandbox:** Mọi file HTML App khi serve đều có sandbox và chính sách tài nguyên hạn chế:
    ```http
-   Content-Security-Policy: sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self';
+   Content-Security-Policy: sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none';
    ```
 4. **Fault-Tolerant Frontmatter Reader:** 
    Trong `DebtRepository.listAll()`, nếu gặp file bị lỗi định dạng YAML do chỉnh sửa tay:
