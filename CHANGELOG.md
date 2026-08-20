@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-20
+
 ### Added
+
+- **Workspace web application** - Browse, edit, autosave, search, and restore workspace files; inspect Markdown front matter; preview HTML apps; and use the AI copilot.
+- **Extension system** (#22) - Added built-in and user-loadable extensions that can register HTTP routes and scheduled jobs.
+- **Workspace-aware AI tools** (#21) - Added tools for managing debts and daily work, checking time, and reading workspace files.
 
 - **Telegram Bot Integration** (#13) - Full Telegram bot support using grammY framework
   - Unified `BotService` interface for both Slack and Telegram platforms
@@ -20,10 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Improved Slack and Telegram message reliability with request timeouts, per-session agent turn isolation, safe output formatting, and a plain-text fallback for invalid Telegram HTML. #21
+- Fixed stale workspace selections and invalid trash paths in the web application.
 - **Deno Deploy Compatibility** (#14) - Replaced Node.js-specific `crypto.subtle.timingSafeEqual` with custom timing-safe string comparison function
 
 ### Changed
 
+- **Breaking** - Replaced Deno KV storage with a single-user, local-first Markdown workspace. #20
 - Extended Deno KV with subscription support for multi-platform management
 
 ### Documentation

@@ -1,6 +1,6 @@
 {
   "name": "@work-boost/data-provider",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "exports": {
     ".": "./mod.ts",
     "./fs/workspace-fs": "./src/fs/workspace-fs.ts",
