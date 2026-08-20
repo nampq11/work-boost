@@ -88,6 +88,26 @@
 
   window.workboost = broker;
 
+  window.addEventListener('message', (event) => {
+    if (!event.data || event.data.type !== 'WB_THEME_CHANGE') return;
+    document.documentElement.dataset.theme = event.data.theme;
+    document.documentElement.style.colorScheme = event.data.theme;
+  });
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest?.('a[href]');
+    if (!link) return;
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('/') || href.startsWith('./')) return;
+    const target = link.getAttribute('target');
+    const url = new URL(href, window.location.href);
+    if (target === '_blank' || url.origin !== window.location.origin) {
+      event.preventDefault();
+      window.parent.postMessage({ type: 'WB_OPEN_EXTERNAL', url: url.href }, '*');
+    }
+  });
+
+  // Listen to SSE events and re-emit them as DOM Events so Alpine.js apps can react
   // Listen to SSE events and re-emit them as DOM Events so Alpine.js apps can react
   broker.events.subscribe((event) => {
     window.dispatchEvent(new CustomEvent('workboost:change', { detail: event }));

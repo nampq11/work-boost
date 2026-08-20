@@ -1,0 +1,27 @@
+{
+  "imports": {
+    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@4.3.4",
+    "@tailwindcss/vite": "npm:@tailwindcss/vite@4.1.11",
+    "@tiptap/extension-code-block": "npm:@tiptap/extension-code-block@latest",
+    "@tiptap/extension-task-item": "npm:@tiptap/extension-task-item@latest",
+    "@tiptap/extension-task-list": "npm:@tiptap/extension-task-list@latest",
+    "@tiptap/react": "npm:@tiptap/react@latest",
+    "@tiptap/starter-kit": "npm:@tiptap/starter-kit@latest",
+    "@types/react": "npm:@types/react@latest",
+    "@types/react-dom": "npm:@types/react-dom@latest",
+    "react": "npm:react@19.1.1",
+    "react/jsx-runtime": "npm:react@19.1.1/jsx-runtime",
+    "react-dom": "npm:react-dom@19.1.1",
+    "vite": "npm:vite@6.3.5",
+    "zustand": "npm:zustand@latest"
+  },
+  "tasks": {
+    "dev": "vite --host localhost --port 3000",
+    "build": "vite build",
+    "check": "deno check --sloppy-imports src/main.tsx vite.config.ts"
+  },
+  "compilerOptions": {
+    "jsx": "react",
+    "lib": ["DOM", "ESNext"]
+  }
+}

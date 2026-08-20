@@ -18,6 +18,7 @@ export interface WorkspaceFS {
   exists(relPath: string): Promise<boolean>;
   stat(relPath: string): Promise<{ size: number; modifiedAt: string }>;
   listDirs(relDir: string): Promise<string[]>;
+  mkdir(relPath: string): Promise<void>;
 }
 
 /**
@@ -166,7 +167,7 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       const files: string[] = [];
       try {
         for await (const entry of Deno.readDir(fullDir)) {
-          if (entry.isFile && /\.(md|json|txt)$/.test(entry.name)) {
+          if (entry.isFile && /\.(md|json|txt|html)$/i.test(entry.name)) {
             files.push(join(relDir, entry.name));
           }
         }
@@ -228,6 +229,10 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
         return [];
       }
       return dirs;
+    },
+
+    async mkdir(relPath: string): Promise<void> {
+      await ensureDir(await assertInside(relPath));
     },
   };
 }

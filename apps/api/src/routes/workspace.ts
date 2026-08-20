@@ -1,3 +1,4 @@
+import { join } from '@std/path';
 import type { DataLayer } from '@work-boost/data-provider';
 import {
   type WorkspaceChangeEvent,
@@ -122,6 +123,7 @@ function guardPath(path: string, requestId?: string): Response | null {
       requestId,
     );
   }
+  if (path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path)) return accessDenied(requestId);
   if (isPathForbidden(path)) return accessDenied(requestId);
   if (!hasAllowedExtension(path)) {
     return accessDenied(requestId);
@@ -242,11 +244,12 @@ function createEventHub(fs: DataLayer['fs']): EventHub {
   };
 }
 
-function sseResponse(hub: EventHub): Response {
+function sseResponse(hub: EventHub, request: Request): Response {
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const pendingEvents: WorkspaceChangeEvent[] = [];
   let closed = false;
+  let aborted = request.signal.aborted;
   let unregisterStream: (() => void) | undefined;
   const unsubscribe = hub.subscribe((event) => {
     if (!controller) {
@@ -264,13 +267,30 @@ function sseResponse(hub: EventHub): Response {
   const cleanup = () => {
     if (closed) return;
     closed = true;
+    request.signal.removeEventListener('abort', abortStream);
     unsubscribe();
     unregisterStream?.();
   };
 
+  const abortStream = () => {
+    aborted = true;
+    cleanup();
+    try {
+      controller?.close();
+    } catch {
+      // The response stream may already be closed by the runtime.
+    }
+  };
+  request.signal.addEventListener('abort', abortStream, { once: true });
+
   const stream = new ReadableStream<Uint8Array>({
     start(streamController) {
       controller = streamController;
+      if (aborted) {
+        cleanup();
+        streamController.close();
+        return;
+      }
       unregisterStream = hub.registerStream(streamController);
       controller.enqueue(encoder.encode('retry: 3000\n\n'));
       for (const event of pendingEvents.splice(0)) {
@@ -372,6 +392,66 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
     return { path, frontmatter, body, size, modifiedAt };
   }
 
+  async function assertExpectedVersion(
+    path: string,
+    expectedModifiedAt: unknown,
+  ): Promise<Response | null> {
+    if (expectedModifiedAt === undefined) return null;
+    if (typeof expectedModifiedAt !== 'string') {
+      return fail(
+        ERROR_CODES.VALIDATION_ERROR,
+        "'expectedModifiedAt' must be an ISO timestamp",
+        400,
+      );
+    }
+    if (!(await fs.exists(path))) return notFound(path);
+    const current = await fs.stat(path);
+    if (current.modifiedAt !== expectedModifiedAt) {
+      return fail(
+        ERROR_CODES.CONFLICT,
+        'The file changed on disk. Reload it before saving again.',
+        409,
+        undefined,
+        { path, modifiedAt: current.modifiedAt },
+      );
+    }
+    return null;
+  }
+
+  async function moveToTrash(path: string): Promise<{ trashId: string; originalPath: string }> {
+    const trashId = crypto.randomUUID();
+    const trashPath = join('.workboost', 'trash', `${trashId}.data`);
+    const metadataPath = join('.workboost', 'trash', `${trashId}.json`);
+    await fs.move(path, trashPath);
+    await fs.writeTextAtomic(
+      metadataPath,
+      JSON.stringify({
+        trashId,
+        originalPath: path,
+        trashPath,
+        deletedAt: new Date().toISOString(),
+      }),
+    );
+    return { trashId, originalPath: path };
+  }
+
+  async function restoreFromTrash(trashId: string): Promise<ParsedMarkdownFile> {
+    if (!/^[0-9a-f-]{36}$/i.test(trashId)) throw new Error('Invalid trash id');
+    const metadataPath = join('.workboost', 'trash', `${trashId}.json`);
+    if (!(await fs.exists(metadataPath))) throw new Deno.errors.NotFound('Trash item not found');
+    const metadata = JSON.parse(await fs.readText(metadataPath)) as {
+      originalPath?: string;
+      trashPath?: string;
+    };
+    if (!metadata.originalPath || !metadata.trashPath) throw new Error('Invalid trash metadata');
+    if (await fs.exists(metadata.originalPath)) {
+      throw new Error('Cannot restore: destination already exists');
+    }
+    await fs.move(metadata.trashPath, metadata.originalPath);
+    await fs.remove(metadataPath);
+    return await readWorkspaceFile(metadata.originalPath);
+  }
+
   async function handleApi(request: Request, url: URL): Promise<Response> {
     const method = request.method;
     const route = url.pathname.slice(workspaceBase.length); // e.g. '/fs/read'
@@ -381,7 +461,7 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
     // SSE events
     // ------------------------------------------------------------------
     if (route === '/events' && method === 'GET') {
-      return sseResponse(hub);
+      return sseResponse(hub, request);
     }
 
     // ------------------------------------------------------------------
@@ -412,6 +492,45 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
       return ok(files);
     }
 
+    if (route === '/fs/delete' && method === 'DELETE') {
+      const path = query.get('path') || '';
+      const guard = guardPath(path);
+      if (guard) return guard;
+      if (!(await fs.exists(path))) return notFound(path);
+      return ok(await moveToTrash(path));
+    }
+
+    if (route === '/fs/restore' && method === 'POST') {
+      const body = await readJsonBody(request);
+      const trashId = body && typeof body.trashId === 'string' ? body.trashId : '';
+      if (!trashId) return fail(ERROR_CODES.VALIDATION_ERROR, "'trashId' is required", 400);
+      try {
+        return ok(await restoreFromTrash(trashId));
+      } catch (error) {
+        if (error instanceof Deno.errors.NotFound) return notFound(`Trash item ${trashId}`);
+        return fail(
+          ERROR_CODES.CONFLICT,
+          error instanceof Error ? error.message : String(error),
+          409,
+        );
+      }
+    }
+
+    if (route === '/fs/folder' && method === 'POST') {
+      const body = await readJsonBody(request);
+      const path = body && typeof body.path === 'string' ? body.path : '';
+      if (
+        !path ||
+        path.startsWith('/') ||
+        /^[A-Za-z]:[\\/]/.test(path) ||
+        isPathForbidden(path) ||
+        path.split(/[\\/]+/).some((part) => part === '..')
+      ) {
+        return accessDenied();
+      }
+      await fs.mkdir(path);
+      return created({ path });
+    }
     if ((route === '/fs/patch' || route === '/fs/write') && method === 'POST') {
       const body = await readJsonBody(request);
       if (!body) {
@@ -443,13 +562,22 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
             );
           }
         }
-        const rawMarkdown =
-          frontmatter !== undefined ? stringifyMarkdown(frontmatter, body.content) : body.content;
+        const versionConflict = await assertExpectedVersion(path, body.expectedModifiedAt);
+        if (versionConflict) return versionConflict;
+        let rawMarkdown = body.content;
+        if (frontmatter !== undefined) {
+          const existingFrontmatter = (await fs.exists(path))
+            ? safeParseMarkdown(await fs.readText(path), path).frontmatter
+            : {};
+          rawMarkdown = stringifyMarkdown({ ...existingFrontmatter, ...frontmatter }, body.content);
+        }
         await fs.writeTextAtomic(path, rawMarkdown);
         return ok(await readWorkspaceFile(path));
       }
 
       // fs/patch
+      const versionConflict = await assertExpectedVersion(path, body.expectedModifiedAt);
+      if (versionConflict) return versionConflict;
       const patch = (body.patch ?? {}) as {
         frontmatter?: Record<string, unknown>;
         body?: string;
@@ -569,9 +697,10 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
       if (!isValidUUID(debtId)) {
         return fail(ERROR_CODES.VALIDATION_ERROR, 'Invalid debt id', 400);
       }
-      const deleted = await debts.delete(debtId);
-      if (!deleted) return notFound(`Debt ${debtId}`, undefined);
-      return ok(true);
+      const debt = await debts.getById(debtId);
+      if (!debt) return notFound(`Debt ${debtId}`, undefined);
+      const trashed = await moveToTrash(debt.filePath);
+      return ok({ deleted: true, ...trashed });
     }
 
     // ------------------------------------------------------------------

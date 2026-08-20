@@ -10,6 +10,15 @@ export interface WorkspaceChangeEvent {
   kind: string;
 }
 
+function isCancellationError(error: unknown): boolean {
+  return (
+    error instanceof Deno.errors.Interrupted ||
+    (error instanceof Error &&
+      (error.name === 'AbortError' ||
+        /operation canceled|request has been cancelled/i.test(error.message)))
+  );
+}
+
 export interface WorkspaceWatcher {
   start(): void;
   stop(): void;
@@ -18,7 +27,7 @@ export interface WorkspaceWatcher {
 /**
  * Create a new workspace watcher
  * @param fs Workspace file system instance
- * @param onChange Callback when markdown/json files change
+ * @param onChange Callback when workspace files change
  */
 export function createWorkspaceWatcher(
   fs: WorkspaceFS,
@@ -40,16 +49,19 @@ export function createWorkspaceWatcher(
           for await (const event of watcher) {
             if (!['create', 'modify', 'remove', 'rename'].includes(event.kind)) continue;
 
-            const mdPaths = event.paths
+            const workspacePaths = event.paths
               .map((p) => relative(fs.root, p))
-              .filter((p) => !p.startsWith('..') && (p.endsWith('.md') || p.endsWith('.json')));
-            if (mdPaths.length > 0) {
-              onChange({ paths: mdPaths, kind: event.kind });
+              .filter(
+                (p) =>
+                  !p.startsWith('..') && !p.split(/[\\/]+/).some((part) => part.startsWith('.')),
+              );
+            if (workspacePaths.length > 0) {
+              onChange({ paths: workspacePaths, kind: event.kind });
             }
           }
         } catch (error) {
           // Watching is best-effort; an Interrupted error is expected on close().
-          if (!(error instanceof Deno.errors.Interrupted)) {
+          if (!isCancellationError(error)) {
             console.error('Workspace watcher loop exited with error', error);
           }
         }

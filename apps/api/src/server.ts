@@ -178,6 +178,15 @@ function validateAndNormalizeApiPrefix(prefix?: string): string {
   return prefix;
 }
 
+function isCancellationError(error: unknown): boolean {
+  return (
+    error instanceof Deno.errors.Interrupted ||
+    (error instanceof Error &&
+      (error.name === 'AbortError' ||
+        /operation canceled|request has been cancelled/i.test(error.message)))
+  );
+}
+
 export function createServer(config: ApiServerConfig) {
   const apiPrefix = validateAndNormalizeApiPrefix(config.apiPrefix);
   const corsOrigins = config.corsOrigins;
@@ -279,7 +288,9 @@ export function createServer(config: ApiServerConfig) {
       ) {
         const response = await workspaceRouter.handle(req, info);
         logResponse(req, response, ctx);
-        return response;
+        // The shell is served separately from the API during development. Keep
+        // workspace JSON and SSE responses usable from that browser origin.
+        return addCorsHeaders(req, response, corsOrigins);
       }
 
       // ==============================================================
@@ -334,6 +345,7 @@ export function createServer(config: ApiServerConfig) {
       logResponse(req, response, ctx);
       return addSecurityHeaders(response);
     } catch (error) {
+      if (isCancellationError(error)) return new Response(null, { status: 499 });
       logError(req, error, ctx);
 
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -358,6 +370,15 @@ export function createServer(config: ApiServerConfig) {
         {
           hostname: host,
           port,
+          onError(error) {
+            if (isCancellationError(error)) return new Response(null, { status: 499 });
+            logger.error('Unhandled HTTP request error', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return addSecurityHeaders(
+              errorResponse(ERROR_CODES.INTERNAL_ERROR, 'Internal server error', 500),
+            );
+          },
           onListen({ hostname, port }) {
             logger.info(
               `API Server started on ${hostname}:${port}${apiPrefix}`,
@@ -371,7 +392,11 @@ export function createServer(config: ApiServerConfig) {
     },
     async stop(): Promise<void> {
       workspaceRouter?.stop();
-      await httpServer?.shutdown();
+      try {
+        await httpServer?.shutdown();
+      } catch (error) {
+        if (!isCancellationError(error)) throw error;
+      }
       await config.extensionManager?.disposeAll();
     },
   };
