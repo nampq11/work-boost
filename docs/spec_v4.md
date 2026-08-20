@@ -337,3 +337,11 @@ apps/web/
 Bản **Master SDD Giai đoạn 4** đã hoàn thiện 100% chuẩn mực và sẵn sàng thực thi. 
 
 Bạn có muốn bắt đầu ngay với **TASK 4.1: Khởi tạo cấu trúc package `apps/web` (Vite, React 19, Tailwind CSS, API Client)** không?
+
+### 6.3. Browser-level tests for NFR-02
+
+NFR-02 remains incomplete until browser tests cover the running shell and an injected HTML app:
+
+1. Verify the iframe has only `allow-scripts allow-forms`, cannot read the host DOM or storage, and can still call `window.parent.postMessage()`.
+2. Send `WB_OPEN_EXTERNAL` from the expected iframe and from an unrelated window; only the expected iframe may trigger a new tab.
+3. Verify only `http` and `https` links are opened externally, while other protocols are ignored.
