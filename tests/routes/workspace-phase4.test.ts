@@ -75,7 +75,8 @@ Deno.test('workspace restore recovers from a journal without metadata', async ()
       body: JSON.stringify({ trashId }),
     });
     assertEquals(restored.status, 200);
-    assertEquals((await json(restored)).data.body, 'journal content');
+    const restoredPayload = await json(restored);
+    assertEquals((restoredPayload.data as { body: string }).body, 'journal content');
   });
 });
 
@@ -178,9 +179,9 @@ Deno.test('workspace create-only writes do not overwrite existing files', async 
     });
     assertEquals(first.status, 200);
     assertEquals(second.status, 409);
-    assertEquals(
-      (await json(await handle('/api/workspace/fs/read?path=daily%2Fcreate-only.md'))).data.body,
-      'first',
+    const readPayload = await json(
+      await handle('/api/workspace/fs/read?path=daily%2Fcreate-only.md'),
     );
+    assertEquals((readPayload.data as { body: string }).body, 'first');
   });
 });
