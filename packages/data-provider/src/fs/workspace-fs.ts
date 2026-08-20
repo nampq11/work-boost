@@ -1,5 +1,5 @@
 import { ensureDir } from '@std/fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from '@std/path';
+import { basename, dirname, globToRegExp, isAbsolute, join, relative, resolve } from '@std/path';
 
 /**
  * Workspace file system abstraction with safety features
@@ -10,11 +10,13 @@ export interface WorkspaceFS {
   init(): Promise<void>;
   readText(relPath: string): Promise<string>;
   writeTextAtomic(relPath: string, content: string): Promise<void>;
+  writeTextIfAbsent(relPath: string, content: string): Promise<boolean>;
   move(fromRelPath: string, toRelPath: string): Promise<void>;
   remove(relPath: string): Promise<void>;
   listFiles(relDir: string): Promise<string[]>;
+  listByGlob(globPattern: string): Promise<string[]>;
   exists(relPath: string): Promise<boolean>;
-  stat(relPath: string): Promise<{ size: number }>;
+  stat(relPath: string): Promise<{ size: number; modifiedAt: string }>;
   listDirs(relDir: string): Promise<string[]>;
 }
 
@@ -131,6 +133,23 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       });
     },
 
+    async writeTextIfAbsent(relPath: string, content: string): Promise<boolean> {
+      return await withLock(relPath, async () => {
+        const fullPath = await assertInside(relPath);
+        await ensureDir(dirname(fullPath));
+        const file = await Deno.open(fullPath, { createNew: true, write: true });
+        try {
+          await file.write(new TextEncoder().encode(content));
+        } finally {
+          file.close();
+        }
+        return true;
+      }).catch((error) => {
+        if (error instanceof Deno.errors.AlreadyExists) return false;
+        throw error;
+      });
+    },
+
     async move(fromRelPath: string, toRelPath: string): Promise<void> {
       const fromFull = await assertInside(fromRelPath);
       const toFull = await assertInside(toRelPath);
@@ -157,6 +176,30 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       return files;
     },
 
+    async listByGlob(globPattern: string): Promise<string[]> {
+      const pattern = globToRegExp(globPattern, { globstar: true });
+      const matches: string[] = [];
+
+      const walk = async (relDir: string) => {
+        try {
+          for await (const entry of Deno.readDir(join(rootPath, relDir))) {
+            const entryRelPath = relDir === '' ? entry.name : join(relDir, entry.name);
+            if (entry.isDirectory) {
+              // Hidden dirs (.git, .workboost, ...) are internal state, never listable
+              if (!entry.name.startsWith('.')) await walk(entryRelPath);
+            } else if (entry.isFile && pattern.test(entryRelPath)) {
+              matches.push(entryRelPath);
+            }
+          }
+        } catch {
+          // Unreadable or missing directories simply contribute no matches
+        }
+      };
+
+      await walk('');
+      return matches.sort();
+    },
+
     async exists(relPath: string): Promise<boolean> {
       try {
         await Deno.stat(await assertInside(relPath));
@@ -166,10 +209,10 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       }
     },
 
-    async stat(relPath: string): Promise<{ size: number }> {
+    async stat(relPath: string): Promise<{ size: number; modifiedAt: string }> {
       const fullPath = await assertInside(relPath);
       const info = await Deno.stat(fullPath);
-      return { size: info.size };
+      return { size: info.size, modifiedAt: new Date(info.mtime ?? Date.now()).toISOString() };
     },
 
     async listDirs(relDir: string): Promise<string[]> {

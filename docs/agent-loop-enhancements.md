@@ -138,7 +138,7 @@ Tools enable the agent to query and modify database entities (users, tasks, debt
 These tools are automatically available when the Brain is initialized with a Database instance:
 
 ```typescript
-const brain = await Brain.init(config, slack, telegram, langfuse, db);
+const brain = await Brain.init(config, slack, telegram, db);
 
 // The agent can now use these tools via tool calling
 const result = await brain.runWithTools(message, {
@@ -223,7 +223,6 @@ const brain = await Brain.init(
   { apiKey: GEMINI_API_KEY, model: 'gemini-2.5-flash' },
   slackService,
   telegramService,
-  langfuseService,
   database // Enables data access tools and long-term memory
 );
 

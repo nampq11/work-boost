@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from '@std/assert';
+import { assertEquals } from '@std/assert';
 import { join } from '@std/path';
 import { createWorkspaceFS } from '@work-boost/data-provider/fs/workspace-fs.ts';
 
@@ -72,6 +72,10 @@ Deno.test('WorkspaceFS - perform atomic writes', async () => {
 
     // Write file atomically
     await fs.writeTextAtomic(testPath, testContent);
+    assertEquals(await fs.writeTextIfAbsent(testPath, 'replacement'), false);
+    assertEquals(await fs.readText(testPath), testContent);
+    assertEquals(await fs.writeTextIfAbsent('new.md', 'created'), true);
+    assertEquals(await fs.readText('new.md'), 'created');
 
     // Verify content was written correctly
     const readContent = await fs.readText(testPath);
@@ -92,16 +96,15 @@ Deno.test('WorkspaceFS - mutex lock prevents race conditions', async () => {
     await fs.init();
 
     const testPath = 'race-test.md';
-    let writeCount = 0;
 
     // Launch multiple concurrent writes
-    const writes = Array.from({ length: 5 }, (_, i) =>
-      fs.writeTextAtomic(testPath, `Content ${i}`),
+    const writes = Array.from(
+      { length: 5 },
+      (_, i) => fs.writeTextAtomic(testPath, `Content ${i}`),
     );
 
     // All writes should complete without conflict
     await Promise.all(writes);
-    writeCount++;
 
     // Verify final state is consistent
     const content = await fs.readText(testPath);

@@ -71,7 +71,7 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
     }
   };
 
-  let cleanupTimer: number | undefined;
+  let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
   const startCleanup = (): void => {
     cleanupTimer = setTimeout(() => {
       cleanup();

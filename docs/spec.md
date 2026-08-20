@@ -1,441 +1,578 @@
-# TÀI LIỆU THIẾT KẾ PHẦN MỀM (SDD) - GIAI ĐOẠN 2
-## Nâng cấp AI Agent Loop & Chuẩn hóa Kiến trúc Workspace (@work-boost/brain)
-
-* **Dự án:** Work Boost
-* **Phiên bản:** 2.0 (Markdown-Native & Monorepo Standardized)
-* **Thành phần thực thi:** `packages/brain`, `packages/data-provider`, `packages/data-schemas`, `packages/services`, `apps/api`
+# 📑 MASTER SOFTWARE DESIGN DOCUMENT (SDD) - V2
+## Giai đoạn 3: HTML Apps & Runtime Broker (Hubble-Native Architecture)
 
 ---
 
-## 1. Mục tiêu & Quyết định Kiến trúc (Architectural Decisions)
+## BLOCK 0: REQUIREMENTS TRACEABILITY CHECKLIST
 
-1. **Bộ công cụ Nguyên tử (Atomic Tools):** Thay thế các mega-tool bằng các tool nhỏ gọn, đơn trách nhiệm (`create_debt`, `settle_debt`, `list_debts`, `get_debt_summary`, `delete_debt`, `save_daily_work`, `get_daily_work`, `list_daily_dates`, `get_current_time`, `read_workspace_file`, `list_workspace_files`).
-2. **Đơn nhất hóa DataLayer (Singleton Instance):** Toàn bộ ứng dụng dùng chung 1 instance `DataLayer` duy nhất; `Database` facade dùng lại instance này để triệt tiêu xung đột Mutex Lock và ghi đĩa.
-3. **Thực thi trực tiếp + Phản hồi chi tiết (Direct Execution):** Agent gọi tool thực thi ngay trên file Markdown, trả về tóm tắt rõ ràng và đường dẫn file để người dùng nắm bắt.
-4. **Hợp nhất kênh tương tác (Unified Agent Interface):** Telegram, Slack và API đều tương tác qua `agent.stream()`. Bỏ các hàm parse legacy (`parseDebtEntry`, `generateDailyWorkReport`).
-5. **Timezone & Thời gian thực:** Bổ sung tool `get_current_time` và cấu hình `timezone` (mặc định `Asia/Ho_Chi_Minh`) trong `.workboost/config.json`.
-6. **Audit Trail trong Frontmatter:** Bổ sung trường `updatedBy: 'telegram' | 'slack' | 'agent' | 'user'` vào `Debt` và `DailyWork`.
-7. **Bảo mật & Tối ưu Token:** `get_daily_work` mặc định trả về JSON gọn gàng; `read_workspace_file` chỉ đọc file `.md`, `.json`, `.txt` dung lượng `< 1MB`.
-8. **Tạm thời gỡ bỏ Langfuse Tracing:** Giảm tải độ phức tạp và tập trung vào hiệu năng Agent Loop.
-
----
-
-## 2. Quy chuẩn Tổ chức Thư mục & Naming Conventions
-
-### 2.1. Cấu trúc Thư mục Mục tiêu (Target Monorepo Layout)
-```text
-work-boost/
-├── 📁 apps/
-│   └── 📁 api/                      # [CHUYỂN TỪ /api VÀO] REST API & Webhooks Server
-│       ├── 📁 src/
-│       │   ├── 📄 bootstrap.ts      # [CHUYỂN VỀ ĐÂY] Wire Dependency Injection
-│       │   ├── 📄 main.ts
-│       │   └── 📄 server.ts
-│       └── 📄 deno.json
-│
-├── 📁 packages/
-│   ├── 📁 brain/                    # AI Agent Core (@work-boost/brain)
-│   │   ├── 📁 src/
-│   │   │   ├── 📁 tools/            # Atomic Workspace Tools
-│   │   │   │   ├── 📄 debt-tools.ts
-│   │   │   │   ├── 📄 daily-work-tools.ts
-│   │   │   │   ├── 📄 workspace-file-tools.ts
-│   │   │   │   ├── 📄 time-tools.ts
-│   │   │   │   └── 📄 index.ts
-│   │   │   ├── 📄 brain.ts
-│   │   │   ├── 📄 sessions.ts
-│   │   │   └── 📄 llm.ts
-│   │   ├── 📄 deno.json
-│   │   └── 📄 mod.ts
-│   │
-│   ├── 📁 data-provider/            # Markdown Engine & Repositories (@work-boost/data-provider)
-│   │   ├── 📁 src/
-│   │   │   ├── 📁 fs/               # WorkspaceFS, Watcher
-│   │   │   ├── 📁 markdown/         # MarkdownEngine
-│   │   │   ├── 📁 repositories/     # DebtRepository, DailyWorkRepository, ConfigManager
-│   │   │   └── 📄 database.ts       # Singleton Compatibility Facade
-│   │   ├── 📄 deno.json
-│   │   └── 📄 mod.ts
-│   │
-│   ├── 📁 data-schemas/             # Zod Schemas & Domain Types (@work-boost/data-schemas)
-│   │   ├── 📁 src/
-│   │   │   ├── 📄 config.ts
-│   │   │   ├── 📄 debt.ts
-│   │   │   ├── 📄 agent.ts
-│   │   │   └── 📄 subscription.ts
-│   │   └── 📄 mod.ts
-│   │
-│   ├── 📁 services/                 # Bots & Platform Integration (@work-boost/services)
-│   │   ├── 📁 src/
-│   │   │   ├── 📁 telegram/         # TelegramService + Handlers
-│   │   │   ├── 📁 slack/            # SlackService
-│   │   │   ├── 📁 formatters/       # Message Formatters
-│   │   │   └── 📁 scheduler/        # Deno Cron Jobs
-│   │   └── 📄 mod.ts
-│   │
-│   └── 📁 shared/                   # Logger, Env Utilities
-│
-├── 📁 tests/                        # Toàn bộ test chuẩn hóa đuôi .test.ts
-│   ├── 📁 entity/
-│   │   └── 📄 debt.test.ts
-│   ├── 📁 provider/
-│   │   ├── 📄 markdown-engine.test.ts
-│   │   └── 📄 workspace-fs.test.ts
-│   └── 📁 services/
-│       ├── 📁 agent/
-│       │   ├── 📄 workspace-tools.test.ts
-│       │   ├── 📄 llm.test.ts
-│       │   └── 📄 sessions.test.ts
-│       └── 📁 formatting/
-│           ├── 📄 debt-slack-formatter.test.ts
-│           └── 📄 debt-telegram-formatter.test.ts
-│
-├── 📁 docs/                         # Tài liệu kiến trúc & SDD
-├── 📄 CONTEXT.md                    # Domain Glossary (Thuật ngữ chuẩn)
-└── 📄 deno.json                     # Root workspace configuration
-```
-
-### 2.2. Quy tắc Đặt tên (Naming Rules)
-* **Tên file code:** Luôn dùng `kebab-case.ts` (ví dụ: `daily-work-repository.ts`, `workspace-fs.ts`).
-* **Tên file test:** Luôn dùng `kebab-case.test.ts` (ví dụ: `workspace-fs.test.ts`, `markdown-engine.test.ts`).
-* **Tên Class & Service:** Dùng `PascalCase` và có hậu tố rõ ràng: `SlackService`, `TelegramService`.
-* **Tên Tools của Agent:** Luôn dùng `snake_case` dạng `verb_noun` (ví dụ: `create_debt`, `settle_debt`, `save_daily_work`, `get_current_time`).
+| ID | Nhóm | Yêu cầu kỹ thuật & Tính năng | Trạng thái thiết kế |
+| :--- | :--- | :--- | :---: |
+| **FR-01** | Runtime | **Auto-Injected Runtime:** Server tự động bơm CSS Theme, Tailwind, Alpine.js và Broker `window.workboost` vào file HTML khi phục vụ; người dùng không cần cấu hình `<script>` hay bundler. | ✅ Chuẩn Hubble |
+| **FR-02** | Broker API | Cung cấp **HTML App File API** nguyên tử (`readFile`, `writeFile`, `patchFile`, `listFiles`) kèm biến thể **Safe Variant** (`safeReadFile`, `safePatchFile`,...). | ✅ Chuẩn Hubble |
+| **FR-03** | Domain SDK | Cung cấp Domain Helpers cấp cao (`workboost.debts.*`, `workboost.daily.*`, `workboost.time.*`). | ✅ Hoàn thành |
+| **FR-04** | Real-time | **SSE Watcher:** Kênh Server-Sent Events (`/api/workspace/events`) phát tín hiệu khi đĩa thay đổi để HTML Apps tự cập nhật giao diện ngay lập tức. | ✅ Hoàn thành |
+| **FR-05** | HTML Apps | `debt-tracker.html` & `standup-viewer.html` là các file HTML độc lập nằm ngay trong thư mục gốc Workspace của người dùng. | ✅ Hoàn thành |
+| **FR-06** | Multi-Currency | `debt-tracker.html` xử lý hiển thị tách bạch từng đồng tiền (VND, USD,...), không cộng gộp sai lệch. | ✅ Hoàn thành |
+| **FR-07** | Timezone | Đồng bộ thời gian thực tế với cấu hình `config.timezone` của Workspace, loại bỏ lỗi lệch múi giờ UTC. | ✅ Hoàn thành |
+| **NFR-01**| Sandboxing | File HTML được phục vụ với header `Content-Security-Policy: sandbox allow-scripts allow-forms`. | ✅ Chuẩn Hubble |
+| **NFR-02**| Security | Chặn Path Traversal và Blacklist các file nhạy cảm (`.env`, `.workboost/config.json`, `.git/`). | ✅ Hoàn thành |
+| **NFR-03**| Access Guard | Localhost Loopback Guard: Chỉ cho phép kết nối nội bộ từ máy local gọi các API Workspace. | ✅ Hoàn thành |
+| **NFR-04**| Fault Tolerance| Safe Parsing: File Markdown bị lỗi YAML Frontmatter sẽ bị bỏ qua và ghi log cảnh báo, không làm sập API (500). | ✅ Hoàn thành |
 
 ---
 
-## 3. Cập nhật Schemas (`packages/data-schemas`)
+## BLOCK 1: ARCHITECTURE OVERVIEW & SYSTEM TOPOLOGY
 
-### 3.1. `packages/data-schemas/src/config.ts`
-```typescript
-import { z } from 'zod';
+Work Boost áp dụng mô hình **Runtime Auto-Injection & Broker Pattern** của Hubble.md. HTML App là file thuần túy nằm trong Workspace; Server đóng vai trò Gateway phục vụ và bơm môi trường thực thi an toàn.
 
-export const WorkspaceConfigSchema = z.object({
-  version: z.literal(1).default(1),
-  workspaceName: z.string().default('My WorkBoost'),
-  timezone: z.string().default('Asia/Ho_Chi_Minh'),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  platforms: z.object({
-    slack: z.object({
-      enabled: z.boolean().default(false),
-      channelId: z.string().optional(),
-      userId: z.string().optional(),
-      lastSentAt: z.string().datetime().nullable().default(null),
-    }).default({ enabled: false }),
-    telegram: z.object({
-      enabled: z.boolean().default(false),
-      chatId: z.string().optional(),
-    }).default({ enabled: false }),
-  }).default({ slack: { enabled: false }, telegram: { enabled: false } }),
-  debtReminder: z.object({
-    enabled: z.boolean().default(false),
-    frequency: z.enum(['weekly', 'monthly', 'never']).default('weekly'),
-    weeklyDay: z.number().min(1).max(7).default(1),
-    monthlyDay: z.number().min(1).max(28).default(1),
-    reminderHour: z.number().min(0).max(23).default(9),
-    lastSentAt: z.string().datetime().nullable().default(null),
-  }).default({ enabled: false, frequency: 'weekly', weeklyDay: 1, monthlyDay: 1, reminderHour: 9, lastSentAt: null }),
-});
-
-export type WorkspaceConfig = z.infer<typeof WorkspaceConfigSchema>;
 ```
-
-### 3.2. `packages/data-schemas/src/debt.ts`
-```typescript
-import { z } from 'zod';
-
-export enum DebtDirection {
-  LENT = 'lent',
-  BORROWED = 'borrowed',
-}
-
-export enum DebtStatus {
-  PENDING = 'pending',
-  PAID = 'paid',
-  CANCELLED = 'cancelled',
-}
-
-export const DebtFrontmatterSchema = z.object({
-  id: z.string().uuid(),
-  direction: z.nativeEnum(DebtDirection),
-  amount: z.number().positive(),
-  currency: z.string().default('VND'),
-  personName: z.string().min(1),
-  status: z.nativeEnum(DebtStatus).default(DebtStatus.PENDING),
-  debtDate: z.iso.date(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  paidAt: z.string().datetime().nullable().default(null),
-  updatedBy: z.enum(['telegram', 'slack', 'agent', 'user']).default('agent'),
-});
-
-export type DebtFrontmatter = z.infer<typeof DebtFrontmatterSchema>;
-
-export interface DebtDocument {
-  frontmatter: DebtFrontmatter;
-  reason: string;
-  filePath: string;
-}
-```
-
-### 3.3. `packages/data-schemas/src/agent.ts`
-```typescript
-import { z } from 'zod';
-
-export interface TaskItem {
-  project: string;
-  task: string;
-}
-
-export interface DailyWorkReport {
-  completed: TaskItem[];
-  incomplete: TaskItem[];
-  planned: TaskItem[];
-}
-
-export const DailyWorkFrontmatterSchema = z.object({
-  id: z.string(), // daily_YYYY-MM-DD
-  date: z.iso.date(),
-  status: z.enum(['draft', 'completed']).default('completed'),
-  updatedAt: z.string().datetime(),
-  updatedBy: z.enum(['telegram', 'slack', 'agent', 'user']).default('agent'),
-});
-
-export type DailyWorkFrontmatter = z.infer<typeof DailyWorkFrontmatterSchema>;
-
-export interface DailyWorkDocument {
-  frontmatter: DailyWorkFrontmatter;
-  report: DailyWorkReport;
-  customSections: string;
-  rawMarkdown: string;
-  filePath: string;
-}
+                  ┌────────────────────────────────────────────────────────┐
+                  │          PHYSICAL WORKSPACE (~/.workboost/workspace)   │
+                  │   ├── debt-tracker.html (Pure HTML template)           │
+                  │   ├── standup-viewer.html (Pure HTML template)         │
+                  │   ├── daily/YYYY-MM-DD.md                              │
+                  │   └── debts/*.md & debts/archive/*.md                  │
+                  └───────────────────────────┬────────────────────────────┘
+                                              │ 
+                                              ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                             APPS/API (Deno HTTP Server)                                  │
+│                                                                                          │
+│  [GET /workspace-apps/:file]                                                             │
+│       │                                                                                  │
+│       ├── 1. Đọc file raw .html từ Workspace                                             │
+│       ├── 2. injectHtmlAppRuntime():                                                     │
+│       │        - Chèn CSS Theme + Tailwind Browser + window.workboost vào <head>         │
+│       │        - Chèn Alpine.js CDN vào cuối <body>                                      │
+│       └── 3. Trả về HTML kèm header: Content-Security-Policy: sandbox allow-scripts ...  │
+│                                                                                          │
+│  [REST API: /api/workspace/*] ─── (Localhost Guard + No-Store Cache) ───┐                │
+│  [SSE Stream: /api/workspace/events] ◄── (createWorkspaceWatcher) ──────┤                │
+└─────────────────────────────────────────────┬───────────────────────────┴────────────────┘
+                                              │ Direct Call
+                                              ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                          PACKAGES/DATA-PROVIDER (DataLayer)                              │
+│         - WorkspaceFS (assertInside, Mutex Locks, Atomic Temp Rename)                    │
+│         - Repositories (Safe Frontmatter Parsing, Archive Move on Settle)                │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Tầng Dữ liệu Singleton (`packages/data-provider`)
+## BLOCK 2: DATA MODEL REQUIREMENTS & ENVELOPES
 
-Trong `packages/data-provider/src/database.ts`:
+### 2.1 Chuẩn phản hồi Envelope (`ApiResponse<T>`)
 ```typescript
-export class Database {
-  private static instance: Database;
-
-  static async init(providedDataLayer?: DataLayer): Promise<Database> {
-    if (this.instance) return this.instance;
-
-    const dataLayer = providedDataLayer || createLocalDataLayer();
-    await dataLayer.fs.init();
-    await dataLayer.config.load();
-
-    this.instance = new Database(dataLayer);
-    return this.instance;
-  }
-}
-```
-
----
-
-## 5. Hệ thống Atomic Tools (`packages/brain/src/tools/`)
-
-### 5.1. File `packages/brain/src/tools/time-tools.ts`
-```typescript
-import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { Type } from '@earendil-works/pi-ai';
-import type { ConfigManager } from '@work-boost/data-provider';
-
-export function createGetCurrentTimeTool(configMgr: ConfigManager): AgentTool<any> {
-  return {
-    name: 'get_current_time',
-    label: 'Get Current Time',
-    description: 'Lấy ngày và giờ hiện tại theo Timezone đã cấu hình của Workspace.',
-    parameters: Type.Object({}),
-    execute: async () => {
-      const config = await configMgr.load();
-      const timezone = config.timezone || 'Asia/Ho_Chi_Minh';
-      const now = new Date();
-      
-      const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-      const localTime = new Intl.DateTimeFormat('vi-VN', { timeZone: timezone, timeStyle: 'full', dateStyle: 'full' }).format(now);
-
-      return {
-        content: [{ type: 'text', text: JSON.stringify({ currentDate: localDate, fullTime: localTime, timezone }) }],
-        details: { localDate, localTime, timezone },
-      };
-    },
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+  meta: {
+    timestamp: string;
+    requestId?: string;
   };
 }
 ```
 
-### 5.2. File `packages/brain/src/tools/debt-tools.ts`
-Chứa 5 tools nguyên tử:
-1. `create_debt`: Nhận `{ personName, amount, currency, direction, reason, debtDate }`.
-2. `list_debts`: Nhận `{ personName, status, direction }`.
-3. `settle_debt`: Nhận `{ debtId }` (Agent gọi `list_debts` trước để lấy ID).
-4. `get_debt_summary`: Tính toán vị thế ròng Net position.
-5. `delete_debt`: Nhận `{ debtId }`.
-
-### 5.3. File `packages/brain/src/tools/daily-work-tools.ts`
-Chứa 3 tools nguyên tử:
-1. `save_daily_work`: Nhận `{ date, completed, incomplete, planned }`.
-2. `get_daily_work`: Nhận `{ date, includeRaw }` (mặc định trả về JSON).
-3. `list_daily_dates`: Liệt kê các ngày đã có báo cáo.
-
-### 5.4. File `packages/brain/src/tools/workspace-file-tools.ts`
-Chứa 2 tools thao tác file:
-1. `read_workspace_file`: Nhận `{ path }` (kiểm tra đuôi `.md`, `.json`, `.txt` và kích thước `< 1MB`).
-2. `list_workspace_files`: Nhận `{ folder }`.
-
-### 5.5. File `packages/brain/src/tools/index.ts`
+### 2.2 Safe Result Pattern cho Broker Client
+Tất cả các phương thức của Broker đều có biến thể `safe*` tuân thủ nguyên tắc không throw Exception:
 ```typescript
-import type { AgentTool } from '@earendil-works/pi-agent-core';
-import type { DataLayer } from '@work-boost/data-provider';
-import { createGetCurrentTimeTool } from './time-tools.ts';
-import {
-  createCreateDebtTool,
-  createDeleteDebtTool,
-  createGetDebtSummaryTool,
-  createListDebtsTool,
-  createSettleDebtTool,
-} from './debt-tools.ts';
-import {
-  createGetDailyWorkTool,
-  createListDailyDatesTool,
-  createSaveDailyWorkTool,
-} from './daily-work-tools.ts';
-import {
-  createListWorkspaceFilesTool,
-  createReadWorkspaceFileTool,
-} from './workspace-file-tools.ts';
+export type SafeResult<T> = 
+  | { ok: true; data: T; error?: never }
+  | { ok: false; error: { code: string; message: string }; data?: never };
+```
 
-export function getWorkspaceTools(dataLayer: DataLayer): AgentTool<any>[] {
-  return [
-    createGetCurrentTimeTool(dataLayer.config),
-    createCreateDebtTool(dataLayer.debts),
-    createListDebtsTool(dataLayer.debts),
-    createSettleDebtTool(dataLayer.debts),
-    createGetDebtSummaryTool(dataLayer.debts),
-    createDeleteDebtTool(dataLayer.debts),
-    createSaveDailyWorkTool(dataLayer.dailyWork),
-    createGetDailyWorkTool(dataLayer.dailyWork),
-    createListDailyDatesTool(dataLayer.dailyWork),
-    createReadWorkspaceFileTool(dataLayer.fs),
-    createListWorkspaceFilesTool(dataLayer.fs),
-  ];
+### 2.3 Cấu trúc File Markdown có cấu trúc (Frontmatter + Body)
+```typescript
+export interface ParsedMarkdownFile<T = Record<string, unknown>> {
+  path: string;
+  frontmatter: T;
+  body: string;
+  size: number;
+  modifiedAt: string;
 }
 ```
 
 ---
 
-## 6. Nâng cấp Core Brain (`packages/brain/src/brain.ts`)
+## BLOCK 3: BROKER SDK & API SPECIFICATIONS
 
-### 6.1. System Prompt
+### 3.1 Giao diện `window.workboost` (TypeScript Interface)
+
 ```typescript
-function buildWorkspaceSystemPrompt(platform?: string, chatId?: string): string {
-  return `You are Work Boost — an intelligent AI assistant operating directly inside the user's Local-First Markdown Workspace.
+export interface WorkBoostBroker {
+  // 1. Generic HTML App File API (Chuẩn Hubble)
+  fs: {
+    readFile<T = Record<string, unknown>>(path: string): Promise<ParsedMarkdownFile<T>>;
+    safeReadFile<T = Record<string, unknown>>(path: string): Promise<SafeResult<ParsedMarkdownFile<T>>>;
+    
+    writeFile(path: string, content: string, frontmatter?: Record<string, unknown>): Promise<void>;
+    safeWriteFile(path: string, content: string, frontmatter?: Record<string, unknown>): Promise<SafeResult<void>>;
+    
+    patchFile(path: string, patch: { frontmatter?: Record<string, unknown>; body?: string }): Promise<void>;
+    safePatchFile(path: string, patch: { frontmatter?: Record<string, unknown>; body?: string }): Promise<SafeResult<void>>;
+    
+    listFiles(globPattern?: string): Promise<string[]>;
+    safeListFiles(globPattern?: string): Promise<SafeResult<string[]>>;
+  };
 
-Platform: ${platform || 'unknown'}
-Chat ID: ${chatId || 'unknown'}
+  // 2. High-level Domain Helpers
+  debts: {
+    list(filter?: { status?: string; direction?: string; personName?: string }): Promise<DebtDocument[]>;
+    getSummary(): Promise<DebtSummary>;
+    settle(debtId: string): Promise<DebtDocument>;
+    create(data: { personName: string; amount: number; direction: 'lent' | 'borrowed'; currency?: string; reason?: string; debtDate?: string }): Promise<DebtDocument>;
+    cancel(debtId: string): Promise<DebtDocument>;
+    delete(debtId: string): Promise<boolean>;
+  };
 
-Operating Principles & Guidelines:
-1. Workspace as Single Source of Truth: All user data (daily work reports, debts) are stored as local Markdown files.
-2. Time Awareness: Always call 'get_current_time' if you need to determine today's date or resolve relative time terms like "hôm nay", "hôm qua", "tuần này".
-3. Debt Management:
-   - Creating debt: Normalize Vietnamese amounts (e.g. "50k" -> 50000, "1 củ" / "1 triệu" -> 1000000, "2 lít" -> 200000). Default currency is 'VND' unless specified otherwise.
-   - Settling debt: If the user says "John đã trả nợ", first call 'list_debts' with personName='John' & status='pending' to find the debtId, then call 'settle_debt' with that debtId.
-4. Daily Work Standup:
-   - When user shares work progress, parse tasks into 3 distinct sections (Completed, Incomplete, Planned) with Project codes (e.g., **B4**, **UI**, **INBOX**) and call 'save_daily_work'.
-5. Response Tone: Friendly, concise, professional Vietnamese. Always summarize the actions performed with Markdown formatting.`;
+  daily: {
+    getToday(): Promise<DailyWorkDocument | null>;
+    get(date: string): Promise<DailyWorkDocument | null>;
+    save(date: string, report: DailyWorkReport, customSections?: string): Promise<DailyWorkDocument>;
+  };
+
+  // 3. Workspace Context & Real-time
+  time: {
+    getCurrentDate(): Promise<string>;
+    getTimezone(): Promise<string>;
+  };
+
+  events: {
+    subscribe(callback: (event: { paths: string[]; kind: string }) => void): () => void;
+  };
+}
+
+declare global {
+  interface Window {
+    workboost: WorkBoostBroker;
+  }
 }
 ```
 
-### 6.2. Interface `AgentPort` Tinh Gọn
-```typescript
-// packages/brain/src/ports/agent.ts
-export interface AgentPort {
-  stream(
-    message: string,
-    onChunk: (chunk: AgentStreamChunk) => void | Promise<void>,
-    options?: AgentStreamOptions,
-  ): Promise<AgentStreamResult>;
+### 3.2 Đặc tả REST Endpoints (`apps/api/src/routes/workspace.ts`)
 
-  createSession(sessionId?: string): Promise<string>;
-  loadSession(sessionId: string): Promise<void>;
-  removeSession(sessionId: string): Promise<boolean>;
-  dispose(): void;
-}
-```
+Tất cả các endpoint đều trả về header `Cache-Control: no-store, no-cache, must-revalidate`.
+
+| Endpoint | Method | Mô tả |
+| :--- | :---: | :--- |
+| `GET /workspace-apps/:filename` | `GET` | Phục vụ file HTML từ Workspace và tự động chạy `injectHtmlAppRuntime()`. |
+| `GET /api/workspace/events` | `GET` | Mở kết nối Server-Sent Events (SSE) để phát thông báo khi file trên đĩa thay đổi. |
+| `GET /api/workspace/time` | `GET` | Trả về `{ currentDate: 'YYYY-MM-DD', timezone: '...' }` theo `config.timezone`. |
+| `GET /api/workspace/fs/read?path=...` | `GET` | Đọc file markdown, tách sẵn `frontmatter` và `body`. |
+| `POST /api/workspace/fs/patch` | `POST` | Patch một phần frontmatter hoặc body mà không làm mất các trường khác. |
+| `GET /api/workspace/fs/list?glob=...` | `GET` | Liệt kê các file markdown/json trong workspace. |
+| `GET /api/workspace/debts?status=...` | `GET` | Lấy danh sách nợ với query params lọc linh hoạt (`status`, `direction`, `personName`). |
+| `GET /api/workspace/debts/summary` | `GET` | Lấy bảng tổng kết tài chính (có đầy đủ `currencies` map). |
+| `POST /api/workspace/debts/create` | `POST` | Tạo bản ghi nợ mới (gán `updatedBy: 'user'`). |
+| `POST /api/workspace/debts/:id/settle` | `POST` | Đánh dấu đã trả và dời file vào `debts/archive/`. |
+| `POST /api/workspace/debts/:id/cancel` | `POST` | Hủy nợ và dời file vào `debts/archive/`. |
+| `DELETE /api/workspace/debts/:id` | `DELETE` | Xóa vĩnh viễn file nợ khỏi đĩa. |
+| `GET /api/workspace/daily/today` | `GET` | Lấy báo cáo công việc của ngày hôm nay (tính theo timezone workspace). |
+| `GET /api/workspace/daily/:date` | `GET` | Lấy báo cáo công việc ngày cụ thể. |
+| `POST /api/workspace/daily/:date` | `POST` | Lưu báo cáo công việc (nhận `{ report, customSections }`, gán `updatedBy: 'user'`). |
 
 ---
 
-## 7. Khởi tạo Tập trung tại `apps/api/src/bootstrap.ts`
+## BLOCK 4: SECURITY & ISOLATION SPECIFICATION
 
-Chuyển `bootstrap.ts` từ `packages/services` về `apps/api/src/bootstrap.ts`:
+```
+[Incoming Request] ───► [1. Localhost Guard: Block non-loopback IP]
+                                   │
+                                   ▼
+                        [2. Workspace Router]
+                                   │
+                                   ▼
+                        [3. Path Filter & Whitelist]
+                        - Cấm: path chứa "..", ".env", ".workboost/config.json", ".git"
+                        - Cho phép: *.md, *.json, *.txt, *.html
+                                   │
+                                   ▼
+                        [4. WorkspaceFS.assertInside()]
+                        - Deno.realPath canonicalization
+                                   │
+                                   ▼
+                        [5. Atomic Write & Mutex Lock]
+```
+
+1. **Localhost Access Guard:** Middleware chặn toàn bộ request gọi vào `/api/workspace/*` nếu không xuất phát từ `127.0.0.1`, `::1` hoặc `localhost`.
+2. **Rate Limit Exemption:** Miễn trừ rate limiting cho router `/api/workspace/*` để Dashboard không bị dính HTTP 429.
+3. **CSP Sandbox:** Mọi file HTML App khi serve đều có sandbox và chính sách tài nguyên hạn chế:
+   ```http
+   Content-Security-Policy: sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none';
+   ```
+4. **Fault-Tolerant Frontmatter Reader:** 
+   Trong `DebtRepository.listAll()`, nếu gặp file bị lỗi định dạng YAML do chỉnh sửa tay:
+   * Không ném Exception làm sập API (500).
+   * Ghi log cảnh báo `logger.warn('Corrupted debt file detected', { path })`.
+   * Bỏ qua file lỗi để toàn bộ danh sách còn lại vẫn hiển thị bình thường.
+
+---
+
+## BLOCK 5: COMPONENT DESIGN & CODE IMPLEMENTATION
+
+### 5.1 Hàm Auto-Injection (`apps/api/src/utils/html-injector.ts`)
+Tái hiện chính xác cơ chế của Hubble.md:
+
 ```typescript
-import { createDataLayer, Database } from '@work-boost/data-provider';
-import { createBrain, type AgentPort } from '@work-boost/brain';
-import { env } from '@work-boost/shared';
-import { SlackService, TelegramService } from '@work-boost/services';
+const TAILWIND_CDN = '<script src="https://cdn.tailwindcss.com/3.4.17" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K" crossorigin="anonymous"></script>';
+const ALPINE_CDN = '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.16.2/dist/cdn.min.js" integrity="sha384-hTDKg8MgHALzleab34+W1b6UpW6tektVmHXleL5Ztz8x2WFIJeaJp6ixjNBjbrDY" crossorigin="anonymous"></script>';
 
-export interface Services {
-  db: Database;
-  agent: AgentPort;
-  slack: SlackService;
-  telegram: TelegramService;
+function styleTag(css: string): string {
+  return `<style data-workboost-injected="theme">\n${css}\n</style>`;
 }
 
-export async function initializeServices(): Promise<Services> {
-  // 1. Khởi tạo DataLayer duy nhất
-  const dataLayer = createDataLayer();
-  await dataLayer.fs.init();
-  await dataLayer.config.load();
+function scriptTag(js: string): string {
+  return `<script data-workboost-injected="runtime">\n${js}\n</script>`;
+}
 
-  // 2. Database facade dùng chung dataLayer
-  const db = await Database.init(dataLayer);
+export function injectHtmlAppRuntime(rawHtml: string, runtimeBundleJs: string): string {
+  const headInjection = `\n${TAILWIND_CDN}\n${scriptTag(runtimeBundleJs)}\n`;
+  const bodyEndInjection = `\n${ALPINE_CDN}\n`;
 
-  // 3. Khởi tạo Brain với Workspace Tools (Không Langfuse)
-  const agent = createBrain({
-    apiKey: env.get('GOOGLE_API_KEY') || '',
-    dataLayer,
+  let html = rawHtml;
+  if (html.search(/<\/head\s*>/i) === -1) {
+    html = `${headInjection}${html}`;
+  } else {
+    html = html.replace(/<\/head\s*>/i, `${headInjection}</head>`);
+  }
+
+  if (html.search(/<\/body\s*>/i) === -1) {
+    html = `${html}${bodyEndInjection}`;
+  } else {
+    html = html.replace(/<\/body\s*>/i, `${bodyEndInjection}</body>`);
+  }
+
+  return html;
+}
+```
+
+### 5.2 Mã nguồn Broker Runtime Client (`packages/runtime/src/global.js`)
+
+File script JS này sẽ được inject tự động vào mọi HTML App:
+
+```javascript
+(function () {
+  const API_BASE = window.__WORKBOOST_API_BASE__ || '/api/workspace';
+
+  async function request(endpoint, options = {}) {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      const err = new Error(json.error?.message || 'Request failed');
+      err.code = json.error?.code || 'INTERNAL_ERROR';
+      err.details = json.error?.details;
+      throw err;
+    }
+    return json.data;
+  }
+
+  async function safe(promise) {
+    try {
+      const data = await promise;
+      return { ok: true, data };
+    } catch (error) {
+      return { ok: false, error: { code: error.code || 'UNKNOWN', message: error.message } };
+    }
+  }
+
+  const broker = {
+    fs: {
+      readFile: (path) => request(`/fs/read?path=${encodeURIComponent(path)}`),
+      safeReadFile: (path) => safe(broker.fs.readFile(path)),
+      patchFile: (path, patch) => request('/fs/patch', { method: 'POST', body: JSON.stringify({ path, patch }) }),
+      safePatchFile: (path, patch) => safe(broker.fs.patchFile(path, patch)),
+      listFiles: (glob = '**/*') => request(`/fs/list?glob=${encodeURIComponent(glob)}`),
+      safeListFiles: (glob) => safe(broker.fs.listFiles(glob)),
+    },
+
+    debts: {
+      list: (filter = {}) => {
+        const params = new URLSearchParams();
+        if (filter.status) params.set('status', filter.status);
+        if (filter.direction) params.set('direction', filter.direction);
+        if (filter.personName) params.set('personName', filter.personName);
+        return request(`/debts?${params.toString()}`);
+      },
+      getSummary: () => request('/debts/summary'),
+      settle: (id) => request(`/debts/${id}/settle`, { method: 'POST' }),
+      cancel: (id) => request(`/debts/${id}/cancel`, { method: 'POST' }),
+      delete: (id) => request(`/debts/${id}`, { method: 'DELETE' }),
+      create: (data) => request('/debts/create', { method: 'POST', body: JSON.stringify(data) }),
+    },
+
+    daily: {
+      getToday: () => request('/daily/today'),
+      get: (date) => request(`/daily/${date}`),
+      save: (date, report, customSections = '') => 
+        request(`/daily/${date}`, { method: 'POST', body: JSON.stringify({ report, customSections }) }),
+    },
+
+    time: {
+      getCurrentDate: async () => (await request('/time')).currentDate,
+      getTimezone: async () => (await request('/time')).timezone,
+    },
+
+    events: {
+      subscribe: (callback) => {
+        const sse = new EventSource(`${API_BASE}/events`);
+        sse.onmessage = (e) => {
+          try { callback(JSON.parse(e.data)); } catch {}
+        };
+        return () => sse.close();
+      }
+    }
+  };
+
+  window.workboost = broker;
+
+  // Lắng nghe sự kiện SSE và phát ra DOM Event để Alpine.js tự reload
+  broker.events.subscribe((event) => {
+    window.dispatchEvent(new CustomEvent('workboost:change', { detail: event }));
   });
+})();
+```
 
-  const slack = new SlackService();
-  const telegram = new TelegramService(db, agent);
+### 5.3 Mẫu HTML App 1: `debt-tracker.html` (Đa tiền tệ + Real-time Reactive)
 
-  return { db, agent, slack, telegram };
-}
+```html
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Sổ Nợ Cá Nhân</title>
+</head>
+<body class="bg-stone-50 text-stone-900 p-6 font-sans antialiased">
+  <div class="max-w-4xl mx-auto space-y-6" x-data="debtTracker()" x-init="init()">
+    
+    <header class="flex items-center justify-between border-b border-stone-200 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">💰 Sổ Nợ Work Boost</h1>
+        <p class="text-sm text-stone-500">Tự động đồng bộ với Telegram & File Markdown</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+          <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Live Sync
+        </span>
+        <button @click="loadData()" class="px-3 py-1.5 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg text-sm font-medium shadow-sm">
+          🔄 Làm mới
+        </button>
+      </div>
+    </header>
+
+    <!-- Multi-Currency Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+      <template x-for="(totals, curr) in summary.currencies" :key="curr">
+        <div class="p-4 bg-white rounded-xl shadow-sm border border-stone-200 space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="text-xs font-bold uppercase tracking-wider text-stone-400" x-text="curr"></span>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded"
+                  :class="(totals.lent - totals.borrowed) >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'"
+                  x-text="(totals.lent - totals.borrowed) >= 0 ? 'Dương' : 'Âm'"></span>
+          </div>
+          <div class="text-2xl font-black text-stone-900" x-text="formatMoney(totals.lent - totals.borrowed, curr)"></div>
+          <div class="text-xs text-stone-500 flex justify-between border-t pt-2">
+            <span>Được nợ: <b class="text-emerald-600" x-text="formatMoney(totals.lent, curr)"></b></span>
+            <span>Cần trả: <b class="text-rose-600" x-text="formatMoney(totals.borrowed, curr)"></b></span>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="flex gap-2">
+      <template x-for="f in ['all', 'pending', 'paid', 'lent', 'borrowed']" :key="f">
+        <button @click="filter = f; loadDebts()" 
+                class="px-3 py-1 text-xs rounded-full uppercase tracking-wider font-bold transition"
+                :class="filter === f ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-600 hover:bg-stone-300'"
+                x-text="f"></button>
+      </template>
+    </div>
+
+    <!-- List -->
+    <div class="bg-white rounded-xl shadow-sm border border-stone-200 divide-y divide-stone-100 overflow-hidden">
+      <template x-if="debts.length === 0">
+        <div class="p-8 text-center text-stone-400">📭 Không có khoản nợ nào.</div>
+      </template>
+      <template x-for="debt in debts" :key="debt.frontmatter.id">
+        <div class="p-4 flex items-center justify-between hover:bg-stone-50 transition">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 text-xs font-bold rounded"
+                    :class="debt.frontmatter.direction === 'lent' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'"
+                    x-text="debt.frontmatter.direction === 'lent' ? 'CHO VAY' : 'VAY'"></span>
+              <span class="font-bold text-stone-900" x-text="debt.frontmatter.personName"></span>
+              <span class="text-xs text-stone-400" x-text="debt.frontmatter.debtDate"></span>
+            </div>
+            <div class="text-sm text-stone-600" x-text="debt.reason || '(Không có lý do)'"></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="text-right">
+              <div class="font-black text-lg text-stone-900" x-text="formatMoney(debt.frontmatter.amount, debt.frontmatter.currency)"></div>
+              <span class="text-xs font-semibold"
+                    :class="debt.frontmatter.status === 'paid' ? 'text-emerald-600' : 'text-amber-600'"
+                    x-text="debt.frontmatter.status === 'paid' ? '✅ Đã trả' : '⏳ Chờ trả'"></span>
+            </div>
+            <template x-if="debt.frontmatter.status === 'pending'">
+              <button @click="settle(debt.frontmatter.id)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition">
+                Đã trả
+              </button>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <script>
+    function debtTracker() {
+      return {
+        filter: 'all',
+        debts: [],
+        summary: { currencies: {} },
+        async init() {
+          await this.loadData();
+          // Tự động reload khi Telegram bot hoặc Agent chỉnh sửa file trên đĩa
+          window.addEventListener('workboost:change', () => this.loadData());
+        },
+        async loadData() {
+          await Promise.all([this.loadSummary(), this.loadDebts()]);
+        },
+        async loadSummary() {
+          this.summary = await window.workboost.debts.getSummary();
+        },
+        async loadDebts() {
+          let query = {};
+          if (this.filter === 'pending' || this.filter === 'paid') query.status = this.filter;
+          if (this.filter === 'lent' || this.filter === 'borrowed') query.direction = this.filter;
+          this.debts = await window.workboost.debts.list(query);
+        },
+        async settle(id) {
+          await window.workboost.debts.settle(id);
+          await this.loadData();
+        },
+        formatMoney(amount, currency = 'VND') {
+          return new Intl.NumberFormat('vi-VN', { style: 'currency', currency }).format(amount || 0);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
+```
+
+### 5.4 Mẫu HTML App 2: `standup-viewer.html` (Bảng tổng kết công việc)
+
+```html
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Daily Standup</title>
+</head>
+<body class="bg-stone-50 text-stone-900 p-6 font-sans antialiased">
+  <div class="max-w-3xl mx-auto space-y-6" x-data="standupViewer()" x-init="init()">
+    <header class="flex items-center justify-between border-b border-stone-200 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">📝 Báo Cáo Standup Hằng Ngày</h1>
+        <p class="text-sm text-stone-500" x-text="'Ngày ' + currentDate"></p>
+      </div>
+      <button @click="copyMarkdown()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-sm transition">
+        📋 Copy Markdown
+      </button>
+    </header>
+
+    <div class="space-y-4">
+      <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
+        <h2 class="font-bold text-emerald-700">✅ 1. Việc đã hoàn thành hôm trước</h2>
+        <ul class="space-y-1.5">
+          <template x-for="item in doc?.report?.completed || []">
+            <li class="flex gap-2 text-sm">
+              <span class="font-bold px-2 py-0.5 bg-stone-100 text-stone-800 rounded text-xs" x-text="item.project"></span>
+              <span class="text-stone-700" x-text="item.task"></span>
+            </li>
+          </template>
+        </ul>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
+        <h2 class="font-bold text-rose-700">⏳ 2. Chưa hoàn thành</h2>
+        <ul class="space-y-1.5">
+          <template x-for="item in doc?.report?.incomplete || []">
+            <li class="flex gap-2 text-sm">
+              <span class="font-bold px-2 py-0.5 bg-stone-100 text-stone-800 rounded text-xs" x-text="item.project"></span>
+              <span class="text-stone-700" x-text="item.task"></span>
+            </li>
+          </template>
+        </ul>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
+        <h2 class="font-bold text-sky-700">🚀 3. Kế hoạch hôm nay</h2>
+        <ul class="space-y-1.5">
+          <template x-for="item in doc?.report?.planned || []">
+            <li class="flex gap-2 text-sm">
+              <span class="font-bold px-2 py-0.5 bg-stone-100 text-stone-800 rounded text-xs" x-text="item.project"></span>
+              <span class="text-stone-700" x-text="item.task"></span>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function standupViewer() {
+      return {
+        currentDate: '',
+        doc: null,
+        async init() {
+          this.currentDate = await window.workboost.time.getCurrentDate();
+          this.doc = await window.workboost.daily.getToday();
+          window.addEventListener('workboost:change', async () => {
+            this.doc = await window.workboost.daily.getToday();
+          });
+        },
+        copyMarkdown() {
+          if (!this.doc?.rawMarkdown) return;
+          navigator.clipboard.writeText(this.doc.rawMarkdown);
+          alert('Đã copy nội dung Standup Markdown!');
+        }
+      }
+    }
+  </script>
+</body>
+</html>
 ```
 
 ---
 
-## 8. Kế hoạch Dọn dẹp & Triển khai (Checklist)
+## BLOCK 6: TESTING & VERIFICATION PLAN
 
-### 🧹 Bước 1: Dọn dẹp Code Rác & Chuẩn hóa Naming
-- [ ] Xóa `packages/data-provider/src/indexes.ts`.
-- [ ] Xóa `packages/data-provider/src/migrations/`.
-- [ ] Xóa các file test rác ở root: `tests/test_agent.ts`, `tests/test_database.ts`, `tests/test_slack.ts`.
-- [ ] Đổi tên `class Slack` thành `class SlackService` trong `packages/services/src/slack/slack.ts`.
-- [ ] Đổi toàn bộ tên file trong `tests/` sang dạng `kebab-case.test.ts`.
-- [ ] Chuyển thư mục `api/` thành `apps/api/` (cập nhật `deno.json` workspace).
-- [ ] Chuyển `bootstrap.ts` sang `apps/api/src/bootstrap.ts`.
+### 6.1 Danh mục Unit & Integration Tests cần triển khai
 
-### ⚙️ Bước 2: Nâng cấp Schemas & Data Layer
-- [ ] Thêm `timezone` vào `WorkspaceConfigSchema`.
-- [ ] Thêm `updatedBy` vào `DebtFrontmatterSchema` và `DailyWorkFrontmatterSchema`.
-- [ ] Sửa `Database.init(dataLayer)` nhận instance từ ngoài vào.
+1. **`tests/runtime/html-injector.test.ts`**:
+   * Kiểm thử `injectHtmlAppRuntime()` chèn đúng CSS theme, Tailwind, runtime JS và Alpine.js vào thẻ `<head>` và `<body>`.
+   * Kiểm thử trường hợp file HTML thiếu thẻ `<head>` hoặc `<body>` vẫn chèn thành công.
+2. **`tests/routes/workspace-router.test.ts`**:
+   * Kiểm thử `GET /workspace-apps/debt-tracker.html` trả về HTTP 200, Content-Type `text/html` và CSP Sandbox Header.
+   * Kiểm thử bảo mật Path Traversal `GET /api/workspace/fs/read?path=../../.env` trả về `403/500 Access Denied`.
+   * Kiểm thử `GET /api/workspace/debts/summary` tính đúng `currencies` khi có đồng thời USD và VND.
+   * Kiểm thử `safeParse` trong repository: Khi cố tình tạo 1 file `.md` chứa YAML hỏng, API list vẫn chạy bình thường.
+3. **`tests/routes/sse-events.test.ts`**:
+   * Kiểm thử tạo kết nối SSE `GET /api/workspace/events` nhận đúng payload event khi có file bị ghi đè.
 
-### 🧠 Bước 3: Triển khai Atomic Tools cho Brain
-- [ ] Tạo `packages/brain/src/tools/time-tools.ts`.
-- [ ] Tạo `packages/brain/src/tools/debt-tools.ts`.
-- [ ] Tạo `packages/brain/src/tools/daily-work-tools.ts`.
-- [ ] Tạo `packages/brain/src/tools/workspace-file-tools.ts`.
-- [ ] Tạo `packages/brain/src/tools/index.ts` gom toàn bộ tools lại.
-- [ ] Xóa bỏ thư mục `packages/brain/src/tools/database/` cũ.
+### 6.2 Tiêu chuẩn nghiệm thu E2E (Acceptance Criteria)
 
-### 🚀 Bước 4: Refactor Brain Core & Services
-- [ ] Cập nhật `packages/brain/src/brain.ts` (gỡ bỏ Langfuse, nạp `dataLayer`, đổi system prompt, tinh gọn `AgentPort`).
-- [ ] Cập nhật các Telegram handlers gọi `agent.stream()`.
-
-### 🧪 Bước 5: Kiểm thử Toàn diện
-- [ ] Viết `tests/services/agent/workspace-tools.test.ts`.
-- [ ] Chạy `deno task test` và `deno task check` đảm bảo **Pass 100%**.
+* [ ] **AC-1:** Khởi động server Deno, mở trình duyệt tại `http://localhost:3001/workspace-apps/debt-tracker.html`: Giao diện hiển thị tức thì với đầy đủ Tailwind CSS & Alpine.js mà không có lỗi console.
+* [ ] **AC-2:** Trên điện thoại, nhắn tin qua Telegram bot: *"Vừa vay Alex 200k ăn tối"* ➔ Quan sát màn hình máy tính: Không cần bấm F5, giao diện `debt-tracker.html` tự động cập nhật khoản nợ mới thông qua kênh SSE Watcher.
+* [ ] **AC-3:** Bấm nút **[Đã trả]** trên giao diện: File `.md` chuyển vào `debts/archive/` và Net Position cập nhật ngay lập tức.
+* [ ] **AC-4:** Chạy toàn bộ test suite `deno test --allow-all`: 100% tests vượt qua thành công.

@@ -1,4 +1,4 @@
-import { startDailyScheduler } from '@work-boost/services/scheduler/daily-job.ts';
+import { seedHtmlApps } from '@work-boost/runtime';
 /// <reference lib="deno.unstable" />
 import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
@@ -31,7 +31,11 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   console.log('[DEBUG] GOOGLE_API_KEY set:', !!env.get('GOOGLE_API_KEY'));
 
   // Initialize services (validates required secrets first)
-  const { db, agent, slack, telegram } = await initializeServices();
+  const { db, agent, extensionManager } = await initializeServices({ enableScheduler });
+  const seededApps = await seedHtmlApps(db.fs);
+  if (seededApps.length > 0) {
+    logger.info('Seeded HTML Apps into workspace: ' + seededApps.join(', '), undefined, 'green');
+  }
   const server = createServer({
     port,
     host,
@@ -40,30 +44,29 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     rateLimitWindowMs: 15 * 60 * 1000,
     enableWebSocket: false,
     apiPrefix,
-    slack,
-    telegram,
     db,
     agent,
+    extensionManager,
   });
 
   try {
     server.start();
     logger.info('API server is running and ready to accept requests', undefined, 'green');
+    logger.info('API server is running and ready to accept requests', undefined, 'green');
 
-    // Start daily scheduler after successful server start
-    if (enableScheduler) {
+    let shuttingDown = false;
+    const shutdown = async (signal: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      logger.info(`Received ${signal}; shutting down extensions`);
       try {
-        await startDailyScheduler({
-          db,
-          agent,
-          slackBot: slack,
-          telegramBot: telegram,
-        });
-        logger.info('Daily scheduler started');
-      } catch (schedulerError) {
-        logger.error('Failed to start scheduler', { error: schedulerError });
+        await server.stop();
+      } finally {
+        Deno.exit(0);
       }
-    }
+    };
+    Deno.addSignalListener('SIGINT', () => void shutdown('SIGINT'));
+    Deno.addSignalListener('SIGTERM', () => void shutdown('SIGTERM'));
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;

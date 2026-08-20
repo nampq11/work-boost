@@ -1,5 +1,5 @@
 import { type AgentToolResult } from '@earendil-works/pi-agent-core';
-import { assertEquals, assertRejects } from '@std/assert';
+import { assertEquals } from '@std/assert';
 import { createGetDailyWorkTool, createListDailyDatesTool } from '@work-boost/brain';
 import type { DailyWorkRepository } from '@work-boost/data-provider';
 import type { DailyWorkDocument } from '@work-boost/data-schemas/agent.ts';

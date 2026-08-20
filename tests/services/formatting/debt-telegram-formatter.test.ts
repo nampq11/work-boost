@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertExists } from '@std/assert';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
-import { DebtTelegramFormatter } from '@work-boost/services';
+import { DebtTelegramFormatter } from '@work-boost/extensions';
 
 function makeDebt(
   overrides: Partial<{

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Daily Standup</title>
+</head>
+<body class="bg-stone-50 text-stone-900 p-6 font-sans antialiased">
+  <div class="max-w-3xl mx-auto space-y-6" x-data="standupViewer()" x-init="init()">
+    <header class="flex items-center justify-between border-b border-stone-200 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">📝 Báo Cáo Standup Hằng Ngày</h1>
+        <p class="text-sm text-stone-500" x-text="'Ngày ' + currentDate"></p>
+      </div>
+      <button @click="copyMarkdown()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-sm transition">
+        📋 Copy Markdown
+      </button>
+    </header>
+
+    <template x-if="error">
+      <div class="p-4 text-center text-rose-700 bg-rose-50 rounded-xl border border-rose-200" x-text="error"></div>
+    </template>
+
+    <template x-if="!error && !doc">
+      <div class="p-8 text-center text-stone-400 bg-white rounded-xl border border-stone-200">
+        📭 Chưa có báo cáo cho hôm nay.
+      </div>
+    </template>
+
+    <div class="space-y-4" x-show="doc && !error">
+      <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
+        <h2 class="font-bold text-emerald-700">✅ 1. Việc đã hoàn thành hôm trước</h2>
+        <ul class="space-y-1.5">
+          <template x-for="item in doc?.report?.completed || []">
+            <li class="flex gap-2 text-sm">
+              <span class="font-bold px-2 py-0.5 bg-stone-100 text-stone-800 rounded text-xs" x-text="item.project"></span>
+              <span class="text-stone-700" x-text="item.task"></span>
+            </li>
+          </template>
+        </ul>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
+        <h2 class="font-bold text-rose-700">⏳ 2. Chưa hoàn thành</h2>
+        <ul class="space-y-1.5">
+          <template x-for="item in doc?.report?.incomplete || []">
+            <li class="flex gap-2 text-sm">
+              <span class="font-bold px-2 py-0.5 bg-stone-100 text-stone-800 rounded text-xs" x-text="item.project"></span>
+              <span class="text-stone-700" x-text="item.task"></span>
+            </li>
+          </template>
+        </ul>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
+        <h2 class="font-bold text-sky-700">🚀 3. Kế hoạch hôm nay</h2>
+        <ul class="space-y-1.5">
+          <template x-for="item in doc?.report?.planned || []">
+            <li class="flex gap-2 text-sm">
+              <span class="font-bold px-2 py-0.5 bg-stone-100 text-stone-800 rounded text-xs" x-text="item.project"></span>
+              <span class="text-stone-700" x-text="item.task"></span>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function standupViewer() {
+      return {
+        currentDate: '',
+        doc: null,
+        error: '',
+        async init() {
+          window.addEventListener('workboost:change', () => this.load());
+          await this.load();
+        },
+        async load() {
+          this.error = '';
+          try {
+            this.currentDate = await window.workboost.time.getCurrentDate();
+            this.doc = await window.workboost.daily.getToday();
+          } catch (error) {
+            this.error = 'Không tải được báo cáo: ' + (error.message || error);
+          }
+        },
+        copyMarkdown() {
+          if (!this.doc?.rawMarkdown) return;
+          navigator.clipboard.writeText(this.doc.rawMarkdown);
+          alert('Đã copy nội dung Standup Markdown!');
+        }
+      }
+    }
+  </script>
+</body>
+</html>

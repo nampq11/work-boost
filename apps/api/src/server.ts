@@ -1,28 +1,23 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
-import type { SlackService } from '@work-boost/services/slack/slack.ts';
-import type { TelegramService } from '@work-boost/services/telegram/telegram.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
+import type { ExtensionManager } from '../../../extensions/manager.ts';
 import {
-  type RequestContext,
   createRequestContext,
   logError,
   logRequest,
   logResponse,
+  type RequestContext,
 } from './middleware/logging.ts';
-import { validateSlackWebhook } from './middleware/slack-validation.ts';
 import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
-import {
-  type SlackDeps,
-  handleSlackMessages,
-  handleSlackSubscribe,
-  handleSlackUnsubscribe,
-} from './routes/slack.ts';
+import { createWorkspaceRouter, type WorkspaceRouter } from './routes/workspace.ts';
 import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
 
 // ============================================================================
 // Configuration
 // ============================================================================
+
+const APPS_BASE = '/workspace-apps';
 
 export interface ApiServerConfig {
   port: number;
@@ -32,10 +27,9 @@ export interface ApiServerConfig {
   rateLimitMaxRequests?: number;
   enableWebSocket?: boolean;
   apiPrefix?: string;
-  slack?: SlackService;
-  telegram?: TelegramService;
   db?: Database;
   agent?: AgentPort;
+  extensionManager?: ExtensionManager;
 }
 
 // ============================================================================
@@ -139,8 +133,7 @@ function createRateLimiter(windowMs: number, maxRequests: number) {
 
   return function checkRateLimit(request: Request): Response | null {
     // Extract client IP from headers or connection info
-    const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
       'unknown';
 
@@ -187,26 +180,25 @@ function validateAndNormalizeApiPrefix(prefix?: string): string {
 export function createServer(config: ApiServerConfig) {
   const apiPrefix = validateAndNormalizeApiPrefix(config.apiPrefix);
   const corsOrigins = config.corsOrigins;
-  const slackSigningSecret = Deno.env.get('SLACK_SIGNING_SECRET') || '';
-
   // Rate limiter for API routes
   const checkRateLimit = createRateLimiter(
     config.rateLimitWindowMs || 15 * 60 * 1000,
     config.rateLimitMaxRequests || 100,
   );
 
-  // Build Slack deps if available
-  const slackDeps: SlackDeps | undefined =
-    config.db && config.agent && config.slack
-      ? { db: config.db, agent: config.agent, slack: config.slack }
-      : undefined;
+  // Workspace HTML-apps + broker API router (spec Phase 3)
+  const workspaceRouter: WorkspaceRouter | undefined = config.db
+    ? createWorkspaceRouter({ dataLayer: config.db.dataLayer, apiPrefix })
+    : undefined;
+
+  let httpServer: Deno.HttpServer | undefined;
 
   function buildApiPath(route: string): string {
     if (!apiPrefix || apiPrefix === '') return route;
     return apiPrefix + route;
   }
 
-  async function handleRequest(req: Request): Promise<Response> {
+  async function handleRequest(req: Request, info?: Deno.ServeHandlerInfo): Promise<Response> {
     const ctx: RequestContext = createRequestContext();
     logRequest(req, ctx);
 
@@ -265,6 +257,30 @@ export function createServer(config: ApiServerConfig) {
         return new Response('OK', { status: 200 });
       }
 
+      // Extension routes run before the built-in REST API.
+      if (config.extensionManager) {
+        const extensionResponse = await config.extensionManager.handleRequest(req);
+        if (extensionResponse) {
+          logResponse(req, extensionResponse, ctx);
+          return extensionResponse;
+        }
+      }
+
+      // ==============================================================
+      // Workspace HTML Apps & Broker API (localhost-only, no rate limit)
+      // ==============================================================
+      const workspaceBase = buildApiPath('/workspace');
+      if (
+        workspaceRouter &&
+        (pathname.startsWith(`${APPS_BASE}/`) ||
+          pathname === workspaceBase ||
+          pathname.startsWith(`${workspaceBase}/`))
+      ) {
+        const response = await workspaceRouter.handle(req, info);
+        logResponse(req, response, ctx);
+        return response;
+      }
+
       // ==============================================================
       // API Routes (with rate limiting)
       // ==============================================================
@@ -305,77 +321,6 @@ export function createServer(config: ApiServerConfig) {
       }
 
       // ==============================================================
-      // Slack Bot Routes (with webhook validation)
-      // ==============================================================
-      if (
-        slackDeps &&
-        (pathname === '/subscribe' || pathname === '/unsubscribe' || pathname === '/messages')
-      ) {
-        if (method !== 'POST') {
-          const response = errorResponse(
-            ERROR_CODES.NOT_FOUND,
-            `Method ${method} not allowed`,
-            405,
-          );
-          logResponse(req, response, ctx);
-          return response;
-        }
-
-        // Validate Slack webhook signature
-        const { error: validationError, bodyString } = await validateSlackWebhook(
-          req,
-          slackSigningSecret,
-          ctx.requestId,
-        );
-        if (validationError) {
-          logResponse(req, validationError, ctx);
-          return validationError;
-        }
-
-        // Parse the validated body
-        let parsedBody: Record<string, string>;
-        try {
-          // Slack sends URL-encoded form data
-          const params = new URLSearchParams(bodyString);
-          parsedBody = Object.fromEntries(params as unknown as Iterable<[string, string]>);
-        } catch {
-          try {
-            parsedBody = JSON.parse(bodyString);
-          } catch {
-            const response = new Response('Invalid request body', { status: 400 });
-            logResponse(req, response, ctx);
-            return response;
-          }
-        }
-
-        let response: Response;
-        if (pathname === '/subscribe') {
-          response = await handleSlackSubscribe(parsedBody, slackDeps);
-        } else if (pathname === '/unsubscribe') {
-          response = await handleSlackUnsubscribe(parsedBody, slackDeps);
-        } else {
-          response = await handleSlackMessages(parsedBody, slackDeps);
-        }
-
-        logResponse(req, response, ctx);
-        return response;
-      }
-
-      // ==============================================================
-      // Telegram Webhook
-      // ==============================================================
-      if (pathname.startsWith('/telegram') && config.telegram) {
-        if (!(await config.telegram.validateWebhook(req))) {
-          const response = new Response('Unauthorized', { status: 401 });
-          logResponse(req, response, ctx);
-          return response;
-        }
-        const response = await config.telegram.handleWebhook(req);
-        logResponse(req, response, ctx);
-        return response;
-      }
-
-      // ==============================================================
       // 404 Not Found
       // ==============================================================
       const response = errorResponse(
@@ -403,11 +348,12 @@ export function createServer(config: ApiServerConfig) {
   }
 
   return {
+    handleRequest,
     start(): void {
       const host = config.host || '0.0.0.0';
       const port = config.port;
 
-      Deno.serve(
+      httpServer = Deno.serve(
         {
           hostname: host,
           port,
@@ -421,6 +367,11 @@ export function createServer(config: ApiServerConfig) {
         },
         handleRequest,
       );
+    },
+    async stop(): Promise<void> {
+      workspaceRouter?.stop();
+      await httpServer?.shutdown();
+      await config.extensionManager?.disposeAll();
     },
   };
 }

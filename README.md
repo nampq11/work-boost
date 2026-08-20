@@ -184,8 +184,7 @@ packages/
 │   └── database.ts            # Database class, indexes, migrations
 ├── shared/                    # Cross-cutting concerns
 │   ├── env.ts                 # Environment configuration
-│   ├── logger/                # Winston-based logging
-│   └── observability/         # Langfuse tracing
+│   └── logger/                # Winston-based logging
 ├── brain/                     # AI agent loop (Google GenAI)
 │   └── src/
 │       ├── brain.ts           # Core agent loop
@@ -196,18 +195,15 @@ packages/
 │       ├── streaming/         # Streaming responses
 │       ├── tools/             # Data access, formatting, messaging tools
 │       └── ports/             # Platform abstraction interfaces
-└── services/                  # Platform adapters
-    └── src/
-        ├── slack/             # Slack integration
-        ├── telegram/          # Telegram integration
-        │   ├── handlers/      # Command handlers
-        │   └── keyboards.ts   # Inline keyboards
-        ├── bot/               # Bot service interface
-        ├── scheduler/         # Cron job schedulers
-        └── *-formatter.ts     # Platform-specific formatters
+extensions/                 # Built-in and user-loadable extensions
+├── slack/                  # Slack integration and webhook routes
+├── telegram/               # Telegram integration and handlers
+├── scheduler/              # Cron job extensions
+├── manager.ts              # Extension lifecycle and routing
+└── loader.ts               # ~/.workboost/plugins loader
 ```
 
-Internal cross-package imports use `@work-boost/*` bare specifiers (e.g. `@work-boost/brain`, `@work-boost/services/slack/slack.ts`). All external dependency versions are pinned in the root `deno.json`.
+Internal cross-package imports use `@work-boost/*` bare specifiers (e.g. `@work-boost/brain`, `@work-boost/extensions/slack/slack.ts`). All external dependency versions are pinned in the root `deno.json`.
 
 ## License
 
