@@ -3,6 +3,7 @@ import type { Database } from '@work-boost/data-provider';
 import type { DebtDirection } from '@work-boost/data-schemas/debt.ts';
 import type { Context } from 'grammy';
 import { debtDirectionKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
+import { createExpiringStore } from '../../state.ts';
 
 type ReplyMarkup = NonNullable<Parameters<Context['reply']>[1]>['reply_markup'];
 
@@ -27,16 +28,14 @@ async function safeReplyHtml(
   }
 }
 
-const pendingDebts = new Map<
-  string,
-  {
-    userId: string;
-    direction?: DebtDirection;
-    amount?: number;
-    person?: string;
-    reason?: string;
-  }
->();
+interface PendingDebt {
+  direction?: DebtDirection;
+  amount?: number;
+  person?: string;
+  reason?: string;
+}
+
+const pendingDebts = createExpiringStore<PendingDebt>(15 * 60 * 1000);
 
 /**
  * Handle /debt command.
@@ -93,7 +92,7 @@ export async function handleDirectionSelect(
     return;
   }
 
-  pendingDebts.set(userId, { userId, direction: direction as DebtDirection });
+  pendingDebts.set(userId, { direction: direction as DebtDirection });
 
   const directionText = direction === 'lent' ? 'lent to' : 'borrowed from';
   await ctx.editMessageText(

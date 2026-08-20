@@ -1,15 +1,12 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import type { Context } from 'grammy';
-import { DebtTelegramFormatter } from '../../../formatters/debt-telegram-formatter.ts';
-import { debtMenuKeyboard } from '../../keyboards.ts';
+import { debtMenuKeyboard, debtReminderKeyboard } from '../../keyboards.ts';
 
 interface RemindHandlerDeps {
   db: Database;
   agent: AgentPort;
 }
-
-const formatter = new DebtTelegramFormatter();
 
 function getCurrentFrequencyText(
   frequency: string,
@@ -85,7 +82,7 @@ async function showReminderSettings(
 
   const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
   await replyFn(message, {
-    reply_markup: formatter.remindKeyboard(currentFrequency),
+    reply_markup: debtReminderKeyboard(currentFrequency),
     parse_mode: 'HTML',
   });
 }

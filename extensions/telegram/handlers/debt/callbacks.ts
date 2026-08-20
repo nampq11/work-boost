@@ -42,71 +42,70 @@ export async function handleDebtCallback(ctx: Context, deps: CallbackHandlerDeps
     handleDebtMenuCallback,
   } = await import('./index.ts');
 
-  // Route to appropriate handler
-  switch (action) {
-    case 'record':
-      await handleRecordDebt(ctx, deps);
-      break;
+  type DebtCallbackHandler = (
+    callbackContext: Context,
+    dependencies: CallbackHandlerDeps,
+    callbackParams: string[],
+  ) => Promise<void>;
 
-    case 'menu':
-      await handleDebtMenuCallback(ctx);
-      break;
-
-    case 'direction':
-      if (params[0]) {
-        await handleDirectionSelect(ctx, deps, params[0] as 'lent' | 'borrowed');
+  const actionHandlers: Record<string, DebtCallbackHandler> = {
+    record: (callbackContext, dependencies) => handleRecordDebt(callbackContext, dependencies),
+    menu: (callbackContext) => handleDebtMenuCallback(callbackContext),
+    direction: (callbackContext, dependencies, callbackParams) => {
+      const direction = callbackParams[0];
+      if (direction === 'lent' || direction === 'borrowed') {
+        return handleDirectionSelect(callbackContext, dependencies, direction);
       }
-      break;
-
-    case 'list':
-      await handleListCallback(ctx, deps);
-      break;
-
-    case 'filter':
-      if (params[0]) {
-        await handleFilterCallback(ctx, deps, params[0]);
+      return Promise.resolve();
+    },
+    list: (callbackContext, dependencies) => handleListCallback(callbackContext, dependencies),
+    filter: (callbackContext, dependencies, callbackParams) => {
+      const filter = callbackParams[0];
+      return filter
+        ? handleFilterCallback(callbackContext, dependencies, filter)
+        : Promise.resolve();
+    },
+    show: (callbackContext, dependencies, callbackParams) => {
+      const debtId = callbackParams[0];
+      return debtId
+        ? handleShowDebtDetails(callbackContext, dependencies, debtId)
+        : Promise.resolve();
+    },
+    settle: (callbackContext, dependencies, callbackParams) => {
+      const debtId = callbackParams[0];
+      return debtId
+        ? handleSettleCallback(callbackContext, dependencies, debtId)
+        : Promise.resolve();
+    },
+    delete: (callbackContext, dependencies, callbackParams) => {
+      const debtId = callbackParams[0];
+      return debtId
+        ? handleDeleteCallback(callbackContext, dependencies, debtId)
+        : Promise.resolve();
+    },
+    confirm: (callbackContext, dependencies, callbackParams) => {
+      const [confirmationAction, debtId] = callbackParams;
+      return confirmationAction === 'delete' && debtId
+        ? handleDeleteConfirm(callbackContext, dependencies, debtId)
+        : Promise.resolve();
+    },
+    summary: (callbackContext, dependencies) =>
+      handleSummaryCallback(callbackContext, dependencies),
+    remind: (callbackContext, dependencies, callbackParams) => {
+      const frequency = callbackParams[0];
+      if (!frequency) return handleRemindCallback(callbackContext, dependencies);
+      if (frequency === 'weekly' || frequency === 'monthly' || frequency === 'never') {
+        return handleSetReminderFrequency(callbackContext, dependencies, frequency);
       }
-      break;
+      return Promise.resolve();
+    },
+  };
 
-    case 'show':
-      if (params[0]) {
-        await handleShowDebtDetails(ctx, deps, params[0]);
-      }
-      break;
-
-    case 'settle':
-      if (params[0]) {
-        await handleSettleCallback(ctx, deps, params[0]);
-      }
-      break;
-
-    case 'delete':
-      if (params[0]) {
-        await handleDeleteCallback(ctx, deps, params[0]);
-      }
-      break;
-
-    case 'confirm':
-      if (params[0] === 'delete' && params[1]) {
-        await handleDeleteConfirm(ctx, deps, params[1]);
-      }
-      break;
-
-    case 'summary':
-      await handleSummaryCallback(ctx, deps);
-      break;
-
-    case 'remind':
-      if (params.length === 0) {
-        await handleRemindCallback(ctx, deps);
-      } else if (params[0]) {
-        await handleSetReminderFrequency(ctx, deps, params[0] as 'weekly' | 'monthly' | 'never');
-      }
-      break;
-
-    default:
-      await ctx.answerCallbackQuery({
-        text: 'Unknown action',
-      });
+  const handler = actionHandlers[action];
+  if (handler) {
+    await handler(ctx, deps, params);
+    return;
   }
+
+  await ctx.answerCallbackQuery({ text: 'Unknown action' });
 }

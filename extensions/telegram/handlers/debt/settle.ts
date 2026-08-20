@@ -3,7 +3,7 @@ import type { Database } from '@work-boost/data-provider';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { Context } from 'grammy';
 import { DebtTelegramFormatter } from '../../../formatters/debt-telegram-formatter.ts';
-import { debtMenuKeyboard } from '../../keyboards.ts';
+import { debtItemKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
 
 interface SettleHandlerDeps {
   db: Database;
@@ -59,7 +59,7 @@ async function settleDebt(
     const message = formatter.formatDebtDocument(debt);
     const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
     await replyFn(message + '\n\nℹ️ This debt is already marked as paid.', {
-      reply_markup: formatter.debtItemKeyboard(debtId, debt.frontmatter.status),
+      reply_markup: debtItemKeyboard(debtId, debt.frontmatter.status),
       parse_mode: 'HTML',
     });
     return;

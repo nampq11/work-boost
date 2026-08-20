@@ -3,7 +3,8 @@ import type { Database } from '@work-boost/data-provider';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { Context } from 'grammy';
 import { DebtTelegramFormatter } from '../../../formatters/debt-telegram-formatter.ts';
-import { debtListKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
+import { debtItemKeyboard, debtListKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
+import { createExpiringStore } from '../../state.ts';
 
 interface ListHandlerDeps {
   db: Database;
@@ -12,7 +13,9 @@ interface ListHandlerDeps {
 
 const formatter = new DebtTelegramFormatter();
 
-const userFilters = new Map<string, { status?: DebtStatus; direction?: DebtDirection }>();
+const userFilters = createExpiringStore<{ status?: DebtStatus; direction?: DebtDirection }>(
+  15 * 60 * 1000,
+);
 
 export async function handleListDebts(ctx: Context, deps: ListHandlerDeps): Promise<void> {
   const userId = ctx.from?.id.toString();
@@ -139,7 +142,7 @@ export async function handleShowDebtDetails(
   const message = formatter.formatDebtDocument(debt);
 
   await ctx.editMessageText(message, {
-    reply_markup: formatter.debtItemKeyboard(debtId, debt.frontmatter.status),
+    reply_markup: debtItemKeyboard(debtId, debt.frontmatter.status),
     parse_mode: 'HTML',
   });
 }

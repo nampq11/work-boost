@@ -1,9 +1,9 @@
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
-import { InlineKeyboard } from 'grammy';
 import {
   calculateNetSummary,
   formatCurrency,
+  formatDate,
   resolveDebtCurrencies,
   resolveNetEmoji,
 } from './debt-formatting.ts';
@@ -18,13 +18,6 @@ export class DebtTelegramFormatter {
    */
   private escapeHtml(text: string): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  /**
-   * Format currency with symbol
-   */
-  formatCurrency(amount: number, currency: string): string {
-    return formatCurrency(amount, currency);
   }
 
   /**
@@ -51,18 +44,6 @@ export class DebtTelegramFormatter {
   }
 
   /**
-   * Format date in readable format
-   */
-  private formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
-
-  /**
    * Format a single debt document
    */
   formatDebtDocument(debt: DebtDocument, showId = false): string {
@@ -78,17 +59,17 @@ export class DebtTelegramFormatter {
         frontmatter.personName,
       )}`,
     );
-    parts.push(`<b>Amount:</b> ${this.formatCurrency(frontmatter.amount, frontmatter.currency)}`);
+    parts.push(`<b>Amount:</b> ${formatCurrency(frontmatter.amount, frontmatter.currency)}`);
     parts.push(`<b>Status:</b> ${this.formatStatus(frontmatter.status)}`);
 
     if (reason) {
       parts.push(`<b>Reason:</b> ${this.escapeHtml(reason)}`);
     }
 
-    parts.push(`<b>Date:</b> ${this.formatDate(frontmatter.debtDate)}`);
+    parts.push(`<b>Date:</b> ${formatDate(frontmatter.debtDate)}`);
 
     if (frontmatter.paidAt) {
-      parts.push(`<b>Paid on:</b> ${this.formatDate(frontmatter.paidAt)}`);
+      parts.push(`<b>Paid on:</b> ${formatDate(frontmatter.paidAt)}`);
     }
 
     return parts.join('\n');
@@ -168,72 +149,5 @@ export class DebtTelegramFormatter {
       `   (${summary.pendingBorrowedCount} pending)\n\n` +
       `${netEmoji} <b>Net:</b> ${netSummary.text}`
     );
-  }
-
-  debtMenuKeyboard(): InlineKeyboard {
-    return new InlineKeyboard()
-      .text('📝 Record Debt', 'action:debt:record')
-      .text('📋 My Debts', 'action:debt:list')
-      .row()
-      .text('📊 Summary', 'action:debt:summary')
-      .text('⏰ Reminders', 'action:debt:remind')
-      .row()
-      .text('« Back', 'action:cancel');
-  }
-
-  debtDirectionKeyboard(): InlineKeyboard {
-    return new InlineKeyboard()
-      .text('💰 Lent Money', 'action:debt:direction:lent')
-      .row()
-      .text('📥 Borrowed Money', 'action:debt:direction:borrowed')
-      .row()
-      .text('« Back', 'action:debt:menu');
-  }
-
-  debtListKeyboard(): InlineKeyboard {
-    return new InlineKeyboard()
-      .text('All', 'action:debt:filter:all')
-      .text('Pending', 'action:debt:filter:pending')
-      .text('Paid', 'action:debt:filter:paid')
-      .row()
-      .text('Lent', 'action:debt:filter:lent')
-      .text('Borrowed', 'action:debt:filter:borrowed')
-      .row()
-      .text('« Back', 'action:debt:menu');
-  }
-
-  debtItemKeyboard(debtId: string, status: DebtStatus): InlineKeyboard {
-    const keyboard = new InlineKeyboard();
-
-    if (status === DebtStatus.PENDING) {
-      keyboard
-        .text('✅ Mark Paid', `action:debt:settle:${debtId}`)
-        .text('✏️ Edit', `action:debt:edit:${debtId}`)
-        .row();
-    }
-
-    keyboard
-      .text('🗑 Delete', `action:debt:delete:${debtId}`)
-      .row()
-      .text('« Back', 'action:debt:list');
-
-    return keyboard;
-  }
-
-  confirmKeyboard(action: string, debtId: string): InlineKeyboard {
-    return new InlineKeyboard()
-      .text('Yes, confirm', `action:debt:confirm:${action}:${debtId}`)
-      .row()
-      .text('Cancel', 'action:debt:list');
-  }
-
-  remindKeyboard(currentFrequency: string): InlineKeyboard {
-    return new InlineKeyboard()
-      .text(currentFrequency === 'weekly' ? '✓ Weekly' : 'Weekly', 'action:debt:remind:weekly')
-      .text(currentFrequency === 'monthly' ? '✓ Monthly' : 'Monthly', 'action:debt:remind:monthly')
-      .row()
-      .text(currentFrequency === 'never' ? '✓ Never' : 'Never', 'action:debt:remind:never')
-      .row()
-      .text('« Back', 'action:debt:menu');
   }
 }

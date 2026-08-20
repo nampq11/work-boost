@@ -2,7 +2,7 @@ import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import type { Context } from 'grammy';
 import { DebtTelegramFormatter } from '../../../formatters/debt-telegram-formatter.ts';
-import { debtMenuKeyboard } from '../../keyboards.ts';
+import { debtConfirmKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
 
 interface DeleteHandlerDeps {
   db: Database;
@@ -76,7 +76,7 @@ async function confirmDelete(
 
   const replyFn = isEdit ? ctx.editMessageText.bind(ctx) : ctx.reply.bind(ctx);
   await replyFn(message, {
-    reply_markup: formatter.confirmKeyboard('delete', debtId),
+    reply_markup: debtConfirmKeyboard('delete', debtId),
     parse_mode: 'HTML',
   });
 }

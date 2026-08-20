@@ -3,6 +3,7 @@ import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import {
   calculateNetSummary,
   formatCurrency,
+  formatDate,
   resolveDebtCurrencies,
   resolveNetEmoji,
 } from './debt-formatting.ts';
@@ -11,10 +12,6 @@ import {
  * Formatter for debt messages in Slack using plain text with emoji.
  */
 export class DebtSlackFormatter {
-  formatCurrency(amount: number, currency: string): string {
-    return formatCurrency(amount, currency);
-  }
-
   private formatStatus(status: DebtStatus): string {
     switch (status) {
       case DebtStatus.PENDING:
@@ -36,15 +33,6 @@ export class DebtSlackFormatter {
     return direction === DebtDirection.LENT ? ':moneybag: Lent to' : ':inbox_tray: Borrowed from';
   }
 
-  private formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
-
   formatDebtDocument(debt: DebtDocument, showId = false): string {
     const { frontmatter, reason } = debt;
     const parts: string[] = [];
@@ -58,17 +46,17 @@ export class DebtSlackFormatter {
         frontmatter.personName,
       )}`,
     );
-    parts.push(`*Amount:* ${this.formatCurrency(frontmatter.amount, frontmatter.currency)}`);
+    parts.push(`*Amount:* ${formatCurrency(frontmatter.amount, frontmatter.currency)}`);
     parts.push(`*Status:* ${this.formatStatus(frontmatter.status)}`);
 
     if (reason) {
       parts.push(`*Reason:* ${this.escapeMrkdwn(reason)}`);
     }
 
-    parts.push(`*Date:* ${this.formatDate(frontmatter.debtDate)}`);
+    parts.push(`*Date:* ${formatDate(frontmatter.debtDate)}`);
 
     if (frontmatter.paidAt) {
-      parts.push(`*Paid on:* ${this.formatDate(frontmatter.paidAt)}`);
+      parts.push(`*Paid on:* ${formatDate(frontmatter.paidAt)}`);
     }
 
     return parts.join('\n');

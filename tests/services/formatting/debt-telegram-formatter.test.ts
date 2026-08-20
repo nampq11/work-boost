@@ -6,6 +6,15 @@ import { assert, assertEquals, assertExists } from '@std/assert';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import { DebtTelegramFormatter } from '@work-boost/extensions';
+import { formatCurrency } from '@work-boost/extensions/formatters/debt-formatting.ts';
+import {
+  debtConfirmKeyboard,
+  debtDirectionKeyboard,
+  debtItemKeyboard,
+  debtListKeyboard,
+  debtMenuKeyboard,
+  debtReminderKeyboard,
+} from '@work-boost/extensions/telegram/keyboards.ts';
 
 function makeDebt(
   overrides: Partial<{
@@ -190,57 +199,49 @@ Deno.test('DebtTelegramFormatter shows settled up when net is zero', () => {
   assert(result.includes('All settled up'), 'Should say settled');
 });
 
-Deno.test('DebtTelegramFormatter creates debt menu keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtMenuKeyboard();
+Deno.test('Telegram keyboards creates debt menu keyboard', () => {
+  const keyboard = debtMenuKeyboard();
   assertExists(keyboard);
   assertEquals(typeof keyboard.inline_keyboard, 'object');
 });
 
-Deno.test('DebtTelegramFormatter creates direction selection keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtDirectionKeyboard();
+Deno.test('Telegram keyboards creates direction selection keyboard', () => {
+  const keyboard = debtDirectionKeyboard();
   assertExists(keyboard);
   assertEquals(typeof keyboard.inline_keyboard, 'object');
 });
 
-Deno.test('DebtTelegramFormatter creates list filter keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtListKeyboard();
+Deno.test('Telegram keyboards creates list filter keyboard', () => {
+  const keyboard = debtListKeyboard();
   assertExists(keyboard);
   assertEquals(typeof keyboard.inline_keyboard, 'object');
 });
 
-Deno.test('DebtTelegramFormatter creates debt item keyboard with pending status', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtItemKeyboard('debt-123', DebtStatus.PENDING);
+Deno.test('Telegram keyboards creates debt item keyboard with pending status', () => {
+  const keyboard = debtItemKeyboard('debt-123', DebtStatus.PENDING);
   assertExists(keyboard);
   assertEquals(typeof keyboard.inline_keyboard, 'object');
 });
 
-Deno.test('DebtTelegramFormatter creates debt item keyboard with paid status', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtItemKeyboard('debt-123', DebtStatus.PAID);
+Deno.test('Telegram keyboards creates paid debt item keyboard', () => {
+  const keyboard = debtItemKeyboard('debt-123', DebtStatus.PAID);
   assertExists(keyboard);
   assertEquals(typeof keyboard.inline_keyboard, 'object');
 });
 
-Deno.test('DebtTelegramFormatter creates confirmation keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.confirmKeyboard('delete', 'debt-123');
+Deno.test('Telegram keyboards creates confirmation keyboard', () => {
+  const keyboard = debtConfirmKeyboard('delete', 'debt-123');
   assertExists(keyboard);
   assertEquals(typeof keyboard.inline_keyboard, 'object');
 });
 
-Deno.test('DebtTelegramFormatter creates reminder keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.remindKeyboard('weekly');
+Deno.test('Telegram keyboards creates reminder keyboard', () => {
+  const keyboard = debtReminderKeyboard('weekly');
   assertExists(keyboard);
   assertEquals(typeof keyboard.inline_keyboard, 'object');
 });
 
 Deno.test('DebtTelegramFormatter handles different currencies', () => {
-  const formatter = new DebtTelegramFormatter();
   const currencies = [
     { code: 'USD', symbol: '$' },
     { code: 'EUR', symbol: '€' },
@@ -249,7 +250,7 @@ Deno.test('DebtTelegramFormatter handles different currencies', () => {
     { code: 'VND', symbol: '₫' },
   ];
   for (const { code, symbol } of currencies) {
-    const result = formatter.formatCurrency(100, code);
+    const result = formatCurrency(100, code);
     assert(result.includes(symbol), `Should include ${symbol} for ${code}`);
   }
 });

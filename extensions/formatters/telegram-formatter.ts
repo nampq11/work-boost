@@ -12,7 +12,7 @@ export class TelegramFormatter {
    */
   format(response: AgentResponse): string[] {
     const content = this.buildContent(response);
-    return this.splitMessage(content, 4096);
+    return splitMessage(content);
   }
 
   private buildContent(response: AgentResponse): string {
@@ -38,15 +38,15 @@ export class TelegramFormatter {
   private escapeHtml(text: string): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+}
 
-  private splitMessage(text: string, maxLength: number): string[] {
-    const messages: string[] = [];
-    while (text.length > maxLength) {
-      const splitAt = text.lastIndexOf('\n', maxLength);
-      messages.push(text.slice(0, splitAt > 0 ? splitAt : maxLength));
-      text = text.slice(splitAt > 0 ? splitAt : maxLength).trim();
-    }
-    if (text) messages.push(text);
-    return messages;
+export function splitMessage(text: string, maxLength = 4096): string[] {
+  const messages: string[] = [];
+  while (text.length > maxLength) {
+    const splitAt = text.lastIndexOf('\n', maxLength);
+    messages.push(text.slice(0, splitAt > 0 ? splitAt : maxLength));
+    text = text.slice(splitAt > 0 ? splitAt : maxLength).trim();
   }
+  if (text) messages.push(text);
+  return messages;
 }

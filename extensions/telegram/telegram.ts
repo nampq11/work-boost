@@ -3,6 +3,7 @@ import { limit } from '@grammyjs/ratelimiter';
 import { stream, type StreamFlavor } from '@grammyjs/stream';
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
+import { SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import { env, timingSafeEqual } from '@work-boost/shared';
 import { redactRecursively } from '@work-boost/shared/logger/logger.ts';
 import { Bot, type Context, GrammyError } from 'grammy';
@@ -202,7 +203,7 @@ export class TelegramService implements BotService {
       if (e instanceof GrammyError) {
         if (e.error_code === 403) {
           if (ctx.from?.id) {
-            this.db.disablePlatform(ctx.from.id.toString(), 'telegram').catch(console.error);
+            this.db.disablePlatform(SINGLE_USER_ID, 'telegram').catch(console.error);
           }
         }
       }
