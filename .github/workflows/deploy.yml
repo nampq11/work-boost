@@ -49,4 +49,4 @@ jobs:
             echo "DENO_DEPLOY_TOKEN is not configured; production deployment is managed by the Deno Deploy GitHub integration."
             exit 0
           fi
-          deno deploy --org nampq11 --app work-boost --prod apps/api/src/main.ts
+          deno deploy --org nampq11 --app work-boost --prod --entrypoint apps/api/src/main.ts .
