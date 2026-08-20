@@ -3,7 +3,8 @@ import { limit } from '@grammyjs/ratelimiter';
 import { stream, type StreamFlavor } from '@grammyjs/stream';
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
-import { env } from '@work-boost/shared';
+import { env, timingSafeEqual } from '@work-boost/shared';
+import { redactRecursively } from '@work-boost/shared/logger/logger.ts';
 import { Bot, type Context, GrammyError } from 'grammy';
 import { webhookCallback } from 'grammy';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../bot/bot-service.ts';
@@ -15,17 +16,16 @@ import { createSanitizationMiddleware } from './sanitizer.ts';
 
 export type TelegramContext = StreamFlavor<Context>;
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-
-  return result === 0;
+interface TelegramUpdatePayload {
+  message?: {
+    from?: { id?: number };
+    chat?: { id?: number };
+  };
+  callback_query?: {
+    from?: { id?: number };
+    message?: { chat?: { id?: number } };
+  };
+  [key: string]: unknown;
 }
 
 /**
@@ -58,34 +58,13 @@ class BulkLimiter {
   }
 }
 
-function redactSensitiveData(obj: Record<string, unknown>): Record<string, unknown> {
-  const sensitiveKeys = ['token', 'password', 'secret', 'apiKey', 'botToken'];
-  const result: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(obj)) {
-    const keyLower = key.toLowerCase();
-    const shouldRedact = sensitiveKeys.some((sensitive) => keyLower === sensitive.toLowerCase());
-
-    if (shouldRedact && typeof value === 'string' && value.length > 0) {
-      result[key] = '[REDACTED]';
-    } else if (shouldRedact && typeof value === 'object' && value !== null) {
-      result[key] = redactSensitiveData(value as Record<string, unknown>);
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result;
-}
-
 function getRateLimit(type: 'interactive' | 'bulk'): number {
   if (type === 'interactive') {
-    const limitStr = env.get('TELEGRAM_RATE_LIMIT_INTERACTIVE');
-    return limitStr ? parseInt(limitStr, 10) : 3;
-  } else {
-    const limitStr = env.get('TELEGRAM_RATE_LIMIT_BULK');
-    return limitStr ? parseInt(limitStr, 10) : 25;
+    const limitString = env.get('TELEGRAM_RATE_LIMIT_INTERACTIVE');
+    return limitString ? parseInt(limitString, 10) : 3;
   }
+  const limitString = env.get('TELEGRAM_RATE_LIMIT_BULK');
+  return limitString ? parseInt(limitString, 10) : 25;
 }
 
 export class TelegramService implements BotService {
@@ -212,7 +191,7 @@ export class TelegramService implements BotService {
 
       console.error(
         'Telegram bot error:',
-        redactSensitiveData({
+        redactRecursively({
           errorMessage: e instanceof Error ? e.message : String(e),
           errorCode: e instanceof GrammyError ? e.error_code : undefined,
           userId: ctx.from?.id,
@@ -238,7 +217,7 @@ export class TelegramService implements BotService {
     } catch (error) {
       console.error(
         'Failed to send Telegram message:',
-        redactSensitiveData({
+        redactRecursively({
           errorMessage: error instanceof Error ? error.message : String(error),
           chatId,
         }),
@@ -271,7 +250,7 @@ export class TelegramService implements BotService {
   }
 
   async parseUpdate(request: Request): Promise<BotUpdate> {
-    const body = (await request.json()) as any;
+    const body = (await request.json()) as TelegramUpdatePayload;
     return {
       platform: 'telegram',
       userId: body.message?.from?.id?.toString() || body.callback_query?.from?.id?.toString() || '',

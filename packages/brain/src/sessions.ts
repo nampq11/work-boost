@@ -47,37 +47,37 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
 
   const sessions = new Map<string, SessionEntry>();
 
-  const touch = (sessionId: string): void => {
+  function touch(sessionId: string): void {
     const entry = sessions.get(sessionId);
     if (entry) entry.lastUsedAt = Date.now();
-  };
+  }
 
-  const shouldTrimTranscript = (agent: Agent): boolean => {
+  function shouldTrimTranscript(agent: Agent): boolean {
     return agent.state.messages.length > maxMessages;
-  };
+  }
 
-  const trimTranscript = (agent: Agent): void => {
+  function trimTranscript(agent: Agent): void {
     if (shouldTrimTranscript(agent)) {
       agent.state.messages = agent.state.messages.slice(-maxMessages);
     }
-  };
+  }
 
-  const cleanup = (): void => {
+  function cleanup(): void {
     const cutoff = Date.now() - sessionTTLMs;
     for (const [sessionId, entry] of sessions) {
       if (entry.lastUsedAt < cutoff) {
         sessions.delete(sessionId);
       }
     }
-  };
+  }
 
   let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
-  const startCleanup = (): void => {
+  function startCleanup(): void {
     cleanupTimer = setTimeout(() => {
       cleanup();
       startCleanup();
     }, cleanupIntervalMs);
-  };
+  }
   startCleanup();
 
   return {

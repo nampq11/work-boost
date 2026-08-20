@@ -1,3 +1,4 @@
+import { timingSafeEqual } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 
 const FIVE_MINUTES_IN_SECONDS = 60 * 5;
@@ -56,14 +57,4 @@ export async function validateSlackWebhook(
 
 function unauthorized(): { error: Response; bodyString: string } {
   return { error: new Response('Unauthorized', { status: 401 }), bodyString: '' };
-}
-
-function timingSafeEqual(first: string, second: string): boolean {
-  if (first.length !== second.length) return false;
-
-  let result = 0;
-  for (let index = 0; index < first.length; index++) {
-    result |= first.charCodeAt(index) ^ second.charCodeAt(index);
-  }
-  return result === 0;
 }

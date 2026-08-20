@@ -97,10 +97,10 @@ export function parseDailyReport(body: string): {
  * Format daily work report into markdown body
  */
 export function formatDailyReport(report: DailyWorkReport, customSections = ''): string {
-  const formatSection = (tasks: TaskItem[]) => {
+  function formatSection(tasks: TaskItem[]): string {
     if (!tasks || tasks.length === 0) return '- N/A';
-    return tasks.map((t) => `- **${t.project || 'INBOX'}**: ${t.task}`).join('\n');
-  };
+    return tasks.map((task) => `- **${task.project || 'INBOX'}**: ${task.task}`).join('\n');
+  }
 
   let result =
     `### 1. Việc hoàn thành hôm trước?\n${formatSection(report.completed)}\n\n` +

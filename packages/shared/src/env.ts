@@ -24,8 +24,12 @@ for (const [key, value] of Object.entries(envFile)) {
 }
 
 // 'developement' is accepted for backward compatibility but normalized to 'development'
-const normalizeDenoEnv = (value: string | undefined): string =>
-  value === 'developement' ? 'development' : (value ?? 'development');
+function normalizeDenoEnv(value: string | undefined): string {
+  if (value === 'developement') {
+    return 'development';
+  }
+  return value ?? 'development';
+}
 
 const envSchema = z.object({
   DENO_ENV: z.enum(['development', 'developement', 'production', 'test']).default('development'),
@@ -55,7 +59,7 @@ const envHandlers = {
 };
 
 const envProxy = new Proxy(envHandlers, {
-  get(_target, prop: string | symbol): any {
+  get(_target, prop: string | symbol): unknown {
     if (prop === 'get' && typeof prop === 'string') {
       return envHandlers.get;
     }
@@ -68,10 +72,8 @@ const envProxy = new Proxy(envHandlers, {
         return normalizeDenoEnv(Deno.env.get('DENO_ENV'));
       case 'LOG_LEVEL':
         return Deno.env.get('LOG_LEVEL') || 'info';
-      case 'REDACT_SECRETS': {
-        const redactValue = Deno.env.get('REDACT_SECRETS');
-        return redactValue === undefined ? true : redactValue !== 'false';
-      }
+      case 'REDACT_SECRETS':
+        return Deno.env.get('REDACT_SECRETS') !== 'false';
       default:
         return Deno.env.get(prop);
     }
@@ -80,7 +82,7 @@ const envProxy = new Proxy(envHandlers, {
 
 export const env = envProxy as EnvSchema & { get(key: string): string | undefined };
 
-export const validateEnv = () => {
+export function validateEnv(): boolean {
   const envToValidate = {
     DENO_ENV: Deno.env.get('DENO_ENV'),
     LOG_LEVEL: Deno.env.get('LOG_LEVEL'),
@@ -99,4 +101,4 @@ export const validateEnv = () => {
     return false;
   }
   return result.success;
-};
+}

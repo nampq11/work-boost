@@ -1,16 +1,8 @@
-import { env } from '@work-boost/shared';
+import { env, timingSafeEqual } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { BotService, BotUpdate, Platform, SendOptions } from '../bot/bot-service.ts';
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return result === 0;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 export class SlackService implements BotService {
@@ -168,11 +160,11 @@ export class SlackService implements BotService {
     return new Response('OK', { status: 200 });
   }
 
-  formatToSlack(agentResponse: any): string {
+  formatToSlack(agentResponse: unknown): string {
     if (typeof agentResponse === 'string') {
       return agentResponse;
     }
-    if (agentResponse?.summary) {
+    if (isRecord(agentResponse) && typeof agentResponse.summary === 'string') {
       return agentResponse.summary;
     }
     return JSON.stringify(agentResponse, null, 2);

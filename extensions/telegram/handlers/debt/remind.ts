@@ -11,6 +11,40 @@ interface RemindHandlerDeps {
 
 const formatter = new DebtTelegramFormatter();
 
+function getCurrentFrequencyText(
+  frequency: string,
+  weeklyDay?: number,
+  monthlyDay?: number,
+): string {
+  switch (frequency) {
+    case 'weekly': {
+      const day = weeklyDay || 1;
+      return `Weekly (every ${day}${getOrdinal(day)} day of the week)`;
+    }
+    case 'monthly': {
+      const day = monthlyDay || 1;
+      return `Monthly (on the ${day}${getOrdinal(day)})`;
+    }
+    default:
+      return 'Disabled';
+  }
+}
+
+function getFrequencyLabel(frequency: 'weekly' | 'monthly' | 'never'): string {
+  switch (frequency) {
+    case 'weekly':
+      return 'Weekly';
+    case 'monthly':
+      return 'Monthly';
+    case 'never':
+      return 'Never';
+  }
+}
+
+function getReminderVerb(frequency: 'weekly' | 'monthly' | 'never'): string {
+  return frequency === 'never' ? 'not receive' : 'receive';
+}
+
 export async function handleRemind(ctx: Context, deps: RemindHandlerDeps): Promise<void> {
   await showReminderSettings(ctx, deps, false);
 }
@@ -34,14 +68,11 @@ async function showReminderSettings(
   let message = '⏰ <b>Debt Reminders</b>\n\n';
 
   if (enabled) {
-    const frequencyText =
-      currentFrequency === 'weekly'
-        ? `Weekly (every ${settings.weeklyDay || 1}${getOrdinal(
-            settings.weeklyDay || 1,
-          )} day of the week)`
-        : currentFrequency === 'monthly'
-          ? `Monthly (on the ${settings.monthlyDay || 1}${getOrdinal(settings.monthlyDay || 1)})`
-          : 'Disabled';
+    const frequencyText = getCurrentFrequencyText(
+      currentFrequency,
+      settings.weeklyDay,
+      settings.monthlyDay,
+    );
 
     message += `Current setting: <b>${frequencyText}</b>\n\n`;
     message += `You'll receive a summary of your unpaid debts.`;
@@ -76,14 +107,11 @@ export async function handleSetReminderFrequency(
 
   await deps.db.config.save(config);
 
-  const frequencyText =
-    frequency === 'weekly' ? 'Weekly' : frequency === 'monthly' ? 'Monthly' : 'Never';
+  const frequencyText = getFrequencyLabel(frequency);
 
   await ctx.editMessageText(
     `✅ Reminder settings updated!\n\n` +
-      `You will ${
-        frequency === 'never' ? 'not receive' : 'receive'
-      } debt reminders ${frequencyText.toLowerCase()}.`,
+      `You will ${getReminderVerb(frequency)} debt reminders ${frequencyText.toLowerCase()}.`,
     { reply_markup: debtMenuKeyboard(), parse_mode: 'HTML' },
   );
 }

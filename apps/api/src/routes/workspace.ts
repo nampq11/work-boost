@@ -1,7 +1,7 @@
 import type { DataLayer } from '@work-boost/data-provider';
 import {
-  createWorkspaceWatcher,
   type WorkspaceChangeEvent,
+  createWorkspaceWatcher,
 } from '@work-boost/data-provider/fs/workspace-watcher.ts';
 import {
   parseMarkdown,
@@ -351,9 +351,9 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
 
     const rawHtml = await fs.readText(filename);
     const runtime = await readBrokerRuntime();
-    const runtimeBundleJs = `window.__WORKBOOST_API_BASE__=${
-      JSON.stringify(workspaceBase)
-    };\n${runtime.js}`;
+    const runtimeBundleJs = `window.__WORKBOOST_API_BASE__=${JSON.stringify(
+      workspaceBase,
+    )};\n${runtime.js}`;
     const html = injectHtmlAppRuntime(rawHtml, runtimeBundleJs, runtime.themeCss);
 
     return new Response(html, {
@@ -443,9 +443,8 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
             );
           }
         }
-        const rawMarkdown = frontmatter !== undefined
-          ? stringifyMarkdown(frontmatter, body.content)
-          : body.content;
+        const rawMarkdown =
+          frontmatter !== undefined ? stringifyMarkdown(frontmatter, body.content) : body.content;
         await fs.writeTextAtomic(path, rawMarkdown);
         return ok(await readWorkspaceFile(path));
       }

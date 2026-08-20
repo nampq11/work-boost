@@ -4,6 +4,8 @@ import type { DebtDirection } from '@work-boost/data-schemas/debt.ts';
 import type { Context } from 'grammy';
 import { debtDirectionKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
 
+type ReplyMarkup = NonNullable<Parameters<Context['reply']>[1]>['reply_markup'];
+
 interface DebtHandlerDeps {
   db: Database;
   agent: AgentPort;
@@ -16,12 +18,12 @@ interface DebtHandlerDeps {
 async function safeReplyHtml(
   ctx: Context,
   text: string,
-  extra: { reply_markup?: unknown } = {},
+  extra: { reply_markup?: ReplyMarkup } = {},
 ): Promise<void> {
   try {
-    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: extra.reply_markup as any });
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: extra.reply_markup });
   } catch {
-    await ctx.reply(text, { reply_markup: extra.reply_markup as any });
+    await ctx.reply(text, { reply_markup: extra.reply_markup });
   }
 }
 

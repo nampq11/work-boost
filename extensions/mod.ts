@@ -3,6 +3,7 @@ export * from './manager.ts';
 export * from './loader.ts';
 export * from './bot/bot-service.ts';
 export * from './formatters/debt-slack-formatter.ts';
+export * from './formatters/debt-formatting.ts';
 export * from './formatters/debt-telegram-formatter.ts';
 export * from './formatters/slack-formatter.ts';
 export * from './formatters/telegram-formatter.ts';

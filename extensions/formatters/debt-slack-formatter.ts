@@ -1,20 +1,18 @@
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import {
+  calculateNetSummary,
+  formatCurrency,
+  resolveDebtCurrencies,
+  resolveNetEmoji,
+} from './debt-formatting.ts';
 
 /**
  * Formatter for debt messages in Slack using plain text with emoji.
  */
 export class DebtSlackFormatter {
   formatCurrency(amount: number, currency: string): string {
-    const symbols: Record<string, string> = {
-      USD: '$',
-      EUR: '€',
-      GBP: '£',
-      JPY: '¥',
-      VND: '₫',
-    };
-    const symbol = symbols[currency] || currency + ' ';
-    return `${symbol}${amount.toLocaleString('vi-VN')}`;
+    return formatCurrency(amount, currency);
   }
 
   private formatStatus(status: DebtStatus): string {
@@ -119,42 +117,19 @@ export class DebtSlackFormatter {
       }
     >;
   }): string {
-    const currencies = summary.currencies || {
-      USD: {
-        lent: summary.totalLent,
-        borrowed: summary.totalBorrowed,
-        lentPaid: summary.totalLentPaid,
-        borrowedPaid: summary.totalBorrowedPaid,
-      },
-    };
-    const formatAmounts = (key: 'lent' | 'borrowed' | 'lentPaid' | 'borrowedPaid') =>
-      Object.entries(currencies)
+    const currencies = resolveDebtCurrencies(summary);
+    function formatAmounts(key: 'lent' | 'borrowed' | 'lentPaid' | 'borrowedPaid'): string {
+      const amounts = Object.entries(currencies)
         .filter(([, totals]) => totals[key] > 0)
-        .map(([currency, totals]) => this.formatCurrency(totals[key], currency))
-        .join(', ') || this.formatCurrency(0, 'USD');
-    const netPositions = Object.entries(currencies).map(([currency, totals]) => ({
-      currency,
-      value: totals.lent - totals.borrowed,
-    }));
-    const netText =
-      netPositions
-        .map(({ currency, value: netPosition }) => {
-          if (netPosition > 0) return `You're owed ${this.formatCurrency(netPosition, currency)}`;
-          if (netPosition < 0) {
-            return `You owe ${this.formatCurrency(Math.abs(netPosition), currency)}`;
-          }
-          return null;
-        })
-        .filter((text): text is string => text !== null)
-        .join(', ') || 'All settled up!';
-    const hasPositivePosition = netPositions.some(({ value }) => value > 0);
-    const hasNegativePosition = netPositions.some(({ value }) => value < 0);
-    const netEmoji =
-      hasPositivePosition && !hasNegativePosition
-        ? ':large_green_circle:'
-        : hasNegativePosition && !hasPositivePosition
-          ? ':red_circle:'
-          : ':white_circle:';
+        .map(([currency, totals]) => formatCurrency(totals[key], currency));
+      return amounts.join(', ') || formatCurrency(0, 'USD');
+    }
+    const netSummary = calculateNetSummary(currencies);
+    const netEmoji = resolveNetEmoji(
+      netSummary.hasPositivePosition,
+      netSummary.hasNegativePosition,
+      'slack',
+    );
 
     return (
       `*:moneybag: Debt Summary*\n\n` +
@@ -164,7 +139,7 @@ export class DebtSlackFormatter {
       `:inbox_tray: *You owe:* ${formatAmounts('borrowed')}\n` +
       `   (Paid: ${formatAmounts('borrowedPaid')})\n` +
       `   (${summary.pendingBorrowedCount} pending)\n\n` +
-      `${netEmoji} *Net:* ${netText}`
+      `${netEmoji} *Net:* ${netSummary.text}`
     );
   }
 }

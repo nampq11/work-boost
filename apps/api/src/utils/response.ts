@@ -1,11 +1,11 @@
 // Standard API response structure
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: {
     code: string;
     message: string;
-    details?: any;
+    details?: unknown;
   };
   meta?: {
     timestamp: string;
@@ -40,20 +40,19 @@ export function successResponse<T>(
 // Enhanced error response helper to prevent [object Object] display
 export function errorResponse(
   code: string,
-  message: string,
+  message: unknown,
   statusCode: number = 500,
-  details?: any,
+  details?: unknown,
   requestId?: string,
 ): Response {
   // Sanitize error message and details to ensure they're serializable
-  let sanitizedMessage = message;
+  let sanitizedMessage = typeof message === 'string' ? message : '';
   let sanitizedDetails = details;
 
   // Ensure message is always a string
   if (typeof message !== 'string') {
     try {
-      sanitizedMessage =
-        (message as any) instanceof Error ? (message as Error).message : String(message);
+      sanitizedMessage = message instanceof Error ? message.message : String(message);
     } catch {
       sanitizedMessage = 'Unknown error occurred';
     }
@@ -85,7 +84,7 @@ export function errorResponse(
     }
   }
 
-  const response: ApiResponse = {
+  const response: ApiResponse<unknown> = {
     success: false,
     error: {
       code,

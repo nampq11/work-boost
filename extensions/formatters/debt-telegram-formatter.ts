@@ -1,6 +1,12 @@
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import { InlineKeyboard } from 'grammy';
+import {
+  calculateNetSummary,
+  formatCurrency,
+  resolveDebtCurrencies,
+  resolveNetEmoji,
+} from './debt-formatting.ts';
 
 /**
  * Formatter for debt messages in Telegram using HTML parse mode.
@@ -18,15 +24,7 @@ export class DebtTelegramFormatter {
    * Format currency with symbol
    */
   formatCurrency(amount: number, currency: string): string {
-    const symbols: Record<string, string> = {
-      USD: '$',
-      EUR: '€',
-      GBP: '£',
-      JPY: '¥',
-      VND: '₫',
-    };
-    const symbol = symbols[currency] || currency + ' ';
-    return `${symbol}${amount.toLocaleString('vi-VN')}`;
+    return formatCurrency(amount, currency);
   }
 
   /**
@@ -146,46 +144,19 @@ export class DebtTelegramFormatter {
       }
     >;
   }): string {
-    const currencies = summary.currencies || {
-      USD: {
-        lent: summary.totalLent,
-        borrowed: summary.totalBorrowed,
-        lentPaid: summary.totalLentPaid,
-        borrowedPaid: summary.totalBorrowedPaid,
-      },
-    };
-
-    const formatAmounts = (key: 'lent' | 'borrowed' | 'lentPaid' | 'borrowedPaid') =>
-      Object.entries(currencies)
+    const currencies = resolveDebtCurrencies(summary);
+    function formatAmounts(key: 'lent' | 'borrowed' | 'lentPaid' | 'borrowedPaid'): string {
+      const amounts = Object.entries(currencies)
         .filter(([, totals]) => totals[key] > 0)
-        .map(([currency, totals]) => this.formatCurrency(totals[key], currency))
-        .join(', ') || this.formatCurrency(0, 'USD');
-
-    const netPositions = Object.entries(currencies).map(([currency, totals]) => ({
-      currency,
-      value: totals.lent - totals.borrowed,
-    }));
-
-    const netText =
-      netPositions
-        .map(({ currency, value: netPosition }) => {
-          if (netPosition > 0) return `You're owed ${this.formatCurrency(netPosition, currency)}`;
-          if (netPosition < 0) {
-            return `You owe ${this.formatCurrency(Math.abs(netPosition), currency)}`;
-          }
-          return null;
-        })
-        .filter((text): text is string => text !== null)
-        .join(', ') || 'All settled up!';
-
-    const hasPositivePosition = netPositions.some(({ value }) => value > 0);
-    const hasNegativePosition = netPositions.some(({ value }) => value < 0);
-    const netEmoji =
-      hasPositivePosition && !hasNegativePosition
-        ? '🟢'
-        : hasNegativePosition && !hasPositivePosition
-          ? '🔴'
-          : '⚪';
+        .map(([currency, totals]) => formatCurrency(totals[key], currency));
+      return amounts.join(', ') || formatCurrency(0, 'USD');
+    }
+    const netSummary = calculateNetSummary(currencies);
+    const netEmoji = resolveNetEmoji(
+      netSummary.hasPositivePosition,
+      netSummary.hasNegativePosition,
+      'telegram',
+    );
 
     return (
       `<b>💵 Debt Summary</b>\n\n` +
@@ -195,7 +166,7 @@ export class DebtTelegramFormatter {
       `📥 <b>You owe:</b> ${formatAmounts('borrowed')}\n` +
       `   (Paid: ${formatAmounts('borrowedPaid')})\n` +
       `   (${summary.pendingBorrowedCount} pending)\n\n` +
-      `${netEmoji} <b>Net:</b> ${netText}`
+      `${netEmoji} <b>Net:</b> ${netSummary.text}`
     );
   }
 

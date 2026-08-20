@@ -21,9 +21,9 @@ export function injectHtmlAppRuntime(
   runtimeBundleJs: string,
   themeCss = '',
 ): string {
-  const headInjection = `\n${TAILWIND_CDN}\n${themeCss ? `${styleTag(themeCss)}\n` : ''}${
-    scriptTag(runtimeBundleJs)
-  }\n`;
+  const headInjection = `\n${TAILWIND_CDN}\n${themeCss ? `${styleTag(themeCss)}\n` : ''}${scriptTag(
+    runtimeBundleJs,
+  )}\n`;
   const bodyEndInjection = `\n${ALPINE_CDN}\n`;
 
   let html = rawHtml;
