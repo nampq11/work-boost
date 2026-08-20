@@ -98,9 +98,8 @@ Deno.test('WorkspaceFS - mutex lock prevents race conditions', async () => {
     const testPath = 'race-test.md';
 
     // Launch multiple concurrent writes
-    const writes = Array.from(
-      { length: 5 },
-      (_, i) => fs.writeTextAtomic(testPath, `Content ${i}`),
+    const writes = Array.from({ length: 5 }, (_, i) =>
+      fs.writeTextAtomic(testPath, `Content ${i}`),
     );
 
     // All writes should complete without conflict

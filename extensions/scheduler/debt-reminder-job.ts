@@ -4,9 +4,7 @@
  */
 
 import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
-import { DebtTelegramFormatter } from '../formatters/debt-telegram-formatter.ts';
-
-const formatter = new DebtTelegramFormatter();
+import { formatCurrency } from '../formatters/debt-formatting.ts';
 
 /**
  * Send weekly debt reminders
@@ -101,7 +99,7 @@ async function sendDebtReminder(
     message += '💰 <b>Owed to you:</b>\n';
     for (const [currency, totals] of Object.entries(summary.currencies)) {
       if (totals.lent > 0) {
-        message += `   ${formatter.formatCurrency(totals.lent, currency)}\n`;
+        message += `   ${formatCurrency(totals.lent, currency)}\n`;
       }
     }
     message += `   (${summary.pendingLentCount} debt${
@@ -114,7 +112,7 @@ async function sendDebtReminder(
     message += '📥 <b>You owe:</b>\n';
     for (const [currency, totals] of Object.entries(summary.currencies)) {
       if (totals.borrowed > 0) {
-        message += `   ${formatter.formatCurrency(totals.borrowed, currency)}\n`;
+        message += `   ${formatCurrency(totals.borrowed, currency)}\n`;
       }
     }
     message += `   (${summary.pendingBorrowedCount} debt${
@@ -137,31 +135,6 @@ async function sendDebtReminder(
   } catch (error) {
     console.error('Sent debt reminder but failed to record the timestamp:', error);
   }
-}
-
-/**
- * Setup cron jobs for debt reminders
- * Updated for single-user system (Phase 1: Local-First Architecture)
- */
-export function setupDebtReminderCron(
-  db: Database,
-  sendFn: (message: string) => Promise<void>,
-): void {
-  // Weekly reminder - every Monday at 9 AM
-  Deno.cron('weekly-debt-reminders', '0 9 * * 1', async () => {
-    console.log('Running weekly debt reminders...');
-    await sendWeeklyDebtReminders(db, sendFn);
-    console.log('Weekly debt reminders completed.');
-  });
-
-  // Monthly reminder - on the 1st at 9 AM
-  Deno.cron('monthly-debt-reminders', '0 9 1 * *', async () => {
-    console.log('Running monthly debt reminders...');
-    await sendMonthlyDebtReminders(db, sendFn);
-    console.log('Monthly debt reminders completed.');
-  });
-
-  console.log('Debt reminder cron jobs registered.');
 }
 
 /**

@@ -7,6 +7,10 @@ interface CallbackHandlerDeps {
   agent: AgentPort;
 }
 
+async function answerInvalidAction(ctx: Context): Promise<void> {
+  await ctx.answerCallbackQuery({ text: 'Invalid action' });
+}
+
 /**
  * Main callback handler for all debt-related actions
  * Routes callbacks to specific handlers based on action type
@@ -42,71 +46,77 @@ export async function handleDebtCallback(ctx: Context, deps: CallbackHandlerDeps
     handleDebtMenuCallback,
   } = await import('./index.ts');
 
-  // Route to appropriate handler
-  switch (action) {
-    case 'record':
-      await handleRecordDebt(ctx, deps);
-      break;
+  type DebtCallbackHandler = (
+    callbackContext: Context,
+    dependencies: CallbackHandlerDeps,
+    callbackParams: string[],
+  ) => Promise<void>;
 
-    case 'menu':
-      await handleDebtMenuCallback(ctx);
-      break;
-
-    case 'direction':
-      if (params[0]) {
-        await handleDirectionSelect(ctx, deps, params[0] as 'lent' | 'borrowed');
+  const actionHandlers: Record<string, DebtCallbackHandler> = {
+    record: (callbackContext, dependencies) => handleRecordDebt(callbackContext, dependencies),
+    menu: (callbackContext) => handleDebtMenuCallback(callbackContext),
+    direction: (callbackContext, dependencies, callbackParams) => {
+      const direction = callbackParams[0];
+      if (direction === 'lent' || direction === 'borrowed') {
+        return handleDirectionSelect(callbackContext, dependencies, direction);
       }
-      break;
-
-    case 'list':
-      await handleListCallback(ctx, deps);
-      break;
-
-    case 'filter':
-      if (params[0]) {
-        await handleFilterCallback(ctx, deps, params[0]);
+      return answerInvalidAction(callbackContext);
+    },
+    list: (callbackContext, dependencies) => handleListCallback(callbackContext, dependencies),
+    filter: (callbackContext, dependencies, callbackParams) => {
+      const filter = callbackParams[0];
+      if (
+        filter === 'all' ||
+        filter === 'pending' ||
+        filter === 'paid' ||
+        filter === 'lent' ||
+        filter === 'borrowed'
+      ) {
+        return handleFilterCallback(callbackContext, dependencies, filter);
       }
-      break;
-
-    case 'show':
-      if (params[0]) {
-        await handleShowDebtDetails(ctx, deps, params[0]);
+      return answerInvalidAction(callbackContext);
+    },
+    show: (callbackContext, dependencies, callbackParams) => {
+      const debtId = callbackParams[0];
+      return debtId
+        ? handleShowDebtDetails(callbackContext, dependencies, debtId)
+        : answerInvalidAction(callbackContext);
+    },
+    settle: (callbackContext, dependencies, callbackParams) => {
+      const debtId = callbackParams[0];
+      return debtId
+        ? handleSettleCallback(callbackContext, dependencies, debtId)
+        : answerInvalidAction(callbackContext);
+    },
+    delete: (callbackContext, dependencies, callbackParams) => {
+      const debtId = callbackParams[0];
+      return debtId
+        ? handleDeleteCallback(callbackContext, dependencies, debtId)
+        : answerInvalidAction(callbackContext);
+    },
+    confirm: (callbackContext, dependencies, callbackParams) => {
+      const [confirmationAction, debtId] = callbackParams;
+      return confirmationAction === 'delete' && debtId
+        ? handleDeleteConfirm(callbackContext, dependencies, debtId)
+        : answerInvalidAction(callbackContext);
+    },
+    summary: (callbackContext, dependencies) =>
+      handleSummaryCallback(callbackContext, dependencies),
+    remind: (callbackContext, dependencies, callbackParams) => {
+      const frequency = callbackParams[0];
+      if (!frequency) return handleRemindCallback(callbackContext, dependencies);
+      if (frequency === 'weekly' || frequency === 'monthly' || frequency === 'never') {
+        return handleSetReminderFrequency(callbackContext, dependencies, frequency);
       }
-      break;
+      return answerInvalidAction(callbackContext);
+    },
+  };
 
-    case 'settle':
-      if (params[0]) {
-        await handleSettleCallback(ctx, deps, params[0]);
-      }
-      break;
-
-    case 'delete':
-      if (params[0]) {
-        await handleDeleteCallback(ctx, deps, params[0]);
-      }
-      break;
-
-    case 'confirm':
-      if (params[0] === 'delete' && params[1]) {
-        await handleDeleteConfirm(ctx, deps, params[1]);
-      }
-      break;
-
-    case 'summary':
-      await handleSummaryCallback(ctx, deps);
-      break;
-
-    case 'remind':
-      if (params.length === 0) {
-        await handleRemindCallback(ctx, deps);
-      } else if (params[0]) {
-        await handleSetReminderFrequency(ctx, deps, params[0] as 'weekly' | 'monthly' | 'never');
-      }
-      break;
-
-    default:
-      await ctx.answerCallbackQuery({
-        text: 'Unknown action',
-      });
+  const handler = actionHandlers[action];
+  if (handler) {
+    await handler(ctx, deps, params);
+    return;
   }
+
+  await ctx.answerCallbackQuery({ text: 'Unknown action' });
 }

@@ -2,23 +2,12 @@ import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import type { Message } from '@work-boost/data-schemas';
 import type { Context } from 'grammy';
+import { splitMessage } from '../../formatters/telegram-formatter.ts';
 
 interface MessageHandlerDeps {
   db: Database;
   agent: AgentPort;
 }
-
-function splitMessage(text: string, maxLength = 4096): string[] {
-  const messages: string[] = [];
-  while (text.length > maxLength) {
-    const splitAt = text.lastIndexOf('\n', maxLength);
-    messages.push(text.slice(0, splitAt > 0 ? splitAt : maxLength));
-    text = text.slice(splitAt > 0 ? splitAt : maxLength).trim();
-  }
-  if (text) messages.push(text);
-  return messages;
-}
-
 /**
  * Handle work report messages from users.
  * Delegates natural-language processing to the Brain agent.

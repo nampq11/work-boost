@@ -3,6 +3,9 @@ import type { Database } from '@work-boost/data-provider';
 import type { DebtDirection } from '@work-boost/data-schemas/debt.ts';
 import type { Context } from 'grammy';
 import { debtDirectionKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
+import { createExpiringStore } from '../../state.ts';
+
+type ReplyMarkup = NonNullable<Parameters<Context['reply']>[1]>['reply_markup'];
 
 interface DebtHandlerDeps {
   db: Database;
@@ -16,25 +19,23 @@ interface DebtHandlerDeps {
 async function safeReplyHtml(
   ctx: Context,
   text: string,
-  extra: { reply_markup?: unknown } = {},
+  extra: { reply_markup?: ReplyMarkup } = {},
 ): Promise<void> {
   try {
-    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: extra.reply_markup as any });
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: extra.reply_markup });
   } catch {
-    await ctx.reply(text, { reply_markup: extra.reply_markup as any });
+    await ctx.reply(text, { reply_markup: extra.reply_markup });
   }
 }
 
-const pendingDebts = new Map<
-  string,
-  {
-    userId: string;
-    direction?: DebtDirection;
-    amount?: number;
-    person?: string;
-    reason?: string;
-  }
->();
+interface PendingDebt {
+  direction?: DebtDirection;
+  amount?: number;
+  person?: string;
+  reason?: string;
+}
+
+const pendingDebts = createExpiringStore<PendingDebt>(15 * 60 * 1000);
 
 /**
  * Handle /debt command.
@@ -91,7 +92,7 @@ export async function handleDirectionSelect(
     return;
   }
 
-  pendingDebts.set(userId, { userId, direction: direction as DebtDirection });
+  pendingDebts.set(userId, { direction: direction as DebtDirection });
 
   const directionText = direction === 'lent' ? 'lent to' : 'borrowed from';
   await ctx.editMessageText(

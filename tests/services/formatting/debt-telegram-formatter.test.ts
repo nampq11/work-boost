@@ -6,6 +6,15 @@ import { assert, assertEquals, assertExists } from '@std/assert';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import { DebtTelegramFormatter } from '@work-boost/extensions';
+import { formatCurrency, formatDate } from '@work-boost/extensions/formatters/debt-formatting.ts';
+import {
+  debtConfirmKeyboard,
+  debtDirectionKeyboard,
+  debtItemKeyboard,
+  debtListKeyboard,
+  debtMenuKeyboard,
+  debtReminderKeyboard,
+} from '@work-boost/extensions/telegram/keyboards.ts';
 
 function makeDebt(
   overrides: Partial<{
@@ -59,6 +68,15 @@ Deno.test('DebtTelegramFormatter formats single debt document', () => {
   assert(result.includes('$'), 'Should include currency symbol');
   assert(result.includes('Pending'), 'Should include status');
   assert(result.includes('Lunch money'), 'Should include reason');
+});
+
+Deno.test('formatDate treats date-only values as calendar dates', () => {
+  const expected = new Date(2025, 0, 1).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  assertEquals(formatDate('2025-01-01'), expected);
 });
 
 Deno.test('DebtTelegramFormatter formats debt with ID when requested', () => {
@@ -190,57 +208,91 @@ Deno.test('DebtTelegramFormatter shows settled up when net is zero', () => {
   assert(result.includes('All settled up'), 'Should say settled');
 });
 
-Deno.test('DebtTelegramFormatter creates debt menu keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtMenuKeyboard();
+Deno.test('Telegram keyboards creates debt menu keyboard', () => {
+  const keyboard = debtMenuKeyboard();
   assertExists(keyboard);
-  assertEquals(typeof keyboard.inline_keyboard, 'object');
+  assertEquals(keyboard.inline_keyboard, [
+    [
+      { text: '📝 Record Debt', callback_data: 'action:debt:record' },
+      { text: '📋 My Debts', callback_data: 'action:debt:list' },
+    ],
+    [
+      { text: '📊 Summary', callback_data: 'action:debt:summary' },
+      { text: '⏰ Reminders', callback_data: 'action:debt:remind' },
+    ],
+    [{ text: '« Back', callback_data: 'action:cancel' }],
+  ]);
 });
 
-Deno.test('DebtTelegramFormatter creates direction selection keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtDirectionKeyboard();
+Deno.test('Telegram keyboards creates direction selection keyboard', () => {
+  const keyboard = debtDirectionKeyboard();
   assertExists(keyboard);
-  assertEquals(typeof keyboard.inline_keyboard, 'object');
+  assertEquals(keyboard.inline_keyboard, [
+    [{ text: '💰 Lent Money', callback_data: 'action:debt:direction:lent' }],
+    [{ text: '📥 Borrowed Money', callback_data: 'action:debt:direction:borrowed' }],
+    [{ text: '« Back', callback_data: 'action:debt:menu' }],
+  ]);
 });
 
-Deno.test('DebtTelegramFormatter creates list filter keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtListKeyboard();
+Deno.test('Telegram keyboards creates list filter keyboard', () => {
+  const keyboard = debtListKeyboard();
   assertExists(keyboard);
-  assertEquals(typeof keyboard.inline_keyboard, 'object');
+  assertEquals(keyboard.inline_keyboard, [
+    [
+      { text: 'All', callback_data: 'action:debt:filter:all' },
+      { text: 'Pending', callback_data: 'action:debt:filter:pending' },
+      { text: 'Paid', callback_data: 'action:debt:filter:paid' },
+    ],
+    [
+      { text: 'Lent', callback_data: 'action:debt:filter:lent' },
+      { text: 'Borrowed', callback_data: 'action:debt:filter:borrowed' },
+    ],
+    [{ text: '« Back', callback_data: 'action:debt:menu' }],
+  ]);
 });
 
-Deno.test('DebtTelegramFormatter creates debt item keyboard with pending status', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtItemKeyboard('debt-123', DebtStatus.PENDING);
+Deno.test('Telegram keyboards creates debt item keyboard with pending status', () => {
+  const keyboard = debtItemKeyboard('debt-123', DebtStatus.PENDING);
   assertExists(keyboard);
-  assertEquals(typeof keyboard.inline_keyboard, 'object');
+  assertEquals(keyboard.inline_keyboard, [
+    [{ text: '✅ Mark Paid', callback_data: 'action:debt:settle:debt-123' }],
+    [{ text: '🗑 Delete', callback_data: 'action:debt:delete:debt-123' }],
+    [{ text: '« Back', callback_data: 'action:debt:list' }],
+  ]);
 });
 
-Deno.test('DebtTelegramFormatter creates debt item keyboard with paid status', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.debtItemKeyboard('debt-123', DebtStatus.PAID);
+Deno.test('Telegram keyboards creates paid debt item keyboard', () => {
+  const keyboard = debtItemKeyboard('debt-123', DebtStatus.PAID);
   assertExists(keyboard);
-  assertEquals(typeof keyboard.inline_keyboard, 'object');
+  assertEquals(keyboard.inline_keyboard, [
+    [{ text: '🗑 Delete', callback_data: 'action:debt:delete:debt-123' }],
+    [{ text: '« Back', callback_data: 'action:debt:list' }],
+  ]);
 });
 
-Deno.test('DebtTelegramFormatter creates confirmation keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.confirmKeyboard('delete', 'debt-123');
+Deno.test('Telegram keyboards creates confirmation keyboard', () => {
+  const keyboard = debtConfirmKeyboard('delete', 'debt-123');
   assertExists(keyboard);
-  assertEquals(typeof keyboard.inline_keyboard, 'object');
+  assertEquals(keyboard.inline_keyboard, [
+    [{ text: 'Yes, confirm', callback_data: 'action:debt:confirm:delete:debt-123' }],
+    [{ text: 'Cancel', callback_data: 'action:debt:list' }],
+  ]);
 });
 
-Deno.test('DebtTelegramFormatter creates reminder keyboard', () => {
-  const formatter = new DebtTelegramFormatter();
-  const keyboard = formatter.remindKeyboard('weekly');
+Deno.test('Telegram keyboards creates reminder keyboard', () => {
+  const keyboard = debtReminderKeyboard('weekly');
   assertExists(keyboard);
-  assertEquals(typeof keyboard.inline_keyboard, 'object');
+  assertEquals(keyboard.inline_keyboard, [
+    [
+      { text: '✓ Weekly', callback_data: 'action:debt:remind:weekly' },
+      { text: 'Monthly', callback_data: 'action:debt:remind:monthly' },
+    ],
+    [{ text: 'Never', callback_data: 'action:debt:remind:never' }],
+    [{ text: '« Back', callback_data: 'action:debt:menu' }],
+  ]);
 });
 
 Deno.test('DebtTelegramFormatter handles different currencies', () => {
-  const formatter = new DebtTelegramFormatter();
   const currencies = [
     { code: 'USD', symbol: '$' },
     { code: 'EUR', symbol: '€' },
@@ -249,7 +301,7 @@ Deno.test('DebtTelegramFormatter handles different currencies', () => {
     { code: 'VND', symbol: '₫' },
   ];
   for (const { code, symbol } of currencies) {
-    const result = formatter.formatCurrency(100, code);
+    const result = formatCurrency(100, code);
     assert(result.includes(symbol), `Should include ${symbol} for ${code}`);
   }
 });

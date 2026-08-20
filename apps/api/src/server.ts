@@ -3,14 +3,14 @@ import type { Database } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { ExtensionManager } from '../../../extensions/manager.ts';
 import {
+  type RequestContext,
   createRequestContext,
   logError,
   logRequest,
   logResponse,
-  type RequestContext,
 } from './middleware/logging.ts';
 import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
-import { createWorkspaceRouter, type WorkspaceRouter } from './routes/workspace.ts';
+import { type WorkspaceRouter, createWorkspaceRouter } from './routes/workspace.ts';
 import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
 
 // ============================================================================
@@ -133,7 +133,8 @@ function createRateLimiter(windowMs: number, maxRequests: number) {
 
   return function checkRateLimit(request: Request): Response | null {
     // Extract client IP from headers or connection info
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
       'unknown';
 

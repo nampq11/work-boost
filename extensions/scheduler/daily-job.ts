@@ -57,11 +57,9 @@ export async function processDailySummary(
     }
 
     const response = await dependencies.agent.stream(
-      `Hãy tổng hợp công việc hôm nay dựa trên các tin nhắn sau: ${
-        todaysMessages
-          .map((message) => message.content)
-          .join('\n')
-      }`,
+      `Hãy tổng hợp công việc hôm nay dựa trên các tin nhắn sau: ${todaysMessages
+        .map((message) => message.content)
+        .join('\n')}`,
       {
         sessionId: 'scheduler',
         signal: AbortSignal.timeout(60_000),

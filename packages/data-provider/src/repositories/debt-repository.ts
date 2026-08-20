@@ -77,16 +77,17 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
     }
   }
 
-  const generateSlug = (personName: string, id: string): string => {
-    const cleanName = personName
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'debt';
+  function generateSlug(personName: string, id: string): string {
+    const cleanName =
+      personName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'debt';
     const shortId = id.slice(0, 4);
     return `${cleanName}-${shortId}.md`;
-  };
+  }
 
   return {
     async create(data: {

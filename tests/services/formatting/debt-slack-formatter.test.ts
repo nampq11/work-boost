@@ -6,6 +6,7 @@ import { assert, assertEquals } from '@std/assert';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import { DebtSlackFormatter } from '@work-boost/extensions';
+import { formatCurrency } from '@work-boost/extensions/formatters/debt-formatting.ts';
 
 function makeDebt(
   overrides: Partial<{
@@ -187,7 +188,6 @@ Deno.test('DebtSlackFormatter shows settled up when net is zero', () => {
 });
 
 Deno.test('DebtSlackFormatter handles different currencies', () => {
-  const formatter = new DebtSlackFormatter();
   const currencies = [
     { code: 'USD', symbol: '$' },
     { code: 'EUR', symbol: '€' },
@@ -196,7 +196,7 @@ Deno.test('DebtSlackFormatter handles different currencies', () => {
     { code: 'VND', symbol: '₫' },
   ];
   for (const { code, symbol } of currencies) {
-    const result = formatter.formatCurrency(100, code);
+    const result = formatCurrency(100, code);
     assert(result.includes(symbol), `Should include ${symbol} for ${code}`);
   }
 });

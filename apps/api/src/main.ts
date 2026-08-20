@@ -5,6 +5,17 @@ import { logger } from '@work-boost/shared/logger/logger.ts';
 import { initializeServices } from './bootstrap.ts';
 import { createServer } from './server.ts';
 
+function resolveApiPrefix(defaultPrefix: string): string {
+  const configuredPrefix = Deno.env.get('WORKBOOST_API_PREFIX');
+  if (configuredPrefix === undefined) {
+    return defaultPrefix;
+  }
+  if (configuredPrefix === '""') {
+    return '';
+  }
+  return configuredPrefix;
+}
+
 export interface StartApiModeOptions {
   port: number;
   host: string;
@@ -18,12 +29,7 @@ export interface StartApiModeOptions {
 export async function startApiMode(options: StartApiModeOptions): Promise<void> {
   const port = options.port;
   const host = options.host;
-  const apiPrefix =
-    Deno.env.get('WORKBOOST_API_PREFIX') !== undefined
-      ? Deno.env.get('WORKBOOST_API_PREFIX') === '""'
-        ? ''
-        : Deno.env.get('WORKBOOST_API_PREFIX')!
-      : options.apiPrefix;
+  const apiPrefix = resolveApiPrefix(options.apiPrefix);
   const enableScheduler = options.enableScheduler !== false;
 
   logger.info('Starting API server on http://' + host + ':' + port + apiPrefix, undefined, 'green');
@@ -36,6 +42,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   if (seededApps.length > 0) {
     logger.info('Seeded HTML Apps into workspace: ' + seededApps.join(', '), undefined, 'green');
   }
+
   const server = createServer({
     port,
     host,
@@ -51,7 +58,6 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
 
   try {
     server.start();
-    logger.info('API server is running and ready to accept requests', undefined, 'green');
     logger.info('API server is running and ready to accept requests', undefined, 'green');
 
     let shuttingDown = false;
