@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import { ensureDir } from '@std/fs';
 import { basename, dirname, globToRegExp, isAbsolute, join, relative, resolve } from '@std/path';
 

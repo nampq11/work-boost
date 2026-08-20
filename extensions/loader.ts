@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import { join, toFileUrl } from '@std/path';
 import type { ExtensionManager } from './manager.ts';
 import { type ExtensionContext, isWorkBoostExtension } from './types.ts';

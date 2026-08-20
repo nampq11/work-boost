@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';

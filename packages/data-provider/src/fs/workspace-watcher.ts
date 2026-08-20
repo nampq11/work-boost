@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import { relative } from '@std/path';
 import type { WorkspaceFS } from '../fs/workspace-fs.ts';
 

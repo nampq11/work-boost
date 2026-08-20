@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import type { AgentPort } from '@work-boost/brain';
 import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import type { ExtensionContext, ExtensionCronJob, ExtensionMessageSender } from '../types.ts';

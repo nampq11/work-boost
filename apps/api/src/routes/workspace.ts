@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import { join } from '@std/path';
 import type { DataLayer } from '@work-boost/data-provider';
 import {
