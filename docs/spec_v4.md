@@ -18,11 +18,11 @@ Bảng theo dõi và nghiệm thu toàn bộ tính năng chức năng (FR) và p
 | **FR-04** | **Frontmatter Inspector** | Header Bar trực quan hóa YAML: hiển thị/sửa trạng thái nợ (pending/paid), số tiền, ngày tháng; tự động bảo toàn các trường YAML lạ khi lưu. | ⬜ Chưa bắt đầu |
 | **FR-05** | **HTML App Sandbox Viewer** | Chạy `debt-tracker.html` và `standup-viewer.html` trong `<iframe>` sandbox biệt lập (`allow-scripts allow-forms`), giao tiếp an toàn qua Broker `window.workboost`. | ⬜ Chưa bắt đầu |
 | **FR-06** | **Autosave & Conflict Handling** | Tự động lưu sau 300ms (Debounced). Bật Toast cảnh báo khi có xung đột file đang gõ dở; Force Flush lưu đồng bộ khi chuyển file. | ⬜ Chưa bắt đầu |
-| **FR-07** | **AI Copilot Drawer** | Khung chat trượt từ cạnh phải kết nối với Brain Agent (`/api/message`) để hỗ trợ tra cứu, tổng hợp công việc hoặc ghi nợ trực tiếp trên Web. | ⬜ Chưa bắt đầu |
+| **FR-07** | **AI Copilot Drawer** | Khung chat trượt từ cạnh phải kết nối với Brain Agent (`/api/message/sync`) để hỗ trợ tra cứu, tổng hợp công việc hoặc ghi nợ trực tiếp trên Web. | ⬜ Chưa bắt đầu |
 | **FR-08** | **Command Palette (`⌘K`)** | Modal tìm kiếm nhanh file, tạo nhanh Daily Note hôm nay, tạo khoản nợ mới, kích hoạt HTML Apps. | ⬜ Chưa bắt đầu |
 | **FR-09** | **An toàn dữ liệu & Undo** | Xóa file đưa vào `.workboost/trash/`, hiển thị Toast cho phép `Undo` (`Cmd+Z`) phục hồi tức thì. Cache bản thảo chưa lưu vào `localStorage`. | ⬜ Chưa bắt đầu |
 | **NFR-01** | **Khởi động & Render tức thì** | Client nạp xong dưới **300ms**. Không bị giật lag khi gõ phím hoặc khi nhận event SSE dưới nền. | ⬜ Chưa bắt đầu |
-| **NFR-02** | **Bảo mật Sandbox tuyệt đối** | Iframe HTML Apps bị chặn truy cập `window.parent`, chặn truy cập cookie/storage của Host, link web ngoài tự mở tab mới. | ⬜ Chưa bắt đầu |
+| **NFR-02** | **Cách ly Sandbox theo origin và capability** | Iframe HTML Apps không được truy cập DOM, cookie hoặc storage của Host; bridge chỉ dùng `window.parent.postMessage()` và Shell chỉ chấp nhận message từ đúng iframe. Link `http`/`https` bên ngoài được mở trong tab mới. Kiểm thử browser phải xác nhận các hành vi này trước khi đánh dấu hoàn tất. | ⬜ Chưa bắt đầu |
 
 ---
 
@@ -90,7 +90,7 @@ Bảng theo dõi và nghiệm thu toàn bộ tính năng chức năng (FR) và p
   │     │           ├── <TiptapEditor> (WYSIWYG Mode)
   │     │           └── <SourceEditor> (Raw Markdown Mode)
   │     │
-  │     └── <AiCopilotDrawer> (Slide-over panel bên phải, gọi /api/message)
+  │     └── <AiCopilotDrawer> (Slide-over panel bên phải, gọi /api/message/sync)
   │
   ├── <StatusBar> (Thống kê từ, Encoding UTF-8, Thời gian lưu cuối)
   └── <GlobalOverlays>
@@ -111,13 +111,13 @@ Client Shell tương tác hoàn toàn với Deno API (`http://localhost:3001`) t
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/workspace/fs/list?glob=**/*` | Query `glob` | Tải toàn bộ danh sách file cho Sidebar |
 | `GET` | `/api/workspace/fs/read?path={path}` | Query `path` | Đọc chi tiết file: `{ frontmatter, body, size, modifiedAt }` |
-| `POST` | `/api/workspace/fs/write` | `{ path, content, frontmatter }` | Lưu file toàn phần (ghi nguyên tử) |
-| `POST` | `/api/workspace/fs/patch` | `{ path, patch: { frontmatter, body } }` | Patch từng phần của file Markdown |
+| `POST` | `/api/workspace/fs/write` | `{ path, content, frontmatter, expectedModifiedAt }` | Lưu file toàn phần có kiểm tra xung đột (ghi nguyên tử) |
+| `POST` | `/api/workspace/fs/patch` | `{ path, patch: { frontmatter, body }, expectedModifiedAt }` | Patch từng phần của file Markdown có kiểm tra xung đột |
 | `POST` | `/api/workspace/debts/create` | `{ personName, amount, direction, ... }` | Tạo nhanh khoản nợ từ Form/Modal |
 | `POST` | `/api/workspace/debts/{id}/settle` | Không | Đánh dấu nợ đã trả (backend tự dời file vào archive) |
 | `DELETE`| `/api/workspace/debts/{id}` | Không | Xóa khoản nợ |
 | `GET` | `/api/workspace/time` | Không | Lấy ngày hiện tại chuẩn theo timezone workspace |
-| `POST` | `/api/message` | `{ message, sessionId }` | Gửi prompt trò chuyện với AI Copilot |
+| `POST` | `/api/message/sync` | `{ message, sessionId }` | Gửi prompt đồng bộ cho AI Copilot trên trình duyệt |
 
 ### 3.2. Giao thức Server-Sent Events (SSE Protocol)
 * **Endpoint:** `GET /api/workspace/events`
@@ -199,7 +199,7 @@ export interface DebtInspectorData {
  Tab switch / Unmount)                         │
           │                                    ▼
           │                            ┌──────────────┐
-          └──────────────────────────> │   SAVING     │──> POST /api/workspace/fs/write
+          └──────────────────────────> │   SAVING     │──> POST /api/workspace/fs/patch (expectedModifiedAt)
                                        └──────────────┘
                                                │
                                  ┌─────────────┴─────────────┐
@@ -324,7 +324,7 @@ apps/web/
   * Tích hợp Tiptap WYSIWYG + Source Editor chuyển đổi qua phím tắt.
   * Tích hợp thanh `FrontmatterInspector` có autosave debounced 300ms.
 * **TASK 4.5: Xây dựng AI Copilot Drawer & Command Palette**
-  * Khung chat AI trượt bên phải kết nối `/api/message`.
+  * Khung chat AI trượt bên phải kết nối `/api/message/sync`.
   * Command Palette (`⌘K`) tìm kiếm nhanh và tạo file.
 * **TASK 4.6: Kiểm thử E2E & Tối ưu hóa UI Polish**
   * Test đồng bộ 2 chiều giữa Telegram Bot và Web Client.

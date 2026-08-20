@@ -140,3 +140,21 @@ Deno.test('WorkspaceFS - file operations work correctly', async () => {
     );
   });
 });
+
+Deno.test('WorkspaceFS - conditional updates reject stale writers atomically', async () => {
+  await withTempDir(async (root) => {
+    const fs = createWorkspaceFS(root);
+    await fs.init();
+    await fs.writeTextAtomic('conditional.md', 'initial');
+    const version = (await fs.stat('conditional.md')).modifiedAt;
+
+    const results = await Promise.all([
+      fs.conditionalUpdate('conditional.md', version, () => 'first'),
+      fs.conditionalUpdate('conditional.md', version, () => 'second'),
+    ]);
+
+    assertEquals(results.filter((result) => result.status === 'updated').length, 1);
+    assertEquals(results.filter((result) => result.status === 'conflict').length, 1);
+    assertEquals(['first', 'second'].includes(await fs.readText('conditional.md')), true);
+  });
+});

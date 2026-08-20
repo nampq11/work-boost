@@ -80,3 +80,66 @@ Deno.test('workspace shell rejects a stale conditional write', async () => {
     assertEquals((payload.error as { code: string }).code, 'CONFLICT');
   });
 });
+
+Deno.test('workspace trash transitions remain recoverable when metadata cleanup fails', async () => {
+  const root = await Deno.makeTempDir({ prefix: 'work-boost-trash-fault-' });
+  const dataLayer = createDataLayer(root);
+  await dataLayer.fs.init();
+  await dataLayer.config.load();
+  await dataLayer.fs.writeTextAtomic('fault.md', 'content');
+
+  const originalFs = dataLayer.fs;
+  let failMetadataWrite = false;
+  let failMetadataRemove = false;
+  dataLayer.fs = {
+    ...originalFs,
+    writeTextAtomic: async (path, content) => {
+      if (failMetadataWrite && path.endsWith('.json') && !path.endsWith('.journal.json')) {
+        throw new Error('injected metadata write failure');
+      }
+      await originalFs.writeTextAtomic(path, content);
+    },
+    remove: async (path) => {
+      if (failMetadataRemove && path.endsWith('.json') && !path.endsWith('.journal.json')) {
+        throw new Error('injected metadata removal failure');
+      }
+      await originalFs.remove(path);
+    },
+  };
+  const router = createWorkspaceRouter({ dataLayer, apiPrefix: '/api' });
+  const handle = (path: string, init?: RequestInit) =>
+    router.handle(new Request(`http://localhost${path}`, init), info);
+
+  try {
+    failMetadataWrite = true;
+    const failedDelete = await handle('/api/workspace/fs/delete?path=fault.md', {
+      method: 'DELETE',
+    });
+    assertEquals(failedDelete.status, 500);
+    assertEquals(await originalFs.exists('fault.md'), true);
+
+    failMetadataWrite = false;
+    const deleted = await json(
+      await handle('/api/workspace/fs/delete?path=fault.md', { method: 'DELETE' }),
+    );
+    const trashId = (deleted.data as { trashId: string }).trashId;
+    failMetadataRemove = true;
+    const failedRestore = await handle('/api/workspace/fs/restore', {
+      method: 'POST',
+      body: JSON.stringify({ trashId }),
+    });
+    assertEquals(failedRestore.status, 409);
+    assertEquals(await originalFs.exists('fault.md'), false);
+
+    failMetadataRemove = false;
+    const restored = await handle('/api/workspace/fs/restore', {
+      method: 'POST',
+      body: JSON.stringify({ trashId }),
+    });
+    assertEquals(restored.status, 200);
+    assertEquals(await originalFs.readText('fault.md'), 'content');
+  } finally {
+    router.stop();
+    await Deno.remove(root, { recursive: true });
+  }
+});

@@ -28,7 +28,11 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
+      )
+        return;
       const currentPath = useWorkspaceStore.getState().activePath;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
         const toast = useUiStore.getState().toast;
@@ -41,12 +45,16 @@ export function App() {
       }
       if (event.key === 'Delete' && currentPath) {
         event.preventDefault();
-        void trash(currentPath).then(({ trashId, originalPath }) => {
-          showToast(`Moved ${originalPath} to trash.`, {
-            label: 'Undo',
-            run: () => void restore(trashId),
+        void trash(currentPath)
+          .then(({ trashId, originalPath }) => {
+            showToast(`Moved ${originalPath} to trash.`, {
+              label: 'Undo',
+              run: () => void restore(trashId),
+            });
+          })
+          .catch((error) => {
+            showToast(error instanceof Error ? error.message : 'Unable to move file to trash.');
           });
-        });
       }
     };
     window.addEventListener('keydown', onKeyDown);

@@ -42,7 +42,7 @@ export function EditorContainer() {
           <button onClick={() => setSourceMode(!sourceMode)}>
             {sourceMode ? 'WYSIWYG' : 'Raw source'}
           </button>
-          <button onClick={() => void save()}>Save</button>
+          <button onClick={() => void save().catch(() => undefined)}>Save</button>
         </div>
       </div>
       <FrontmatterInspector />

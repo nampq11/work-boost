@@ -19,7 +19,22 @@ export interface WorkspaceFS {
   stat(relPath: string): Promise<{ size: number; modifiedAt: string }>;
   listDirs(relDir: string): Promise<string[]>;
   mkdir(relPath: string): Promise<void>;
+  conditionalUpdate(
+    relPath: string,
+    expectedModifiedAt: string | undefined,
+    transform: (current: WorkspaceFileState) => Promise<string | null> | string | null,
+  ): Promise<ConditionalUpdateResult>;
 }
+
+export interface WorkspaceFileState {
+  content: string | null;
+  modifiedAt: string | null;
+}
+
+export type ConditionalUpdateResult =
+  | { status: 'updated'; content: string; modifiedAt: string }
+  | { status: 'not-found' }
+  | { status: 'conflict'; modifiedAt: string };
 
 /**
  * Create a new WorkspaceFS instance
@@ -97,6 +112,20 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
     }
   }
 
+  async function writeTextAtomicUnlocked(fullPath: string, content: string): Promise<void> {
+    await ensureDir(dirname(fullPath));
+    const tempPath = `${fullPath}.${crypto.randomUUID()}.tmp`;
+    const bytes = new TextEncoder().encode(content);
+    await Deno.writeFile(tempPath, bytes);
+
+    try {
+      await Deno.rename(tempPath, fullPath);
+    } catch {
+      // Fallback for Windows if file is locked by OS
+      await Deno.copyFile(tempPath, fullPath);
+      await Deno.remove(tempPath);
+    }
+  }
   return {
     get root() {
       return rootPath;
@@ -118,19 +147,51 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
     async writeTextAtomic(relPath: string, content: string): Promise<void> {
       return await withLock(relPath, async () => {
         const fullPath = await assertInside(relPath);
-        await ensureDir(dirname(fullPath));
+        await writeTextAtomicUnlocked(fullPath, content);
+      });
+    },
 
-        const tempPath = `${fullPath}.${crypto.randomUUID()}.tmp`;
-        const bytes = new TextEncoder().encode(content);
-        await Deno.writeFile(tempPath, bytes);
-
+    async conditionalUpdate(
+      relPath: string,
+      expectedModifiedAt: string | undefined,
+      transform: (current: WorkspaceFileState) => Promise<string | null> | string | null,
+    ): Promise<ConditionalUpdateResult> {
+      return await withLock(relPath, async () => {
+        const fullPath = await assertInside(relPath);
+        let current: WorkspaceFileState = { content: null, modifiedAt: null };
         try {
-          await Deno.rename(tempPath, fullPath);
-        } catch {
-          // Fallback for Windows if file is locked by OS
-          await Deno.copyFile(tempPath, fullPath);
-          await Deno.remove(tempPath);
+          const [content, info] = await Promise.all([
+            Deno.readTextFile(fullPath),
+            Deno.stat(fullPath),
+          ]);
+          current = {
+            content,
+            modifiedAt: new Date(info.mtime ?? Date.now()).toISOString(),
+          };
+        } catch (error) {
+          if (!(error instanceof Deno.errors.NotFound)) throw error;
         }
+
+        if (expectedModifiedAt !== undefined) {
+          if (current.modifiedAt === null) return { status: 'not-found' };
+          if (current.modifiedAt !== expectedModifiedAt) {
+            return { status: 'conflict', modifiedAt: current.modifiedAt };
+          }
+        }
+
+        const content = await transform(current);
+        if (content === null) return { status: 'not-found' };
+        await writeTextAtomicUnlocked(fullPath, content);
+        if (current.modifiedAt !== null) {
+          const nextModifiedAt = new Date(Math.max(Date.now(), Date.parse(current.modifiedAt) + 1));
+          await Deno.utime(fullPath, nextModifiedAt, nextModifiedAt);
+        }
+        const info = await Deno.stat(fullPath);
+        return {
+          status: 'updated',
+          content,
+          modifiedAt: new Date(info.mtime ?? Date.now()).toISOString(),
+        };
       });
     },
 

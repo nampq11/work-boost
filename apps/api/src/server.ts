@@ -36,40 +36,47 @@ export interface ApiServerConfig {
 // CORS Helpers
 // ============================================================================
 
-function addCorsHeaders(request: Request, response: Response, corsOrigins?: string[]): Response {
+export function addCorsHeaders(
+  request: Request,
+  response: Response,
+  corsOrigins?: string[],
+): Response {
   const origin = request.headers.get('origin');
   const headers = new Headers(response.headers);
 
-  // Check allowed origins
-  let allowOrigin = '*';
-  if (origin) {
-    const allowed = corsOrigins || ['http://localhost:3000'];
-    if (allowed.includes(origin)) {
-      allowOrigin = origin;
-    } else {
-      // Allow localhost in development
-      try {
-        const originUrl = new URL(origin);
-        if (
-          originUrl.hostname === 'localhost' ||
+  const allowed = corsOrigins || ['http://localhost:3000'];
+  let allowOrigin: string | undefined;
+  if (origin && allowed.includes(origin)) {
+    allowOrigin = origin;
+  } else if (origin) {
+    try {
+      const originUrl = new URL(origin);
+      if (
+        originUrl.protocol === 'http:' &&
+        (originUrl.hostname === 'localhost' ||
           originUrl.hostname === '127.0.0.1' ||
-          originUrl.hostname === '::1'
-        ) {
-          allowOrigin = origin;
-        }
-      } catch {
-        // Invalid origin URL, use default
+          originUrl.hostname === '::1')
+      ) {
+        allowOrigin = origin;
       }
+    } catch {
+      // Invalid origins are never granted CORS access.
     }
   }
 
-  headers.set('Access-Control-Allow-Origin', allowOrigin);
+  if (allowOrigin) {
+    headers.set('Access-Control-Allow-Origin', allowOrigin);
+    headers.set('Access-Control-Allow-Credentials', 'true');
+    headers.set('Vary', 'Origin');
+  } else {
+    headers.delete('Access-Control-Allow-Origin');
+    headers.delete('Access-Control-Allow-Credentials');
+  }
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   headers.set(
     'Access-Control-Allow-Headers',
     'Content-Type, Authorization, X-Request-ID, X-Session-ID',
   );
-  headers.set('Access-Control-Allow-Credentials', 'true');
 
   return new Response(response.body, {
     status: response.status,

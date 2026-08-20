@@ -33,7 +33,12 @@ export function CommandPalette() {
   );
   if (!open) return null;
   async function createDaily() {
-    const date = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const date = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
     const path = `daily/${date}.md`;
     try {
       await api.writeFile(path, '', { date, type: 'daily' });

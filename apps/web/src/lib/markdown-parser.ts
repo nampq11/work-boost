@@ -90,8 +90,18 @@ function nodeToMarkdown(node: ChildNode): string {
       return `**${content}**`;
     case 'em':
       return `*${content}*`;
-    case 'li':
-      return `- [${element.dataset.checked === 'true' ? 'x' : ' '}] ${content}`;
+    case 'li': {
+      if (element.dataset.type === 'taskItem') {
+        return `- [${element.dataset.checked === 'true' ? 'x' : ' '}] ${content}`;
+      }
+      const list = element.parentElement;
+      const itemNumber = list ? Array.from(list.children).indexOf(element) + 1 : 1;
+      const marker = list?.tagName.toLowerCase() === 'ol' ? `${itemNumber}.` : '-';
+      return `${marker} ${content}`;
+    }
+    case 'ul':
+    case 'ol':
+      return Array.from(element.children).map(nodeToMarkdown).filter(Boolean).join('\n');
     case 'pre':
       return `\`\`\`\n${element.textContent || ''}\n\`\`\``;
     case 'br':

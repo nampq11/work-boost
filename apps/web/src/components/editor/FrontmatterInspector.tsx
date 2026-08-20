@@ -25,7 +25,11 @@ export function FrontmatterInspector() {
           <input
             type="number"
             value={Number(frontmatter.amount ?? 0)}
-            onChange={(event) => set('amount', Number(event.target.value))}
+            onChange={(event) => {
+              if (event.target.validity.badInput) return;
+              const amount = event.target.valueAsNumber;
+              if (Number.isFinite(amount) && amount > 0) set('amount', amount);
+            }}
           />
         </label>
         <label>

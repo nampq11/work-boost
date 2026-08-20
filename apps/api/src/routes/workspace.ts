@@ -392,63 +392,92 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
     return { path, frontmatter, body, size, modifiedAt };
   }
 
-  async function assertExpectedVersion(
+  function validateExpectedModifiedAt(value: unknown): Response | null {
+    if (value === undefined || typeof value === 'string') return null;
+    return fail(ERROR_CODES.VALIDATION_ERROR, "'expectedModifiedAt' must be an ISO timestamp", 400);
+  }
+
+  function conditionalUpdateFailure(
     path: string,
-    expectedModifiedAt: unknown,
-  ): Promise<Response | null> {
-    if (expectedModifiedAt === undefined) return null;
-    if (typeof expectedModifiedAt !== 'string') {
-      return fail(
-        ERROR_CODES.VALIDATION_ERROR,
-        "'expectedModifiedAt' must be an ISO timestamp",
-        400,
-      );
-    }
-    if (!(await fs.exists(path))) return notFound(path);
-    const current = await fs.stat(path);
-    if (current.modifiedAt !== expectedModifiedAt) {
-      return fail(
-        ERROR_CODES.CONFLICT,
-        'The file changed on disk. Reload it before saving again.',
-        409,
-        undefined,
-        { path, modifiedAt: current.modifiedAt },
-      );
-    }
-    return null;
+    result: { status: 'not-found' } | { status: 'conflict'; modifiedAt: string },
+  ): Response {
+    if (result.status === 'not-found') return notFound(path);
+    return fail(
+      ERROR_CODES.CONFLICT,
+      'The file changed on disk. Reload it before saving again.',
+      409,
+      undefined,
+      { path, modifiedAt: result.modifiedAt },
+    );
+  }
+
+  interface TrashRecord {
+    trashId: string;
+    originalPath: string;
+    trashPath: string;
+    deletedAt: string;
   }
 
   async function moveToTrash(path: string): Promise<{ trashId: string; originalPath: string }> {
     const trashId = crypto.randomUUID();
     const trashPath = join('.workboost', 'trash', `${trashId}.data`);
     const metadataPath = join('.workboost', 'trash', `${trashId}.json`);
+    const journalPath = join('.workboost', 'trash', `${trashId}.journal.json`);
+    const record: TrashRecord = {
+      trashId,
+      originalPath: path,
+      trashPath,
+      deletedAt: new Date().toISOString(),
+    };
+
+    // Write before moving so metadata failures leave a durable recovery record.
+    await fs.writeTextAtomic(journalPath, JSON.stringify(record));
     await fs.move(path, trashPath);
-    await fs.writeTextAtomic(
-      metadataPath,
-      JSON.stringify({
-        trashId,
-        originalPath: path,
-        trashPath,
-        deletedAt: new Date().toISOString(),
-      }),
-    );
+    try {
+      await fs.writeTextAtomic(metadataPath, JSON.stringify(record));
+    } catch (error) {
+      try {
+        await fs.move(trashPath, path);
+      } catch {
+        // Keep the journal when compensation fails for a later restore attempt.
+      }
+      throw error;
+    }
+    await fs.remove(journalPath).catch(() => undefined);
     return { trashId, originalPath: path };
   }
 
   async function restoreFromTrash(trashId: string): Promise<ParsedMarkdownFile> {
     if (!/^[0-9a-f-]{36}$/i.test(trashId)) throw new Error('Invalid trash id');
     const metadataPath = join('.workboost', 'trash', `${trashId}.json`);
-    if (!(await fs.exists(metadataPath))) throw new Deno.errors.NotFound('Trash item not found');
-    const metadata = JSON.parse(await fs.readText(metadataPath)) as {
-      originalPath?: string;
-      trashPath?: string;
-    };
+    const journalPath = join('.workboost', 'trash', `${trashId}.journal.json`);
+    const recordPath = (await fs.exists(metadataPath)) ? metadataPath : journalPath;
+    if (!(await fs.exists(recordPath))) throw new Deno.errors.NotFound('Trash item not found');
+    const metadata = JSON.parse(await fs.readText(recordPath)) as Partial<TrashRecord>;
     if (!metadata.originalPath || !metadata.trashPath) throw new Error('Invalid trash metadata');
     if (await fs.exists(metadata.originalPath)) {
+      if (!(await fs.exists(metadata.trashPath))) {
+        await fs.remove(metadataPath).catch(() => undefined);
+        await fs.remove(journalPath).catch(() => undefined);
+        return await readWorkspaceFile(metadata.originalPath);
+      }
       throw new Error('Cannot restore: destination already exists');
     }
+    if (!(await fs.exists(metadata.trashPath)))
+      throw new Deno.errors.NotFound('Trash item not found');
+    await fs.writeTextAtomic(journalPath, JSON.stringify(metadata));
     await fs.move(metadata.trashPath, metadata.originalPath);
-    await fs.remove(metadataPath);
+    try {
+      await fs.remove(metadataPath);
+    } catch (error) {
+      try {
+        await fs.move(metadata.originalPath, metadata.trashPath);
+      } catch {
+        // Keep the journal and restored file when compensation fails for later recovery.
+      }
+      throw error;
+    }
+    await fs.remove(journalPath).catch(() => undefined);
     return await readWorkspaceFile(metadata.originalPath);
   }
 
@@ -540,6 +569,10 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
       const path = typeof body.path === 'string' ? body.path : '';
       const guard = guardPath(path);
       if (guard) return guard;
+      const expectedValidation = validateExpectedModifiedAt(body.expectedModifiedAt);
+      if (expectedValidation) return expectedValidation;
+      const expectedModifiedAt =
+        typeof body.expectedModifiedAt === 'string' ? body.expectedModifiedAt : undefined;
 
       if (route === '/fs/write') {
         if (typeof body.content !== 'string') {
@@ -562,34 +595,28 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
             );
           }
         }
-        const versionConflict = await assertExpectedVersion(path, body.expectedModifiedAt);
-        if (versionConflict) return versionConflict;
-        let rawMarkdown = body.content;
-        if (frontmatter !== undefined) {
-          const existingFrontmatter = (await fs.exists(path))
-            ? safeParseMarkdown(await fs.readText(path), path).frontmatter
+        const result = await fs.conditionalUpdate(path, expectedModifiedAt, (current) => {
+          if (frontmatter === undefined) return body.content as string;
+          const existingFrontmatter = current.content
+            ? safeParseMarkdown(current.content, path).frontmatter
             : {};
-          rawMarkdown = stringifyMarkdown({ ...existingFrontmatter, ...frontmatter }, body.content);
-        }
-        await fs.writeTextAtomic(path, rawMarkdown);
+          return stringifyMarkdown(
+            { ...existingFrontmatter, ...(frontmatter as Record<string, unknown>) },
+            body.content as string,
+          );
+        });
+        if (result.status !== 'updated') return conditionalUpdateFailure(path, result);
         return ok(await readWorkspaceFile(path));
       }
 
-      // fs/patch
-      const versionConflict = await assertExpectedVersion(path, body.expectedModifiedAt);
-      if (versionConflict) return versionConflict;
-      const patch = (body.patch ?? {}) as {
+      const patchValue = body.patch ?? {};
+      if (typeof patchValue !== 'object' || patchValue === null || Array.isArray(patchValue)) {
+        return fail(ERROR_CODES.VALIDATION_ERROR, "'patch' must be an object", 400);
+      }
+      const patch = patchValue as {
         frontmatter?: Record<string, unknown>;
         body?: string;
       };
-      if (
-        body.patch !== undefined &&
-        (typeof patch !== 'object' || patch === null || Array.isArray(patch))
-      ) {
-        return fail(ERROR_CODES.VALIDATION_ERROR, "'patch' must be an object", 400);
-      }
-      if (!(await fs.exists(path))) return notFound(path);
-
       if (patch.frontmatter !== undefined) {
         if (typeof patch.frontmatter !== 'object' || patch.frontmatter === null) {
           return fail(ERROR_CODES.VALIDATION_ERROR, "'patch.frontmatter' must be an object", 400);
@@ -606,14 +633,16 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
         return fail(ERROR_CODES.VALIDATION_ERROR, "'patch.body' must be a string", 400);
       }
 
-      const raw = await fs.readText(path);
-      const { frontmatter, body: existingBody } = safeParseMarkdown(raw, path);
-      const mergedFrontmatter = { ...frontmatter, ...patch.frontmatter };
-      const mergedBody = patch.body !== undefined ? patch.body : existingBody;
-      const rawMarkdown = path.toLowerCase().endsWith('.md')
-        ? stringifyMarkdown(mergedFrontmatter, mergedBody)
-        : mergedBody;
-      await fs.writeTextAtomic(path, rawMarkdown);
+      const result = await fs.conditionalUpdate(path, expectedModifiedAt, (current) => {
+        if (current.content === null) return null;
+        const { frontmatter, body: existingBody } = safeParseMarkdown(current.content, path);
+        const mergedFrontmatter = { ...frontmatter, ...patch.frontmatter };
+        const mergedBody = patch.body !== undefined ? patch.body : existingBody;
+        return path.toLowerCase().endsWith('.md')
+          ? stringifyMarkdown(mergedFrontmatter, mergedBody)
+          : mergedBody;
+      });
+      if (result.status !== 'updated') return conditionalUpdateFailure(path, result);
       return ok(await readWorkspaceFile(path));
     }
 

@@ -31,6 +31,8 @@ function createFakeFS(files: Record<string, { content: string; size: number }> =
       return Promise.resolve({ size: files[path].size, modifiedAt: '' });
     },
     listDirs: () => Promise.resolve([]),
+    mkdir: () => Promise.resolve(),
+    conditionalUpdate: () => Promise.resolve({ status: 'not-found' as const }),
   };
 }
 

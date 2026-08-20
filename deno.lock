@@ -9,13 +9,13 @@
     "npm:@grammyjs/ratelimiter@^1.2.1": "1.2.1",
     "npm:@grammyjs/stream@1": "1.1.0_grammy@1.45.1",
     "npm:@tailwindcss/vite@4.1.11": "4.1.11_vite@6.3.5__picomatch@4.0.5",
-    "npm:@tiptap/extension-code-block@latest": "3.30.2_@tiptap+core@3.30.2__@tiptap+pm@3.30.2_@tiptap+pm@3.30.2",
-    "npm:@tiptap/extension-task-item@latest": "3.30.2_@tiptap+extension-list@3.30.2__@tiptap+core@3.30.2___@tiptap+pm@3.30.2__@tiptap+pm@3.30.2",
-    "npm:@tiptap/extension-task-list@latest": "3.30.2_@tiptap+extension-list@3.30.2__@tiptap+core@3.30.2___@tiptap+pm@3.30.2__@tiptap+pm@3.30.2",
-    "npm:@tiptap/react@latest": "3.30.2_@tiptap+core@3.30.2__@tiptap+pm@3.30.2_@tiptap+pm@3.30.2_@types+react@19.2.18_@types+react-dom@19.2.4__@types+react@19.2.18_react@19.1.1_react-dom@19.1.1__react@19.1.1",
-    "npm:@tiptap/starter-kit@latest": "3.30.2_@tiptap+pm@3.30.2_@tiptap+core@3.30.2__@tiptap+pm@3.30.2_@tiptap+extension-list@3.30.2__@tiptap+core@3.30.2___@tiptap+pm@3.30.2__@tiptap+pm@3.30.2_@tiptap+extensions@3.30.2__@tiptap+core@3.30.2___@tiptap+pm@3.30.2__@tiptap+pm@3.30.2",
-    "npm:@types/react-dom@latest": "19.2.4_@types+react@19.2.18",
-    "npm:@types/react@latest": "19.2.18",
+    "npm:@tiptap/extension-code-block@3.30.2": "3.30.2_@tiptap+core@3.30.2__@tiptap+pm@3.30.2_@tiptap+pm@3.30.2",
+    "npm:@tiptap/extension-task-item@3.30.2": "3.30.2_@tiptap+extension-list@3.30.2__@tiptap+core@3.30.2___@tiptap+pm@3.30.2__@tiptap+pm@3.30.2",
+    "npm:@tiptap/extension-task-list@3.30.2": "3.30.2_@tiptap+extension-list@3.30.2__@tiptap+core@3.30.2___@tiptap+pm@3.30.2__@tiptap+pm@3.30.2",
+    "npm:@tiptap/react@3.30.2": "3.30.2_@tiptap+core@3.30.2__@tiptap+pm@3.30.2_@tiptap+pm@3.30.2_@types+react@19.2.18_@types+react-dom@19.2.4__@types+react@19.2.18_react@19.1.1_react-dom@19.1.1__react@19.1.1",
+    "npm:@tiptap/starter-kit@3.30.2": "3.30.2_@tiptap+pm@3.30.2_@tiptap+core@3.30.2__@tiptap+pm@3.30.2_@tiptap+extension-list@3.30.2__@tiptap+core@3.30.2___@tiptap+pm@3.30.2__@tiptap+pm@3.30.2_@tiptap+extensions@3.30.2__@tiptap+core@3.30.2___@tiptap+pm@3.30.2__@tiptap+pm@3.30.2",
+    "npm:@types/react-dom@19.2.4": "19.2.4_@types+react@19.2.18",
+    "npm:@types/react@19.2.18": "19.2.18",
     "npm:@vitejs/plugin-react@4.3.4": "4.3.4_vite@6.3.5__picomatch@4.0.5_@babel+core@7.29.7",
     "npm:boxen@^8.0.1": "8.0.1",
     "npm:chalk@^5.6.2": "5.6.2",
@@ -30,7 +30,7 @@
     "npm:vite@6.3.5": "6.3.5_picomatch@4.0.5",
     "npm:winston@^3.18.3": "3.19.0",
     "npm:zod@^4.1.12": "4.4.3",
-    "npm:zustand@latest": "5.0.15_@types+react@19.2.18_react@19.1.1"
+    "npm:zustand@5.0.15": "5.0.15_@types+react@19.2.18_react@19.1.1"
   },
   "npm": {
     "@ampproject/remapping@2.3.0": {
@@ -2670,18 +2670,18 @@
       "apps/web": {
         "dependencies": [
           "npm:@tailwindcss/vite@4.1.11",
-          "npm:@tiptap/extension-code-block@latest",
-          "npm:@tiptap/extension-task-item@latest",
-          "npm:@tiptap/extension-task-list@latest",
-          "npm:@tiptap/react@latest",
-          "npm:@tiptap/starter-kit@latest",
-          "npm:@types/react-dom@latest",
-          "npm:@types/react@latest",
+          "npm:@tiptap/extension-code-block@3.30.2",
+          "npm:@tiptap/extension-task-item@3.30.2",
+          "npm:@tiptap/extension-task-list@3.30.2",
+          "npm:@tiptap/react@3.30.2",
+          "npm:@tiptap/starter-kit@3.30.2",
+          "npm:@types/react-dom@19.2.4",
+          "npm:@types/react@19.2.18",
           "npm:@vitejs/plugin-react@4.3.4",
           "npm:react-dom@19.1.1",
           "npm:react@19.1.1",
           "npm:vite@6.3.5",
-          "npm:zustand@latest"
+          "npm:zustand@5.0.15"
         ]
       }
     }

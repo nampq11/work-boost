@@ -12,6 +12,7 @@ interface WorkspaceState {
   error: string | null;
   draft: string;
   isDirty: boolean;
+  documentRevision: number;
   loadFiles: () => Promise<void>;
   selectFile: (path: string, force?: boolean) => Promise<boolean>;
   updateBody: (body: string) => void;
@@ -71,16 +72,36 @@ export function buildFileTree(paths: string[], directories: string[] = []): File
 function draftKey(path: string): string {
   return `workboost:draft:${path}`;
 }
-function getDraft(path: string): string | null {
+interface DraftCache {
+  body: string;
+  frontmatter?: Record<string, unknown>;
+}
+
+function getDraft(path: string): DraftCache | null {
   try {
-    return localStorage.getItem(draftKey(path));
+    const value = localStorage.getItem(draftKey(path));
+    if (!value) return null;
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed === 'object' && parsed !== null && 'body' in parsed) {
+      const draft = parsed as { body?: unknown; frontmatter?: unknown };
+      if (typeof draft.body === 'string') {
+        return {
+          body: draft.body,
+          frontmatter:
+            typeof draft.frontmatter === 'object' && draft.frontmatter !== null
+              ? (draft.frontmatter as Record<string, unknown>)
+              : {},
+        };
+      }
+    }
+    return { body: value };
   } catch {
     return null;
   }
 }
-function setDraft(path: string, value: string): void {
+function setDraft(path: string, value: DraftCache): void {
   try {
-    localStorage.setItem(draftKey(path), value);
+    localStorage.setItem(draftKey(path), JSON.stringify(value));
   } catch {
     /* storage is optional */
   }
@@ -108,6 +129,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   error: null,
   draft: '',
   isDirty: false,
+  documentRevision: 0,
   async loadFiles() {
     set({ isLoading: true, error: null });
     try {
@@ -126,27 +148,38 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
   async selectFile(path, force = false) {
     const state = get();
+    const previousPath = state.activePath;
     if (state.isDirty && !force) await state.save();
+    if (!force && get().activePath !== previousPath) return false;
     if (path.toLowerCase().endsWith('.html')) {
-      set({ activePath: path, activeDocument: null, draft: '', isDirty: false });
+      set((current) => ({
+        activePath: path,
+        activeDocument: null,
+        draft: '',
+        isDirty: false,
+        documentRevision: current.documentRevision + 1,
+      }));
       return true;
     }
     try {
       const document = await api.readFile(path);
       const raw = stringifyMarkdown(document.frontmatter, document.body);
       const cachedDraft = getDraft(path);
-      set({
+      const frontmatter = cachedDraft?.frontmatter ?? document.frontmatter;
+      set((current) => ({
         activePath: path,
         activeDocument: {
           ...document,
+          frontmatter,
           rawMarkdown: raw,
           isDirty: Boolean(cachedDraft),
           lastSavedAt: new Date(document.modifiedAt),
         },
-        draft: cachedDraft ?? document.body,
+        draft: cachedDraft?.body ?? document.body,
         isDirty: Boolean(cachedDraft),
+        documentRevision: current.documentRevision + 1,
         error: null,
-      });
+      }));
       return true;
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Unable to read file' });
@@ -156,25 +189,41 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   updateBody(body) {
     const { activeDocument, activePath } = get();
     if (!activeDocument || !activePath) return;
-    setDraft(activePath, body);
-    set({ draft: body, isDirty: true, activeDocument: { ...activeDocument, body, isDirty: true } });
+    setDraft(activePath, { body, frontmatter: activeDocument.frontmatter });
+    set((current) => ({
+      draft: body,
+      isDirty: true,
+      documentRevision: current.documentRevision + 1,
+      activeDocument: { ...activeDocument, body, isDirty: true },
+    }));
   },
   updateFrontmatter(frontmatter) {
-    const { activeDocument, activePath } = get();
+    const { activeDocument, activePath, draft } = get();
     if (!activeDocument || !activePath) return;
-    set({ activeDocument: { ...activeDocument, frontmatter, isDirty: true }, isDirty: true });
+    setDraft(activePath, { body: draft, frontmatter });
+    set((current) => ({
+      activeDocument: { ...activeDocument, frontmatter, isDirty: true },
+      isDirty: true,
+      documentRevision: current.documentRevision + 1,
+    }));
   },
   async save() {
-    const { activeDocument, activePath, draft } = get();
+    const { activeDocument, activePath, draft, documentRevision } = get();
     if (!activeDocument || !activePath || !get().isDirty) return;
+    const savePath = activePath;
+    const saveRevision = documentRevision;
+    const saveDocument = activeDocument;
+    const saveDraft = draft;
     set({ syncStatus: 'saving' });
     try {
       const saved = await api.patchFile(
-        activePath,
-        { body: draft, frontmatter: activeDocument.frontmatter },
-        activeDocument.modifiedAt,
+        savePath,
+        { body: saveDraft, frontmatter: saveDocument.frontmatter },
+        saveDocument.modifiedAt,
       );
-      clearDraft(activePath);
+      const current = get();
+      if (current.activePath !== savePath || current.documentRevision !== saveRevision) return;
+      clearDraft(savePath);
       set({
         activeDocument: {
           ...saved,
@@ -194,20 +243,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           : error instanceof Error
             ? error.message
             : 'Save failed';
-      set({ syncStatus: 'offline', error: message });
+      if (get().activePath === savePath) set({ syncStatus: 'offline', error: message });
       throw error;
     }
   },
   async handleEvent(event) {
-    const state = get();
-    const changed = event.paths.some((path) => path === state.activePath);
-    await state.loadFiles();
-    if (!changed || !state.activePath || state.activePath.toLowerCase().endsWith('.html')) return;
-    if (state.isDirty) {
+    await get().loadFiles();
+    const current = get();
+    const activePath = current.activePath;
+    const changed = activePath !== null && event.paths.some((path) => path === activePath);
+    if (!changed || activePath.toLowerCase().endsWith('.html')) return;
+    if (current.isDirty) {
       set({ error: 'This file changed on disk while you were editing.' });
       return;
     }
-    await state.selectFile(state.activePath, true);
+    await current.selectFile(activePath, true);
   },
   async trash(path) {
     const result = await api.trashFile(path);

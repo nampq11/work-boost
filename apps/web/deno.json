@@ -2,18 +2,18 @@
   "imports": {
     "@vitejs/plugin-react": "npm:@vitejs/plugin-react@4.3.4",
     "@tailwindcss/vite": "npm:@tailwindcss/vite@4.1.11",
-    "@tiptap/extension-code-block": "npm:@tiptap/extension-code-block@latest",
-    "@tiptap/extension-task-item": "npm:@tiptap/extension-task-item@latest",
-    "@tiptap/extension-task-list": "npm:@tiptap/extension-task-list@latest",
-    "@tiptap/react": "npm:@tiptap/react@latest",
-    "@tiptap/starter-kit": "npm:@tiptap/starter-kit@latest",
-    "@types/react": "npm:@types/react@latest",
-    "@types/react-dom": "npm:@types/react-dom@latest",
+    "@tiptap/extension-code-block": "npm:@tiptap/extension-code-block@3.30.2",
+    "@tiptap/extension-task-item": "npm:@tiptap/extension-task-item@3.30.2",
+    "@tiptap/extension-task-list": "npm:@tiptap/extension-task-list@3.30.2",
+    "@tiptap/react": "npm:@tiptap/react@3.30.2",
+    "@tiptap/starter-kit": "npm:@tiptap/starter-kit@3.30.2",
+    "@types/react": "npm:@types/react@19.2.18",
+    "@types/react-dom": "npm:@types/react-dom@19.2.4",
     "react": "npm:react@19.1.1",
     "react/jsx-runtime": "npm:react@19.1.1/jsx-runtime",
     "react-dom": "npm:react-dom@19.1.1",
     "vite": "npm:vite@6.3.5",
-    "zustand": "npm:zustand@latest"
+    "zustand": "npm:zustand@5.0.15"
   },
   "tasks": {
     "dev": "vite --host localhost --port 3000",
