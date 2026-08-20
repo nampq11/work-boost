@@ -8,7 +8,7 @@ import { env, timingSafeEqual } from '@work-boost/shared';
 import { redactRecursively } from '@work-boost/shared/logger/logger.ts';
 import { Bot, type Context, GrammyError } from 'grammy';
 import { webhookCallback } from 'grammy';
-import type { BotService, BotUpdate, Platform, SendOptions } from '../bot/bot-service.ts';
+import type { BotService, Platform, SendOptions } from '../bot/bot-service.ts';
 import { handleDebtInput, hasPendingDebt } from './handlers/debt/debt.ts';
 import * as debtHandlers from './handlers/debt/index.ts';
 import * as handlers from './handlers/index.ts';
@@ -16,18 +16,6 @@ import { mainMenuKeyboard } from './keyboards.ts';
 import { createSanitizationMiddleware } from './sanitizer.ts';
 
 export type TelegramContext = StreamFlavor<Context>;
-
-interface TelegramUpdatePayload {
-  message?: {
-    from?: { id?: number };
-    chat?: { id?: number };
-  };
-  callback_query?: {
-    from?: { id?: number };
-    message?: { chat?: { id?: number } };
-  };
-  [key: string]: unknown;
-}
 
 /**
  * Simple sliding-window rate limiter for bulk message sending.
@@ -248,20 +236,6 @@ export class TelegramService implements BotService {
     }
 
     return !isProduction;
-  }
-
-  async parseUpdate(request: Request): Promise<BotUpdate> {
-    const body = (await request.json()) as TelegramUpdatePayload;
-    return {
-      platform: 'telegram',
-      userId: body.message?.from?.id?.toString() || body.callback_query?.from?.id?.toString() || '',
-      chatId:
-        body.message?.chat?.id?.toString() ||
-        body.callback_query?.message?.chat?.id?.toString() ||
-        '',
-      action: 'start',
-      data: body,
-    };
   }
 
   handleWebhook(request: Request): Promise<Response> {
