@@ -193,6 +193,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }));
       return true;
     } catch (error) {
+      if (requestToken !== selectionToken) return false;
       set({ error: error instanceof Error ? error.message : 'Unable to read file' });
       return false;
     }

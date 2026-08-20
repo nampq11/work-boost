@@ -457,6 +457,7 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
     if (
       !metadata.originalPath ||
       !metadata.trashPath ||
+      metadata.trashPath !== join('.workboost', 'trash', `${trashId}.data`) ||
       isPathForbidden(metadata.originalPath) ||
       !hasAllowedExtension(metadata.originalPath)
     ) {
