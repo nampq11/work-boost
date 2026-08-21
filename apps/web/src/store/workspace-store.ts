@@ -16,6 +16,7 @@ interface WorkspaceState {
   recentFiles: Map<string, Date>;
   loadFiles: () => Promise<void>;
   selectFile: (path: string, force?: boolean) => Promise<boolean>;
+  goHome: () => Promise<boolean>;
   updateBody: (body: string) => void;
   updateFrontmatter: (frontmatter: Record<string, unknown>) => void;
   save: () => Promise<void>;
@@ -243,6 +244,28 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set({ error: error instanceof Error ? error.message : 'Unable to read file' });
       return false;
     }
+  },
+  async goHome() {
+    const path = get().activePath;
+    if (!path) return true;
+    const requestToken = ++selectionToken;
+    if (get().isDirty) {
+      try {
+        await get().save();
+      } catch {
+        return false;
+      }
+    }
+    if (requestToken !== selectionToken || get().activePath !== path) return false;
+    set((current) => ({
+      activePath: null,
+      activeDocument: null,
+      draft: '',
+      isDirty: false,
+      documentRevision: current.documentRevision + 1,
+      error: null,
+    }));
+    return true;
   },
   updateBody(body) {
     const { activeDocument, activePath } = get();

@@ -1,5 +1,5 @@
+import { Circle, FolderOpen, House, Moon, Sparkle, Sun } from '@phosphor-icons/react';
 import React from 'react';
-import { Sun, Moon, Sparkle, Circle, FolderOpen } from '@phosphor-icons/react';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { Button } from '../ui/Button.tsx';
@@ -7,6 +7,7 @@ import { Button } from '../ui/Button.tsx';
 export function AppHeader() {
   const activePath = useWorkspaceStore((state) => state.activePath);
   const syncStatus = useWorkspaceStore((state) => state.syncStatus);
+  const goHome = useWorkspaceStore((state) => state.goHome);
   const theme = useUiStore((state) => state.theme);
   const toggleTheme = useUiStore((state) => state.toggleTheme);
   const toggleCopilot = useUiStore((state) => state.toggleCopilot);
@@ -16,13 +17,28 @@ export function AppHeader() {
   return (
     <header className="h-12 border-b border-[var(--border)] bg-[var(--surface-app)] px-3.5 flex items-center justify-between select-none shrink-0">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="flex items-center gap-2 font-semibold text-sm tracking-tight shrink-0">
+        <button
+          type="button"
+          onClick={() => void goHome()}
+          className="flex items-center gap-2 font-semibold text-sm tracking-tight shrink-0 rounded hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
+          aria-label="Return to start page"
+          title="Return to start page"
+        >
           <img src="/logo.png" alt="" className="w-6 h-6 rounded-full" />
           <span>Work Boost</span>
-        </div>
+        </button>
 
         {breadcrumbs.length > 0 && (
           <div className="flex items-center gap-2 text-sm text-[var(--text-muted)] truncate border-l border-[var(--border)] pl-3">
+            <button
+              type="button"
+              onClick={() => void goHome()}
+              className="shrink-0 rounded hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
+              aria-label="Return to start page"
+              title="Return to start page"
+            >
+              <House size={15} />
+            </button>
             <FolderOpen size={15} className="shrink-0" />
             {breadcrumbs.map((part, index) => (
               <React.Fragment key={index}>
