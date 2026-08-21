@@ -29,6 +29,7 @@ The Deno HTTP application and composition root.
 - `routes/message.ts` exposes the agent message and session-reset API.
 - `routes/workspace.ts` exposes the loopback-only workspace API, SSE change feed, and HTML-app
   server.
+- `routes/auth.ts` exposes API-owned OAuth status, device-code progress, cancellation, and logout.
 
 HTTP request and response details end here. Use package APIs and ports below this layer.
 
@@ -61,7 +62,8 @@ repositories.
 
 The AI boundary. `Brain` implements `AgentPort`, which is the interface used by the API and platform
 adapters. It creates a Pi agent with a system prompt and atomic workspace tools, manages one
-transcript per session, and returns response text to its caller.
+transcript per session, and returns response text to its caller. Its `AuthService` adapts pi-ai
+OAuth interactions into safe API events without exposing credentials to clients.
 
 `tools/` defines the operations available to the model: time lookup, debt management, daily-work
 management, and workspace-file discovery. Tools use `DataLayer` repositories.
@@ -101,6 +103,8 @@ holds environment access, logging, and security helpers.
    order; different IDs isolate conversation history.
 7. **Workspace apps and plugins are user-owned.** Bundled apps seed only when absent, and a plugin
    failure must not prevent the core application from starting.
+8. **OAuth belongs to the API process.** Browser clients receive only authentication status and
+   device-code progress; tokens remain in the server-side pi credential store.
 
 ## System boundaries
 

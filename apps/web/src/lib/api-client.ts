@@ -1,5 +1,39 @@
 import type { ActiveDocument, WorkspaceEvent } from './types.ts';
 
+export interface AuthStatus {
+  provider: string;
+  model: string;
+  auth: {
+    supported: boolean;
+    type: 'oauth' | 'unsupported';
+    status: 'connected' | 'not_connected' | 'refresh_failed' | 'unsupported';
+    source?: string;
+  };
+}
+
+export interface AuthLoginSession {
+  loginId: string;
+  provider: string;
+  type: 'oauth';
+  status: 'running';
+  eventsUrl: string;
+  expiresAt: string;
+}
+
+export type AuthLoginEvent =
+  | { type: 'started'; provider: string; authType: 'oauth' }
+  | { type: 'auth_url'; url: string; instructions?: string }
+  | {
+      type: 'device_code';
+      verificationUri: string;
+      userCode: string;
+      intervalSeconds?: number;
+      expiresInSeconds?: number;
+    }
+  | { type: 'progress'; message: string }
+  | { type: 'completed'; provider: string; status: 'connected' }
+  | { type: 'failed'; code: string; message: string }
+  | { type: 'cancelled'; message: string };
 const buildEnvironment = (import.meta as ImportMeta & { env?: Record<string, string> }).env ?? {};
 const workspaceBase = buildEnvironment.VITE_WORKSPACE_API ?? '/api/workspace';
 const apiBase = buildEnvironment.VITE_API_BASE ?? '/api';
@@ -96,6 +130,47 @@ export const api = {
     request<{ response: string; sessionId: string }>(`${apiBase}/message/sync`, {
       method: 'POST',
       body: JSON.stringify({ message, sessionId }),
+    }),
+  getAuthStatus: () => request<AuthStatus>(`${apiBase}/auth/status`),
+  startAuthLogin: (reauthenticate = false) =>
+    request<AuthLoginSession>(`${apiBase}/auth/login`, {
+      method: 'POST',
+      body: JSON.stringify({ provider: 'openai-codex', type: 'oauth', reauthenticate }),
+    }),
+  subscribeAuthLogin: (
+    loginId: string,
+    onEvent: (event: AuthLoginEvent) => void,
+    onError: () => void,
+  ) => {
+    const source = new EventSource(`${apiBase}/auth/login/${encodeURIComponent(loginId)}/events`);
+    const eventTypes: AuthLoginEvent['type'][] = [
+      'started',
+      'auth_url',
+      'device_code',
+      'progress',
+      'completed',
+      'failed',
+      'cancelled',
+    ];
+    const handleEvent = (event: MessageEvent<string>) => {
+      try {
+        onEvent(JSON.parse(event.data) as AuthLoginEvent);
+      } catch {
+        onError();
+      }
+    };
+    for (const eventType of eventTypes) source.addEventListener(eventType, handleEvent);
+    source.onerror = onError;
+    return () => source.close();
+  },
+  cancelAuthLogin: (loginId: string) =>
+    request<{ status: 'completed' | 'failed' | 'cancelled' }>(
+      `${apiBase}/auth/login/${encodeURIComponent(loginId)}/cancel`,
+      { method: 'POST' },
+    ),
+  logoutAuth: () =>
+    request<{ provider: string; status: 'not_connected' }>(`${apiBase}/auth/logout`, {
+      method: 'POST',
     }),
   subscribe: (onEvent: (event: WorkspaceEvent) => void, onError: () => void) => {
     const source = new EventSource(`${workspaceBase}/events`);

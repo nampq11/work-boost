@@ -38,7 +38,10 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   console.log('[DEBUG] AI_MODEL:', env.get('AI_MODEL') || 'workspace/default');
 
   // Initialize services (validates required secrets first)
-  const { db, agent, extensionManager } = await initializeServices({ enableScheduler });
+  const { db, agent, auth, extensionManager } = await initializeServices({
+    enableScheduler,
+    apiPrefix,
+  });
   const seededApps = await seedHtmlApps(db.fs);
   if (seededApps.length > 0) {
     logger.info('Seeded HTML Apps into workspace: ' + seededApps.join(', '), undefined, 'green');
@@ -54,6 +57,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     apiPrefix,
     db,
     agent,
+    auth,
     extensionManager,
   });
 

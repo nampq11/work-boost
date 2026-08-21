@@ -16,6 +16,7 @@ import { zaiProvider } from '@earendil-works/pi-ai/providers/zai';
 import type { DataLayer } from '@work-boost/data-provider';
 import type { ResolvedAIConfig } from '@work-boost/data-schemas/config.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
+import { AuthService } from './auth-service.ts';
 import { createSessionStore } from './sessions.ts';
 import { SYSTEM_PROMPT } from './system-prompt.ts';
 import { getWorkspaceTools } from './tools/index.ts';
@@ -26,6 +27,7 @@ export interface BrainDeps {
   ai?: ResolvedAIConfig;
   credentials?: CredentialStore;
   authContext?: AuthContext;
+  authApiPrefix?: string;
 }
 
 export function createBrain(deps: BrainDeps): Brain {
@@ -74,6 +76,7 @@ export class Brain implements AgentPort {
   private readonly model: Model<any>;
   private readonly tools;
   readonly ai: ResolvedAIConfig;
+  readonly auth: AuthService;
 
   constructor(deps: BrainDeps) {
     this.ai = deps.ai ?? { provider: 'google', model: 'gemini-2.5-flash' };
@@ -91,6 +94,7 @@ export class Brain implements AgentPort {
     this.model = model;
     this.store = createSessionStore();
     this.tools = getWorkspaceTools(deps.dataLayer);
+    this.auth = new AuthService({ ai: this.ai, models, apiPrefix: deps.authApiPrefix });
   }
 
   /**
@@ -193,6 +197,7 @@ export class Brain implements AgentPort {
    * Stop background timers. Intended for tests and graceful shutdown.
    */
   dispose(): void {
+    this.auth.dispose();
     this.store.stopCleanup();
   }
 }

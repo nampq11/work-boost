@@ -1,4 +1,9 @@
-import { type AgentPort, createBrain, createCredentialStore } from '@work-boost/brain';
+import {
+  type AgentPort,
+  type AuthService,
+  createBrain,
+  createCredentialStore,
+} from '@work-boost/brain';
 import { type DataLayer, Database, createDataLayer } from '@work-boost/data-provider';
 import { resolveAIConfig } from '@work-boost/data-schemas/config.ts';
 import { env } from '@work-boost/shared';
@@ -15,6 +20,7 @@ export interface Services {
   dataLayer: DataLayer;
   db: Database;
   agent: AgentPort;
+  auth: AuthService;
   extensionManager: ExtensionManager;
 }
 
@@ -43,7 +49,7 @@ export function validateRequiredSecrets(options: { strict?: boolean } = {}): {
 }
 
 export async function initializeServices(
-  options: { strict?: boolean; enableScheduler?: boolean } = {},
+  options: { strict?: boolean; enableScheduler?: boolean; apiPrefix?: string } = {},
 ): Promise<Services> {
   const validation = validateRequiredSecrets(options);
   if (!validation.valid) {
@@ -63,7 +69,8 @@ export async function initializeServices(
 
   const db = await Database.init(dataLayer);
   const credentials = createCredentialStore(env.get('PI_AUTH_PATH'));
-  const agent = createBrain({ ai, credentials, dataLayer });
+  const brain = createBrain({ ai, credentials, dataLayer, authApiPrefix: options.apiPrefix });
+  const agent = brain;
   logger.info('Agent initialized');
 
   const context = {
@@ -85,5 +92,5 @@ export async function initializeServices(
     extensionManager.registerAllCronJobs();
   }
 
-  return { dataLayer, db, agent, extensionManager };
+  return { dataLayer, db, agent, auth: brain.auth, extensionManager };
 }

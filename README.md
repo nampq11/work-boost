@@ -85,7 +85,10 @@ Gemini (`gemini-2.5-flash`). OpenRouter requires an explicit model. Environment 
 workspace configuration. Credentials are read from `~/.pi/agent/auth.json` by default, and OAuth
 refreshes are written back safely without changing other providers. Existing workspaces without AI
 settings continue to use Google Gemini for backward compatibility. Provider changes take effect
-after an API restart; there is no automatic provider fallback.
+after an API restart; there is no automatic provider fallback. When `AI_PROVIDER=openai-codex`,
+the browser Copilot drawer can start device-code login without exposing tokens to the browser.
+OAuth credentials remain in the server-side pi credential file and can be removed with the
+drawer's Log out action.
 
 ## Setting Up Telegram Bot
 

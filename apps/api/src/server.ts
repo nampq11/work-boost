@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import type { AgentPort } from '@work-boost/brain';
+import type { AgentPort, AuthPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { ExtensionManager } from '../../../extensions/manager.ts';
@@ -11,6 +11,13 @@ import {
   logRequest,
   logResponse,
 } from './middleware/logging.ts';
+import {
+  handleAuthLogin,
+  handleAuthLoginCancel,
+  handleAuthLoginEvents,
+  handleAuthLogout,
+  handleAuthStatus,
+} from './routes/auth.ts';
 import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
 import { type WorkspaceRouter, createWorkspaceRouter } from './routes/workspace.ts';
 import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
@@ -31,6 +38,7 @@ export interface ApiServerConfig {
   apiPrefix?: string;
   db?: Database;
   agent?: AgentPort;
+  auth?: AuthPort;
   extensionManager?: ExtensionManager;
 }
 
@@ -312,6 +320,61 @@ export function createServer(config: ApiServerConfig) {
       }
 
       // ==============================================================
+      // Authentication routes (with rate limiting)
+      // ==============================================================
+      const authBase = buildApiPath('/auth');
+      if (pathname === authBase || pathname.startsWith(`${authBase}/`)) {
+        const rateLimitResponse = checkRateLimit(req);
+        if (rateLimitResponse) {
+          logResponse(req, rateLimitResponse, ctx);
+          return addCorsHeaders(req, addSecurityHeaders(rateLimitResponse), corsOrigins);
+        }
+        if (!config.auth) {
+          const response = errorResponse(
+            ERROR_CODES.AUTH_SERVICE_UNAVAILABLE,
+            'Authentication service is unavailable',
+            503,
+            undefined,
+            ctx.requestId,
+          );
+          return addCorsHeaders(req, addSecurityHeaders(response), corsOrigins);
+        }
+
+        let response: Response;
+        const loginPathPrefix = `${authBase}/login/`;
+        const loginEventsMatch =
+          pathname.startsWith(loginPathPrefix) && pathname.endsWith('/events')
+            ? pathname.slice(loginPathPrefix.length, -'/events'.length)
+            : undefined;
+        const loginCancelMatch =
+          pathname.startsWith(loginPathPrefix) && pathname.endsWith('/cancel')
+            ? pathname.slice(loginPathPrefix.length, -'/cancel'.length)
+            : undefined;
+
+        if (pathname === `${authBase}/status` && method === 'GET') {
+          response = await handleAuthStatus(config.auth, ctx.requestId);
+        } else if (pathname === `${authBase}/login` && method === 'POST') {
+          response = await handleAuthLogin(req, config.auth, ctx.requestId);
+        } else if (loginEventsMatch !== undefined && method === 'GET') {
+          response = handleAuthLoginEvents(req, config.auth, loginEventsMatch, ctx.requestId);
+        } else if (loginCancelMatch !== undefined && method === 'POST') {
+          response = await handleAuthLoginCancel(config.auth, loginCancelMatch, ctx.requestId);
+        } else if (pathname === `${authBase}/logout` && method === 'POST') {
+          response = await handleAuthLogout(config.auth, ctx.requestId);
+        } else {
+          response = errorResponse(
+            ERROR_CODES.NOT_FOUND,
+            `Route ${method} ${pathname} not found`,
+            404,
+            undefined,
+            ctx.requestId,
+          );
+        }
+        logResponse(req, response, ctx);
+        return addCorsHeaders(req, addSecurityHeaders(response), corsOrigins);
+      }
+
+      // ==============================================================
       // API Routes (with rate limiting)
       // ==============================================================
       if (pathname.startsWith(buildApiPath('/message'))) {
@@ -416,6 +479,7 @@ export function createServer(config: ApiServerConfig) {
         if (!isCancellationError(error)) throw error;
       }
       await config.extensionManager?.disposeAll();
+      config.auth?.dispose?.();
     },
   };
 }

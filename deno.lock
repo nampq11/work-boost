@@ -36,6 +36,7 @@
     "npm:oxlint@0.11": "0.11.1",
     "npm:oxlint@~0.11.1": "0.11.1",
     "npm:react-dom@19.1.1": "19.1.1_react@19.1.1",
+    "npm:react-resizable-panels@4.12.3": "4.12.3_react@19.1.1_react-dom@19.1.1__react@19.1.1",
     "npm:react@19.1.1": "19.1.1",
     "npm:tailwind-merge@2.5.5": "2.5.5",
     "npm:tailwindcss@4.1.11": "4.1.11",
@@ -2785,6 +2786,13 @@
         "@types/react"
       ]
     },
+    "react-resizable-panels@4.12.3_react@19.1.1_react-dom@19.1.1__react@19.1.1": {
+      "integrity": "sha512-GHMJWnDXui/3RX4bT+cgBP+N3N2nkwcoZATr/2xLFpqQQe7TlBrE0cGM0dUa9ceT7A90tUrSRsiqgRG+g0/2AA==",
+      "dependencies": [
+        "react",
+        "react-dom"
+      ]
+    },
     "react-style-singleton@2.2.3_@types+react@19.2.18_react@19.1.1": {
       "integrity": "sha512-b6jSvxvVnyptAiLjbkWLE/lOnR4lfTtDAl+eUC7RZy+QQWc6wRzIV2CE6xBuMmDxc2qIihtDCZD5NPOFl7fRBQ==",
       "dependencies": [
@@ -3392,6 +3400,7 @@
           "npm:class-variance-authority@0.7.1",
           "npm:clsx@2.1.1",
           "npm:react-dom@19.1.1",
+          "npm:react-resizable-panels@4.12.3",
           "npm:react@19.1.1",
           "npm:tailwind-merge@2.5.5",
           "npm:tailwindcss@4.1.11",

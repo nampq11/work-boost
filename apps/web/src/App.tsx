@@ -7,6 +7,12 @@ import { Sidebar } from './components/layout/Sidebar.tsx';
 import { StatusBar } from './components/layout/StatusBar.tsx';
 import { CommandPalette } from './components/palette/CommandPalette.tsx';
 import { Toast } from './components/ui/Toast.tsx';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  useDefaultLayout,
+} from './components/ui/resizable.tsx';
 import { HtmlAppViewer } from './components/viewer/HtmlAppViewer.tsx';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.ts';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync.ts';
@@ -21,7 +27,14 @@ export function App() {
   const trash = useWorkspaceStore((state) => state.trash);
   const restore = useWorkspaceStore((state) => state.restore);
   const theme = useUiStore((state) => state.theme);
+  const copilotOpen = useUiStore((state) => state.copilotOpen);
   const showToast = useUiStore((state) => state.showToast);
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: 'workboost-workspace-layout',
+    panelIds: ['main', 'copilot'],
+    onlySaveAfterUserInteractions: true,
+    storage: typeof window === 'undefined' ? undefined : window.localStorage,
+  });
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
@@ -68,28 +81,39 @@ export function App() {
       <AppHeader />
       <div className="app-body">
         <Sidebar />
-        <main className="main-viewport">
-          {error && (
-            <div className="mx-6 mt-4 p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">Lỗi kết nối workspace:</span>
-                <span>{error}</span>
-              </div>
-              <button
-                onClick={() => void useWorkspaceStore.getState().loadFiles()}
-                className="underline font-medium hover:opacity-80"
-              >
-                Thử lại
-              </button>
-            </div>
-          )}
-          {activePath?.toLowerCase().endsWith('.html') ? (
-            <HtmlAppViewer path={activePath} />
-          ) : (
-            <EditorContainer />
-          )}
-        </main>
-        <AiCopilotDrawer />
+        <ResizablePanelGroup
+          id="workboost-workspace"
+          orientation="horizontal"
+          defaultLayout={defaultLayout}
+          onLayoutChanged={onLayoutChanged}
+          className="min-w-0 flex-1"
+        >
+          <ResizablePanel id="main" minSize={0} className="min-w-0">
+            <main className="main-viewport">
+              {error && (
+                <div className="mx-6 mt-4 p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">Lỗi kết nối workspace:</span>
+                    <span>{error}</span>
+                  </div>
+                  <button
+                    onClick={() => void useWorkspaceStore.getState().loadFiles()}
+                    className="underline font-medium hover:opacity-80"
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              )}
+              {activePath?.toLowerCase().endsWith('.html') ? (
+                <HtmlAppViewer path={activePath} />
+              ) : (
+                <EditorContainer />
+              )}
+            </main>
+          </ResizablePanel>
+          {copilotOpen && <ResizableHandle withHandle />}
+          <AiCopilotDrawer />
+        </ResizablePanelGroup>
       </div>
       <StatusBar />
       <CommandPalette />

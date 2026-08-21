@@ -15,3 +15,10 @@
 ## 2026-08-21 - Configurable AI provider compatibility
 
 - Workspaces without an `ai` section resolve to Google with `gemini-2.5-flash`. This preserves existing workspaces and the legacy `GOOGLE_API_KEY` setup while keeping new provider selection explicit through configuration or environment overrides.
+
+## 2026-08-21 - Frontend OAuth login
+
+- Browser authentication is implemented as an API-owned `AuthService` in `packages/brain`. The API exposes only safe status and progress metadata; pi-ai remains the owner of OAuth exchange and credential persistence.
+- The first browser flow is intentionally limited to OpenAI Codex device-code OAuth. OpenRouter remains unsupported in the browser, matching the plan's remote-browser safety constraint.
+- The plan does not define the response when login is requested for an already connected provider. The implementation returns `409 AUTH_ALREADY_CONNECTED` unless `reauthenticate: true` is sent, rather than creating a redundant session.
+- SSE subscribers receive a bounded in-memory replay and disconnect-triggered cancellation waits one second for a reconnect. This preserves the plan's reconnect behavior while ensuring abandoned device flows do not run indefinitely.
