@@ -29,6 +29,7 @@ export function AiCopilotDrawer() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const loginSessionRef = useRef<AuthLoginSession | null>(null);
   const authRequestRef = useRef(0);
+  const loginRequestRef = useRef(0);
 
   function clearLoginSession(): void {
     unsubscribeRef.current?.();
@@ -59,6 +60,7 @@ export function AiCopilotDrawer() {
     void refreshAuthStatus();
     return () => {
       authRequestRef.current += 1;
+      loginRequestRef.current += 1;
       const session = loginSessionRef.current;
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
@@ -94,6 +96,7 @@ export function AiCopilotDrawer() {
 
   async function startLogin() {
     if (authLoading || loginSession) return;
+    const requestId = ++loginRequestRef.current;
     setAuthLoading(true);
     setAuthError('');
     setDeviceCode(null);
@@ -103,6 +106,10 @@ export function AiCopilotDrawer() {
         authStatus?.provider ?? '',
         authStatus?.auth.status === 'refresh_failed',
       );
+      if (requestId !== loginRequestRef.current) {
+        void api.cancelAuthLogin(session.loginId).catch(() => undefined);
+        return;
+      }
       clearLoginSession();
       loginSessionRef.current = session;
       setLoginSession(session);
