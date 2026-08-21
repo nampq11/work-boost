@@ -207,6 +207,7 @@ function isCancellationError(error: unknown): boolean {
 export function createServer(config: ApiServerConfig) {
   const apiPrefix = validateAndNormalizeApiPrefix(config.apiPrefix);
   const corsOrigins = config.corsOrigins;
+  const workspaceCorsOrigins = [...(corsOrigins ?? ['http://localhost:3000']), 'null'];
   // Rate limiter for API routes
   const checkRateLimit = createRateLimiter(
     config.rateLimitWindowMs || 15 * 60 * 1000,
@@ -231,7 +232,7 @@ export function createServer(config: ApiServerConfig) {
 
     try {
       // Handle CORS preflight
-      const corsResponse = handleOptionsRequest(req, corsOrigins);
+      const corsResponse = handleOptionsRequest(req, workspaceCorsOrigins);
       if (corsResponse) return corsResponse;
 
       const url = new URL(req.url);
@@ -307,7 +308,7 @@ export function createServer(config: ApiServerConfig) {
         logResponse(req, response, ctx);
         // The shell is served separately from the API during development. Keep
         // workspace JSON and SSE responses usable from that browser origin.
-        return addCorsHeaders(req, response, corsOrigins);
+        return addCorsHeaders(req, response, workspaceCorsOrigins);
       }
 
       // ==============================================================
@@ -379,11 +380,11 @@ export function createServer(config: ApiServerConfig) {
 
   return {
     handleRequest,
-    start(): void {
+    async start(): Promise<void> {
       const host = config.host || '0.0.0.0';
       const port = config.port;
 
-      httpServer = Deno.serve(
+      httpServer = await Deno.serve(
         {
           hostname: host,
           port,

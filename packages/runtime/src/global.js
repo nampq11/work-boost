@@ -2,10 +2,11 @@
   const API_BASE = window.__WORKBOOST_API_BASE__ || '/api/workspace';
 
   async function request(endpoint, options = {}) {
-    const res = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-    });
+    const headers = new Headers(options.headers);
+    if (options.body !== undefined && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
     const json = await res.json();
     if (!res.ok || !json.success) {
       const err = new Error(json.error?.message || 'Request failed');

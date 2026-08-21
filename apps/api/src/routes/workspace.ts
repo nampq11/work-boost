@@ -35,13 +35,13 @@ const APPS_BASE = '/workspace-apps';
 const CSP_POLICY = [
   'sandbox allow-scripts allow-forms allow-same-origin',
   "default-src 'none'",
-  "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net",
   "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self'",
+  "connect-src 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*",
   "img-src 'self' data:",
   "font-src 'self' data:",
   "form-action 'self'",
-  "frame-ancestors 'none'",
+  "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*",
   "base-uri 'none'",
 ].join('; ');
 

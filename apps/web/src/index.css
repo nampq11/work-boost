@@ -124,6 +124,52 @@ body {
   overflow: hidden;
 }
 
+.app-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 28px 32px 40px;
+}
+
+.viewer-heading {
+  flex: 0 0 auto;
+  margin-bottom: 16px;
+}
+
+.viewer-heading .eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.viewer-heading h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.app-viewer iframe {
+  display: block;
+  width: 100%;
+  min-height: 420px;
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-card);
+}
+
+@media (max-width: 640px) {
+  .app-viewer {
+    padding: 20px 16px 28px;
+  }
+}
 .main-viewport {
   flex: 1;
   min-width: 0;

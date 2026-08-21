@@ -1,5 +1,4 @@
-const TAILWIND_CDN =
-  '<script src="https://cdn.tailwindcss.com/3.4.17" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K" crossorigin="anonymous"></script>';
+const TAILWIND_CDN = '<script src="https://cdn.tailwindcss.com/3.4.17"></script>';
 const ALPINE_CDN =
   '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.16.2/dist/cdn.min.js" integrity="sha384-hTDKg8MgHALzleab34+W1b6UpW6tektVmHXleL5Ztz8x2WFIJeaJp6ixjNBjbrDY" crossorigin="anonymous"></script>';
 

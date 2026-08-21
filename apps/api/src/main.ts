@@ -56,32 +56,22 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     extensionManager,
   });
 
-  try {
-    server.start();
-    logger.info('API server is running and ready to accept requests', undefined, 'green');
+  await server.start();
+  logger.info('API server is running and ready to accept requests', undefined, 'green');
 
-    let shuttingDown = false;
-    const shutdown = async (signal: string) => {
-      if (shuttingDown) return;
-      shuttingDown = true;
-      logger.info(`Received ${signal}; shutting down extensions`);
-      try {
-        await server.stop();
-      } finally {
-        Deno.exit(0);
-      }
-    };
-    Deno.addSignalListener('SIGINT', () => void shutdown('SIGINT'));
-    Deno.addSignalListener('SIGTERM', () => void shutdown('SIGTERM'));
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    console.error('=== API SERVER START FAILED ===');
-    console.error('Error:', errorMsg);
-    if (errorStack) console.error('Stack:', errorStack);
-    logger.error('Failed to start API server: ' + errorMsg);
-    throw error;
-  }
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info(`Received ${signal}; shutting down extensions`);
+    try {
+      await server.stop();
+    } finally {
+      Deno.exit(0);
+    }
+  };
+  Deno.addSignalListener('SIGINT', () => void shutdown('SIGINT'));
+  Deno.addSignalListener('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
 // Start server when run directly (not when imported by the CLI)
@@ -97,7 +87,7 @@ if (import.meta.main) {
     console.error('Error:', errorMsg);
     if (errorStack) console.error('Stack:', errorStack);
     logger.error('Failed to start API server: ' + errorMsg);
-    // Rethrow so startup failure exits with a non-zero code instead of resolving silently
-    throw error;
+    // Exit explicitly so startup failures do not become uncaught promise errors.
+    Deno.exit(1);
   });
 }

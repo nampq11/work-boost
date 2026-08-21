@@ -74,7 +74,7 @@ function routerFor(dataLayer: DataLayer) {
   };
 }
 
-Deno.test('Workspace router - serves a seeded HTML app with CSP + injected runtime', async () => {
+Deno.test('Workspace router - serves seeded HTML apps with CSP + injected runtime', async () => {
   await withTempWorkspace(async ({ dataLayer }) => {
     const handle = routerFor(dataLayer);
 
@@ -84,7 +84,7 @@ Deno.test('Workspace router - serves a seeded HTML app with CSP + injected runti
     assertEquals(res.headers.get('content-type'), 'text/html; charset=utf-8');
     assertEquals(
       res.headers.get('content-security-policy'),
-      "sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      "sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*; img-src 'self' data:; font-src 'self' data:; form-action 'self'; frame-ancestors 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*; base-uri 'none'",
     );
     assertEquals(res.headers.get('cache-control'), 'no-store, no-cache, must-revalidate');
     const text = await bodyText(res);
@@ -92,6 +92,16 @@ Deno.test('Workspace router - serves a seeded HTML app with CSP + injected runti
     assertEquals(text.includes('cdn.jsdelivr.net/npm/alpinejs@3.16.2'), true);
     assertEquals(text.includes('window.workboost'), true);
     assertEquals(text.includes('Sổ Nợ Work Boost'), true);
+    assertEquals(text.includes('class="wb-app"'), true);
+
+    const standupResponse = await handle(
+      '/workspace-apps/standup-viewer.html',
+      undefined,
+      loopbackInfo(),
+    );
+    const standupText = await bodyText(standupResponse);
+    assertEquals(standupText.includes('class="wb-report-card wb-report-card-success"'), true);
+    assertEquals(standupText.includes('Báo Cáo '), true);
   });
 });
 

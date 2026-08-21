@@ -15,6 +15,9 @@ export default defineConfig({
   customLogger: logger,
   plugins: [react(), tailwindcss()],
   server: {
+    cors: {
+      origin: ['http://localhost:3000', 'http://localhost:3001', 'null'],
+    },
     port: 3000,
     proxy: {
       '/api': 'http://localhost:3001',
