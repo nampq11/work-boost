@@ -72,11 +72,7 @@ export function EditorContainer() {
           <div className="w-full max-w-2xl px-8 flex flex-col gap-6 items-center">
             {/* Brand Mark */}
             <div className="flex justify-center">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--surface-sidebar)] border border-[var(--border)] flex items-center justify-center shadow-sm">
-                <span className="font-bold text-sm tracking-tight text-[var(--accent-blue)]">
-                  WB
-                </span>
-              </div>
+              <img src="/logo.png" alt="" className="w-12 h-12 rounded-full shadow-sm" />
             </div>
 
             {/* Heading */}
@@ -154,11 +150,7 @@ export function EditorContainer() {
         <div className="max-w-md px-8 flex flex-col gap-6">
           {/* Brand Mark Icon */}
           <div className="flex justify-center">
-            <div className="w-12 h-12 rounded-2xl bg-[var(--surface-sidebar)] border border-[var(--border)] flex items-center justify-center shadow-sm">
-              <span className="font-bold text-sm tracking-tight text-[var(--accent-blue)]">
-                WB
-              </span>
-            </div>
+            <img src="/logo.png" alt="" className="w-12 h-12 rounded-full shadow-sm" />
           </div>
 
           {/* Heading */}

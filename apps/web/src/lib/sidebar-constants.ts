@@ -15,7 +15,7 @@ export type SidebarItemTypeValue = (typeof SidebarItemType)[keyof typeof Sidebar
 export interface SidebarItemConfig {
   type: SidebarItemTypeValue;
   colorClass: string;
-  getLabel: (node: FileNode) => string;
+  getLabel: (node: FileNode) => SidebarItemTypeValue;
 }
 
 export const SIDEBAR_ITEM_CONFIG: Record<FileNode['kind'], SidebarItemConfig> = {

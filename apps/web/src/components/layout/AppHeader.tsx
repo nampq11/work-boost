@@ -17,9 +17,7 @@ export function AppHeader() {
     <header className="h-12 border-b border-[var(--border)] bg-[var(--surface-app)] px-3.5 flex items-center justify-between select-none shrink-0">
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex items-center gap-2 font-semibold text-sm tracking-tight shrink-0">
-          <div className="w-6 h-6 rounded bg-[var(--text-primary)] text-[var(--text-inverse)] flex items-center justify-center font-bold text-xs">
-            WB
-          </div>
+          <img src="/logo.png" alt="" className="w-6 h-6 rounded-full" />
           <span>Work Boost</span>
         </div>
 
