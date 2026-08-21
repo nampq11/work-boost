@@ -2,8 +2,8 @@
   "imports": {
     "@vitejs/plugin-react": "npm:@vitejs/plugin-react@4.3.4",
     "@assistant-ui/react": "npm:@assistant-ui/react@0.15.16",
-    "@assistant-ui/react-markdown": "npm:@assistant-ui/react-markdown@0.14.12",
-    "remark-gfm": "npm:remark-gfm@4.0.1",
+    "@assistant-ui/react-streamdown": "npm:@assistant-ui/react-streamdown@0.3.11",
+    "streamdown": "npm:streamdown@2.5.0",
     "@tailwindcss/vite": "npm:@tailwindcss/vite@4.1.11",
     "@tiptap/extension-code-block": "npm:@tiptap/extension-code-block@3.30.2",
     "@tiptap/extension-task-item": "npm:@tiptap/extension-task-item@3.30.2",

@@ -6,10 +6,9 @@ import {
   useAuiState,
 } from '@assistant-ui/react';
 import type { ThreadMessage } from '@assistant-ui/react';
-import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown';
+import { StreamdownTextPrimitive } from '@assistant-ui/react-streamdown';
 import { Copy, PaperPlaneRight, Stop } from '@phosphor-icons/react';
-import React, { useEffect, useMemo, useState } from 'react';
-import remarkGfm from 'remark-gfm';
+import React from 'react';
 import { MessagePair } from './MessagePair.tsx';
 
 function getMessageText(content: ThreadMessage['content']): string {
@@ -19,46 +18,13 @@ function getMessageText(content: ThreadMessage['content']): string {
     .join('');
 }
 
-function useAssistantReveal() {
-  const text = useAuiState((state) => getMessageText(state.message.content));
-  const status = useAuiState((state) => state.message.status);
-  const words = useMemo(() => (text ? text.split(' ') : ['Thinking...']), [text]);
-  const [visibleWordCount, setVisibleWordCount] = useState(0);
-
-  useEffect(() => {
-    if (!text) {
-      setVisibleWordCount(1);
-      return;
-    }
-
-    setVisibleWordCount(0);
-    const revealStep = Math.max(1, Math.ceil(words.length / 40));
-    const intervalId = window.setInterval(() => {
-      setVisibleWordCount((currentCount) => {
-        const nextCount = Math.min(words.length, currentCount + revealStep);
-        if (nextCount === words.length) window.clearInterval(intervalId);
-        return nextCount;
-      });
-    }, 30);
-
-    return () => window.clearInterval(intervalId);
-  }, [text, words.length]);
-
-  return {
-    status,
-    text,
-    words,
-    visibleWordCount,
-    streaming: status?.type === 'running' || visibleWordCount < words.length,
-    contentReady: Boolean(text) && visibleWordCount >= words.length,
-  };
-}
-
 function AssistantMarkdown() {
   return (
-    <MarkdownTextPrimitive
-      remarkPlugins={[remarkGfm]}
-      smooth={false}
+    <StreamdownTextPrimitive
+      mode="streaming"
+      caret="block"
+      animated
+      defer
       className="copilot-markdown"
     />
   );
@@ -80,29 +46,26 @@ function UserMessage() {
 }
 
 function AssistantMessage() {
+  const assistantText = useAuiState((state) => getMessageText(state.message.content));
+  const status = useAuiState((state) => state.message.status);
   const userMessage = useAuiState((state) => {
     const previousMessage = state.thread.messages[state.message.index - 1];
     return previousMessage?.role === 'user' ? getMessageText(previousMessage.content) : '';
   });
-  const { status, text, words, visibleWordCount, streaming, contentReady } = useAssistantReveal();
-  const assistantContent =
-    status?.type !== 'running' || contentReady ? (
-      <>
-        <MessagePrimitive.Parts components={{ Text: AssistantMarkdown }} />
-        <MessagePrimitive.Error>
-          <AssistantError />
-        </MessagePrimitive.Error>
-      </>
-    ) : undefined;
+  const assistantContent = (
+    <>
+      <MessagePrimitive.Parts components={{ Text: AssistantMarkdown }} />
+      <MessagePrimitive.Error>
+        <AssistantError />
+      </MessagePrimitive.Error>
+    </>
+  );
 
   return (
     <MessagePrimitive.Root className="group flex flex-col items-start gap-1">
       <MessagePair
         userMessage={userMessage}
-        words={words}
-        visibleWords={visibleWordCount}
-        streaming={streaming}
-        loading={status?.type === 'running' && !text}
+        loading={status?.type === 'running' && !assistantText}
         assistantContent={assistantContent}
         actions={
           <ActionBarPrimitive.Root className="flex items-center px-1" hideWhenRunning>

@@ -439,22 +439,6 @@ input[type="number"] {
   font-size: 1.05em;
 }
 
-.copilot-streaming-word {
-  display: inline-block;
-  animation: copilot-word-in 500ms ease-out both;
-}
-
-@keyframes copilot-word-in {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .copilot-loading-label {
   background: linear-gradient(
     110deg,
@@ -479,10 +463,6 @@ input[type="number"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .copilot-streaming-word {
-    animation: none;
-  }
-
   .copilot-loading-label {
     background: none;
     color: var(--text-muted);

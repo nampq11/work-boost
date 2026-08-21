@@ -2,13 +2,9 @@ import type { ComponentProps, ReactNode } from 'react';
 import React, { useEffect, useState } from 'react';
 import { cn } from '../../lib/utils.ts';
 import { GenerationLoader } from './LoadingState.tsx';
-import { StreamingText } from './StreamingText.tsx';
 
 export interface MessagePairProps extends Omit<ComponentProps<'div'>, 'children'> {
   userMessage: string;
-  words: readonly string[];
-  visibleWords: number;
-  streaming: boolean;
   loading?: boolean;
   variant?: 'bubble' | 'flat';
   assistantContent?: ReactNode;
@@ -17,9 +13,6 @@ export interface MessagePairProps extends Omit<ComponentProps<'div'>, 'children'
 
 export function MessagePair({
   userMessage,
-  words,
-  visibleWords,
-  streaming,
   loading = false,
   variant = 'bubble',
   assistantContent,
@@ -27,7 +20,6 @@ export function MessagePair({
   className,
   ...props
 }: MessagePairProps) {
-  const showAssistantContent = assistantContent !== undefined && visibleWords >= words.length;
   const [loadingTick, setLoadingTick] = useState(0);
 
   useEffect(() => {
@@ -68,15 +60,8 @@ export function MessagePair({
             tick={loadingTick}
             className="min-h-[4.25rem] px-2 py-2"
           />
-        ) : showAssistantContent ? (
-          assistantContent
         ) : (
-          <StreamingText
-            segments={[{ text: words.join(' ') }]}
-            count={visibleWords}
-            streaming={streaming}
-            className="min-h-[4.25rem] max-w-[95%] text-[var(--text-primary)]"
-          />
+          assistantContent
         )}
         {actions}
       </div>
