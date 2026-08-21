@@ -7,36 +7,26 @@ import {
   useAuiState,
 } from '@assistant-ui/react';
 import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
-import { StreamdownTextPrimitive } from '@assistant-ui/react-streamdown';
 import { Copy, PaperPlaneRight, Stop } from '@phosphor-icons/react';
 import React from 'react';
+import { AssistantMarkdown } from './AssistantMarkdown.tsx';
 import { MessagePair } from './MessagePair.tsx';
 import { ToolTimeline } from './ToolCall.tsx';
 
 function getMessageText(content: ThreadMessage['content']): string {
   return content
-    .filter((part) => part.type === 'text')
+    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
     .join('');
-}
-
-function AssistantMarkdown() {
-  return (
-    <StreamdownTextPrimitive
-      mode="streaming"
-      caret="block"
-      animated
-      defer
-      className="copilot-markdown"
-    />
-  );
 }
 
 function UserMessage() {
   const hasAssistantReply = useAuiState(
     (state) => state.thread.messages[state.message.index + 1]?.role === 'assistant',
   );
-  if (hasAssistantReply) return null;
+  if (hasAssistantReply) {
+    return null;
+  }
 
   return (
     <MessagePrimitive.Root className="flex justify-end">
@@ -45,6 +35,26 @@ function UserMessage() {
       </div>
     </MessagePrimitive.Root>
   );
+}
+
+function MessagePart({
+  part,
+  firstToolCallId,
+  toolCalls,
+  isMessageRunning,
+}: {
+  part: ThreadMessage['content'][number];
+  firstToolCallId: string | undefined;
+  toolCalls: ToolCallMessagePart[];
+  isMessageRunning: boolean;
+}) {
+  if (part.type === 'text') {
+    return <AssistantMarkdown content={part.text} />;
+  }
+  if (part.type === 'tool-call' && part.toolCallId === firstToolCallId) {
+    return <ToolTimeline parts={toolCalls} isMessageRunning={isMessageRunning} />;
+  }
+  return null;
 }
 
 function AssistantMessage() {
@@ -61,29 +71,29 @@ function AssistantMessage() {
     const previousMessage = state.thread.messages[state.message.index - 1];
     return previousMessage?.role === 'user' ? getMessageText(previousMessage.content) : '';
   });
-  const assistantContent = (
-    <>
-      <MessagePrimitive.Parts>
-        {({ part }) => {
-          if (part.type === 'text') return <AssistantMarkdown />;
-          if (part.type === 'tool-call' && part.toolCallId === firstToolCallId) {
-            return <ToolTimeline parts={toolCalls} isMessageRunning={isMessageRunning} />;
-          }
-          return null;
-        }}
-      </MessagePrimitive.Parts>
-      <MessagePrimitive.Error>
-        <AssistantError />
-      </MessagePrimitive.Error>
-    </>
-  );
 
   return (
     <MessagePrimitive.Root className="group flex flex-col items-start gap-1">
       <MessagePair
         userMessage={userMessage}
         loading={isMessageRunning && !assistantText && !hasToolCall}
-        assistantContent={assistantContent}
+        assistantContent={
+          <>
+            <MessagePrimitive.Parts>
+              {({ part }) => (
+                <MessagePart
+                  part={part}
+                  firstToolCallId={firstToolCallId}
+                  toolCalls={toolCalls}
+                  isMessageRunning={isMessageRunning}
+                />
+              )}
+            </MessagePrimitive.Parts>
+            <MessagePrimitive.Error>
+              <AssistantError />
+            </MessagePrimitive.Error>
+          </>
+        }
         actions={
           <ActionBarPrimitive.Root className="flex items-center px-1" hideWhenRunning>
             <ActionBarPrimitive.Copy
@@ -104,7 +114,9 @@ function AssistantMessage() {
 function AssistantError() {
   const error = useAuiState((state) => {
     const status = state.message.status;
-    if (status?.type !== 'incomplete' || status.reason !== 'error') return undefined;
+    if (status?.type !== 'incomplete' || status.reason !== 'error') {
+      return undefined;
+    }
     return status.error;
   });
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
@@ -124,6 +136,7 @@ function Welcome() {
 
 function Composer() {
   const isRunning = useAuiState((state) => state.thread.isRunning);
+
   return (
     <ComposerPrimitive.Root className="relative border-t border-[var(--border)] bg-[var(--surface-app)] p-3">
       <ComposerPrimitive.Input
