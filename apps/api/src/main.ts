@@ -34,7 +34,8 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
 
   logger.info('Starting API server on http://' + host + ':' + port + apiPrefix, undefined, 'green');
   console.log('[DEBUG] Environment DENO_ENV:', env.DENO_ENV);
-  console.log('[DEBUG] GOOGLE_API_KEY set:', !!env.get('GOOGLE_API_KEY'));
+  console.log('[DEBUG] AI_PROVIDER:', env.get('AI_PROVIDER') || 'workspace/default');
+  console.log('[DEBUG] AI_MODEL:', env.get('AI_MODEL') || 'workspace/default');
 
   // Initialize services (validates required secrets first)
   const { db, agent, extensionManager } = await initializeServices({ enableScheduler });

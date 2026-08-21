@@ -1,3 +1,17 @@
+export const AI_UNAVAILABLE_CODE = 'AI_UNAVAILABLE' as const;
+
+export class AIUnavailableError extends Error {
+  readonly code = AI_UNAVAILABLE_CODE;
+  readonly provider: string;
+  readonly model: string;
+
+  constructor(provider: string, model: string, options?: { cause?: unknown }) {
+    super('The configured AI provider is unavailable', options);
+    this.name = 'AIUnavailableError';
+    this.provider = provider;
+    this.model = model;
+  }
+}
 /**
  * Minimal agent interface consumed by all platform services (API, Slack, Telegram).
  *

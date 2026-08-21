@@ -1,3 +1,6 @@
+export { FileCredentialStore, createCredentialStore } from './credential-store.ts';
+export type { FileCredentialStoreOptions } from './credential-store.ts';
+export { AI_UNAVAILABLE_CODE, AIUnavailableError } from './types.ts';
 export { Brain, createBrain } from './brain.ts';
 export type { BrainDeps } from './brain.ts';
 export type { AgentPort } from './types.ts';

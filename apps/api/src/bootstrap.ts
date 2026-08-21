@@ -1,5 +1,6 @@
-import { type AgentPort, createBrain } from '@work-boost/brain';
+import { type AgentPort, createBrain, createCredentialStore } from '@work-boost/brain';
 import { type DataLayer, Database, createDataLayer } from '@work-boost/data-provider';
+import { resolveAIConfig } from '@work-boost/data-schemas/config.ts';
 import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import {
@@ -25,8 +26,6 @@ export function validateRequiredSecrets(options: { strict?: boolean } = {}): {
   const requireSecret = (name: string): void => {
     if (!env.get(name)) missing.push(name);
   };
-
-  requireSecret('GOOGLE_API_KEY');
 
   const telegramEnabled = Boolean(env.get('TELEGRAM_BOT_TOKEN'));
   const slackEnabled = Boolean(env.get('SLACK_BOT_TOKEN'));
@@ -55,14 +54,16 @@ export async function initializeServices(
 
   const dataLayer = createDataLayer();
   await dataLayer.fs.init();
-  await dataLayer.config.load();
+  const workspaceConfig = await dataLayer.config.load();
+  const ai = resolveAIConfig(workspaceConfig, {
+    provider: env.get('AI_PROVIDER'),
+    model: env.get('AI_MODEL'),
+  });
   logger.info('Markdown-based workspace initialized');
 
   const db = await Database.init(dataLayer);
-  const agent = createBrain({
-    apiKey: env.get('GOOGLE_API_KEY') || '',
-    dataLayer,
-  });
+  const credentials = createCredentialStore(env.get('PI_AUTH_PATH'));
+  const agent = createBrain({ ai, credentials, dataLayer });
   logger.info('Agent initialized');
 
   const context = {

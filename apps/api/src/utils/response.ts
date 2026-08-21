@@ -112,9 +112,18 @@ export const ERROR_CODES = {
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   FORBIDDEN: 'FORBIDDEN',
   SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
+  AI_UNAVAILABLE: 'AI_UNAVAILABLE',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   CONFLICT: 'CONFLICT',
 } as const;
+
+export function isAIUnavailableError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error as { code?: unknown }).code === ERROR_CODES.AI_UNAVAILABLE
+  );
+}
 
 export type ErrorCode = keyof typeof ERROR_CODES;

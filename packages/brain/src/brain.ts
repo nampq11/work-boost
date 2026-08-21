@@ -7,50 +7,90 @@
  */
 
 import { Agent } from '@earendil-works/pi-agent-core';
-import { createModels } from '@earendil-works/pi-ai';
-import type { Model } from '@earendil-works/pi-ai';
+import { InMemoryCredentialStore, createModels } from '@earendil-works/pi-ai';
+import type { AuthContext, CredentialStore, Model } from '@earendil-works/pi-ai';
 import { googleProvider } from '@earendil-works/pi-ai/providers/google';
+import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex';
+import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
+import { zaiProvider } from '@earendil-works/pi-ai/providers/zai';
 import type { DataLayer } from '@work-boost/data-provider';
+import type { ResolvedAIConfig } from '@work-boost/data-schemas/config.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import type { AgentPort } from './types.ts';
-import { SYSTEM_PROMPT } from './system-prompt.ts';
 import { createSessionStore } from './sessions.ts';
+import { SYSTEM_PROMPT } from './system-prompt.ts';
 import { getWorkspaceTools } from './tools/index.ts';
-
-const DEFAULT_MODEL_ID = 'gemini-2.5-flash';
+import { AIUnavailableError, type AgentPort } from './types.ts';
 
 export interface BrainDeps {
-  apiKey: string;
   dataLayer: DataLayer;
+  ai?: ResolvedAIConfig;
+  credentials?: CredentialStore;
+  authContext?: AuthContext;
 }
 
 export function createBrain(deps: BrainDeps): Brain {
   return new Brain(deps);
 }
 
+function createProvider(provider: ResolvedAIConfig['provider']) {
+  switch (provider) {
+    case 'zai':
+      return zaiProvider();
+    case 'openai-codex':
+      return openaiCodexProvider();
+    case 'openrouter':
+      return openrouterProvider();
+    case 'google':
+      return googleProvider();
+  }
+}
+
+function createEnvironmentAuthContext(): AuthContext {
+  return {
+    async env(name: string): Promise<string | undefined> {
+      const value = Deno.env.get(name);
+      if (value?.trim()) return value;
+      if (name === 'GEMINI_API_KEY') return Deno.env.get('GOOGLE_API_KEY')?.trim() || undefined;
+      return undefined;
+    },
+    async fileExists(path: string): Promise<boolean> {
+      const resolvedPath = path.startsWith('~')
+        ? path.replace(/^~/, Deno.env.get('HOME') ?? '')
+        : path;
+      try {
+        await Deno.stat(resolvedPath);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
 export class Brain implements AgentPort {
-  private readonly store = createSessionStore();
+  private readonly store: ReturnType<typeof createSessionStore>;
   private readonly queues = new Map<string, Promise<unknown>>();
   private readonly models;
   private readonly model: Model<any>;
   private readonly tools;
-  private readonly getApiKey?: () => string | undefined;
+  readonly ai: ResolvedAIConfig;
 
   constructor(deps: BrainDeps) {
-    const models = createModels();
-    models.setProvider(googleProvider());
-    const model = models.getModel('google', DEFAULT_MODEL_ID);
+    this.ai = deps.ai ?? { provider: 'google', model: 'gemini-2.5-flash' };
+    const models = createModels({
+      credentials: deps.credentials ?? new InMemoryCredentialStore(),
+      authContext: deps.authContext ?? createEnvironmentAuthContext(),
+    });
+    models.setProvider(createProvider(this.ai.provider));
+    const model = models.getModel(this.ai.provider, this.ai.model);
     if (!model) {
-      throw new Error(`Model not found: ${DEFAULT_MODEL_ID}`);
+      throw new Error(`Unknown AI model "${this.ai.model}" for provider "${this.ai.provider}"`);
     }
 
     this.models = models;
     this.model = model;
+    this.store = createSessionStore();
     this.tools = getWorkspaceTools(deps.dataLayer);
-
-    if (deps.apiKey) {
-      this.getApiKey = () => deps.apiKey;
-    }
   }
 
   /**
@@ -67,7 +107,6 @@ export class Brain implements AgentPort {
         tools: this.tools,
       },
       streamFn,
-      getApiKey: this.getApiKey,
       toolExecution: 'sequential',
     });
   }
@@ -128,11 +167,14 @@ export class Brain implements AgentPort {
       }
     } catch (error) {
       logger.error('[Brain.stream]', {
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.name : 'UnknownError',
+        provider: this.ai.provider,
+        model: this.ai.model,
         sessionId,
         messageLength: message.length,
       });
-      throw error;
+      if (signal?.aborted) throw error;
+      throw new AIUnavailableError(this.ai.provider, this.ai.model, { cause: error });
     } finally {
       unsubscribe();
     }

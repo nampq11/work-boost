@@ -105,7 +105,7 @@ holds environment access, logging, and security helpers.
 ## System boundaries
 
 ```text
-Google model API ── packages/brain ──┐
+Configured model provider ── packages/brain ──┐
 Slack / Telegram ── extensions ──────┼── apps/api ── packages/data-provider
 Browser and HTML apps ── HTTP / SSE ─┘                    │
                                                           ▼

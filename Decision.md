@@ -11,3 +11,7 @@
 ## 2026-08-20 - Development SSE cancellation handling
 
 - The specification does not define development-server logging. Expected SSE disconnects now close the server stream on `Request.signal.abort`, and both Deno's `onError` hook and Vite filter only cancellation errors; non-cancellation failures remain visible. Root web tasks run with `--cwd apps/web` so Vite owns its package-local lifecycle.
+
+## 2026-08-21 - Configurable AI provider compatibility
+
+- Workspaces without an `ai` section resolve to Google with `gemini-2.5-flash`. This preserves existing workspaces and the legacy `GOOGLE_API_KEY` setup while keeping new provider selection explicit through configuration or environment overrides.

@@ -1,6 +1,11 @@
 import type { AgentPort } from '@work-boost/brain';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
+import {
+  ERROR_CODES,
+  errorResponse,
+  isAIUnavailableError,
+  successResponse,
+} from '../utils/response.ts';
 import { isValidSessionId, sanitizeInput } from '../utils/security.ts';
 
 const AGENT_TIMEOUT_MS = 120_000;
@@ -162,8 +167,20 @@ export async function handleMessageSync(
         requestId,
       );
     } catch (streamError) {
+      logger.error('Agent stream failed', {
+        requestId,
+        error: streamError instanceof Error ? streamError.name : 'UnknownError',
+      });
+      if (isAIUnavailableError(streamError)) {
+        return errorResponse(
+          ERROR_CODES.AI_UNAVAILABLE,
+          'The AI provider is unavailable',
+          503,
+          undefined,
+          requestId,
+        );
+      }
       const errorMsg = streamError instanceof Error ? streamError.message : String(streamError);
-      logger.error('Agent stream failed', { requestId, error: errorMsg });
       return errorResponse(
         ERROR_CODES.INTERNAL_ERROR,
         `Message processing failed: ${errorMsg}`,
