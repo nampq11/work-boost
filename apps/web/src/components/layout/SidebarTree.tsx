@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
 import {
+  Archive,
+  Browser,
+  CaretDown,
+  CaretRight,
+  Coins,
+  FileText,
   Folder,
   FolderOpen,
-  FileText,
-  Coins,
-  Browser,
-  Archive,
-  CaretRight,
-  CaretDown,
 } from '@phosphor-icons/react';
+import React, { useState } from 'react';
+import {
+  formatNodeDisplayName,
+  getSidebarItemColorClass,
+  getSidebarItemType,
+} from '../../lib/sidebar-constants.ts';
 import type { FileNode } from '../../lib/types.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
-import {
-  getSidebarItemType,
-  getSidebarItemColorClass,
-  formatNodeDisplayName,
-} from '../../lib/sidebar-constants.ts';
 import './tree-view.css';
 
 function NodeIcon({ node, isExpanded }: { node: FileNode; isExpanded?: boolean }) {

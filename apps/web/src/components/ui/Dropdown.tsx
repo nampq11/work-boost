@@ -1,5 +1,5 @@
+import { Coins, FileText, Plus } from '@phosphor-icons/react';
 import React, { useRef, useEffect } from 'react';
-import { Plus, FileText, Coins } from '@phosphor-icons/react';
 import { Button } from './Button.tsx';
 
 interface DropdownProps {

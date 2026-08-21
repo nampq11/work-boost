@@ -1,7 +1,7 @@
+import { Clock, Coins, FileText } from '@phosphor-icons/react';
 import React from 'react';
-import { FileText, Coins, Clock } from '@phosphor-icons/react';
+import { formatNodeDisplayName, getSidebarItemColorClass } from '../../lib/sidebar-constants.ts';
 import type { FileNode } from '../../lib/types.ts';
-import { getSidebarItemColorClass, formatNodeDisplayName } from '../../lib/sidebar-constants.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 
 interface RecentNote {

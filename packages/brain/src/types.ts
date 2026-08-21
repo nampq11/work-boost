@@ -18,6 +18,12 @@ export class AIUnavailableError extends Error {
  * The agent processes a user message through its tool-calling loop and returns
  * the full assistant response as a string.
  */
+export interface AgentStreamOptions {
+  sessionId?: string;
+  signal?: AbortSignal;
+  onText?: (text: string) => void;
+}
+
 export interface AgentPort {
   /**
    * Process a user message and return the agent's response text.
@@ -28,9 +34,10 @@ export interface AgentPort {
    *   Different session IDs maintain separate conversation histories. If not
    *   provided, a default singleton session is used.
    * @param options.signal - Abort signal to cancel the agent loop.
+   * @param options.onText - Called for each streamed assistant text delta.
    * @returns The complete assistant response text.
    */
-  stream(message: string, options?: { sessionId?: string; signal?: AbortSignal }): Promise<string>;
+  stream(message: string, options?: AgentStreamOptions): Promise<string>;
 
   /**
    * Remove a session, clearing its conversation history.

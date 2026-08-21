@@ -31,3 +31,41 @@ Deno.test('AI provider failures map to a stable 503 response', async () => {
   assertEquals(body.meta.requestId, 'request-1');
   assertEquals(Number.isNaN(Date.parse(body.meta.timestamp)), false);
 });
+
+Deno.test('sync message processing receives client cancellation', async () => {
+  const controller = new AbortController();
+  let agentSignal: AbortSignal | undefined;
+  let resolveStreamStarted!: () => void;
+  const streamStarted = new Promise<void>((resolve) => {
+    resolveStreamStarted = resolve;
+  });
+  let resolveStream!: (response: string) => void;
+  const stream = new Promise<string>((resolve) => {
+    resolveStream = resolve;
+  });
+  const agent = {
+    stream: (_message: string, options?: { signal?: AbortSignal }) => {
+      agentSignal = options?.signal;
+      resolveStreamStarted();
+      return stream;
+    },
+    removeSession: () => false,
+  };
+
+  const responsePromise = handleMessageSync(
+    new Request('http://localhost/api/message/sync', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'hello' }),
+      headers: { 'content-type': 'application/json' },
+      signal: controller.signal,
+    }),
+    agent,
+    'request-cancel',
+  );
+
+  await streamStarted;
+  controller.abort();
+  assertEquals(agentSignal?.aborted, true);
+  resolveStream('done');
+  assertEquals((await responsePromise).status, 200);
+});

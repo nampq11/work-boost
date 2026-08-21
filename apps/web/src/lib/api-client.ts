@@ -14,11 +14,72 @@ interface ApiEnvelope<T> {
 export class ApiError extends Error {
   readonly code: string;
   readonly details: unknown;
+
   constructor(code: string, message: string, details?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.details = details;
+  }
+}
+
+export interface AssistantResponseEvent {
+  type: string;
+  response?: {
+    id: string;
+    status: string;
+    outputText: string;
+    error: { code: string; message: string } | null;
+  };
+  delta?: string;
+}
+
+async function* readAssistantEvents(
+  responseId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<AssistantResponseEvent> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}/v1/responses/${encodeURIComponent(responseId)}`, {
+      headers: { Accept: 'text/event-stream' },
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new ApiError(
+      'NETWORK_ERROR',
+      error instanceof Error ? error.message : 'Response stream failed',
+    );
+  }
+  if (!response.ok || !response.body) {
+    const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<unknown>;
+    throw new ApiError(
+      payload.error?.code ?? 'HTTP_ERROR',
+      payload.error?.message ?? `Response stream failed (${response.status})`,
+    );
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      buffer += decoder.decode(result.value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) {
+        const data = frame
+          .split('\n')
+          .find((line) => line.startsWith('data:'))
+          ?.slice('data:'.length)
+          .trim();
+        if (data) yield JSON.parse(data) as AssistantResponseEvent;
+      }
+    }
+  } finally {
+    reader.releaseLock();
   }
 }
 
@@ -30,6 +91,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       headers: { 'Content-Type': 'application/json', ...init?.headers },
     });
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
     throw new ApiError(
       'NETWORK_ERROR',
       error instanceof Error ? error.message : 'Network request failed',
@@ -93,10 +155,24 @@ export const api = {
     request(`${workspaceBase}/debts/create`, { method: 'POST', body: JSON.stringify(data) }),
   settleDebt: (id: string) =>
     request(`${workspaceBase}/debts/${encodeURIComponent(id)}/settle`, { method: 'POST' }),
-  sendMessage: (message: string, sessionId: string) =>
+  createThread: () =>
+    request<{ id: string }>(`${apiBase}/v1/threads`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  createResponse: (threadId: string, input: string, signal?: AbortSignal) =>
+    request<{ id: string }>(`${apiBase}/v1/threads/${encodeURIComponent(threadId)}/responses`, {
+      method: 'POST',
+      body: JSON.stringify({ input }),
+      signal,
+    }),
+  streamResponse: (responseId: string, signal?: AbortSignal) =>
+    readAssistantEvents(responseId, signal),
+  sendMessage: (message: string, sessionId: string, signal?: AbortSignal) =>
     request<{ response: string; sessionId: string }>(`${apiBase}/message/sync`, {
       method: 'POST',
       body: JSON.stringify({ message, sessionId }),
+      signal,
     }),
   getAuthStatus: () => request<AuthStatus>(`${apiBase}/auth/status`),
   startAuthLogin: (provider: string, reauthenticate = false) =>

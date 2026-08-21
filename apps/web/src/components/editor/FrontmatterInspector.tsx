@@ -1,12 +1,12 @@
-import React from 'react';
 import {
-  Coins,
-  CalendarBlank,
-  User,
-  CheckCircle,
-  CurrencyDollar,
   ArrowsLeftRight,
+  CalendarBlank,
+  CheckCircle,
+  Coins,
+  CurrencyDollar,
+  User,
 } from '@phosphor-icons/react';
+import React from 'react';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 
 export function FrontmatterInspector() {
