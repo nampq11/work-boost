@@ -80,3 +80,26 @@ Deno.test('concurrent credential modifications are serialized', async () => {
   assertEquals((credential as { key: string }).key, 'first-second');
   await Deno.remove(root, { recursive: true });
 });
+
+Deno.test('credential store recovers a lock owned by a terminated process', async () => {
+  if (Deno.build.os === 'windows') return;
+  const root = await Deno.makeTempDir({ prefix: 'work-boost-auth-' });
+  const path = `${root}/auth.json`;
+  const lockPath = `${path}.lock`;
+  await Deno.writeTextFile(
+    lockPath,
+    JSON.stringify({ pid: 2_147_483_647, createdAt: Date.now() - 60_000 }),
+  );
+  const staleAt = new Date(Date.now() - 60_000);
+  await Deno.utime(lockPath, staleAt, staleAt);
+
+  await createCredentialStore(path).modify('zai', async () => ({
+    type: 'api_key',
+    key: 'recovered',
+  }));
+  assertEquals(
+    ((await createCredentialStore(path).read('zai')) as { key: string }).key,
+    'recovered',
+  );
+  await Deno.remove(root, { recursive: true });
+});

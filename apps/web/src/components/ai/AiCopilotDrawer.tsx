@@ -27,45 +27,48 @@ export function AiCopilotDrawer() {
   const [authError, setAuthError] = useState('');
   const [copied, setCopied] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const loginSessionRef = useRef<AuthLoginSession | null>(null);
+  const authRequestRef = useRef(0);
 
   function clearLoginSession(): void {
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
+    loginSessionRef.current = null;
     setLoginSession(null);
+  }
+
+  async function refreshAuthStatus() {
+    const requestId = ++authRequestRef.current;
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const status = await api.getAuthStatus();
+      if (requestId === authRequestRef.current) setAuthStatus(status);
+    } catch (error) {
+      if (requestId === authRequestRef.current) {
+        setAuthStatus(null);
+        setAuthError(error instanceof Error ? error.message : 'The AI provider is unavailable.');
+      }
+    } finally {
+      if (requestId === authRequestRef.current) setAuthLoading(false);
+    }
   }
 
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    setAuthLoading(true);
-    api
-      .getAuthStatus()
-      .then((status) => {
-        if (!cancelled) setAuthStatus(status);
-      })
-      .catch((error) => {
-        if (!cancelled)
-          setAuthError(error instanceof Error ? error.message : 'The AI provider is unavailable.');
-      })
-      .finally(() => {
-        if (!cancelled) setAuthLoading(false);
-      });
+    void refreshAuthStatus();
     return () => {
-      cancelled = true;
+      authRequestRef.current += 1;
+      const session = loginSessionRef.current;
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
+      loginSessionRef.current = null;
+      setLoginSession(null);
+      if (session) void api.cancelAuthLogin(session.loginId).catch(() => undefined);
     };
   }, [open]);
 
   if (!open) return null;
-
-  async function refreshAuthStatus() {
-    try {
-      setAuthStatus(await api.getAuthStatus());
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'The AI provider is unavailable.');
-    }
-  }
 
   function handleAuthEvent(event: AuthLoginEvent) {
     if (event.type === 'device_code') {
@@ -96,8 +99,12 @@ export function AiCopilotDrawer() {
     setDeviceCode(null);
     setAuthProgress('Starting secure login...');
     try {
-      const session = await api.startAuthLogin(authStatus?.auth.status === 'refresh_failed');
+      const session = await api.startAuthLogin(
+        authStatus?.provider ?? '',
+        authStatus?.auth.status === 'refresh_failed',
+      );
       clearLoginSession();
+      loginSessionRef.current = session;
       setLoginSession(session);
       unsubscribeRef.current = api.subscribeAuthLogin(session.loginId, handleAuthEvent, () => {
         setAuthError('The login progress connection was interrupted.');
@@ -195,6 +202,14 @@ export function AiCopilotDrawer() {
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
           {authLoading && !authStatus && (
             <p className="text-sm text-[var(--text-muted)]">Checking provider connection...</p>
+          )}
+          {!authLoading && !authStatus && authError && (
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-app)] p-4 text-sm">
+              <p className="text-red-600">{authError}</p>
+              <Button className="mt-3" onClick={() => void refreshAuthStatus()}>
+                Retry
+              </Button>
+            </div>
           )}
           {authStatus && !connected && (
             <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-app)] p-4 text-sm">

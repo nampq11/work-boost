@@ -110,8 +110,8 @@ holds environment access, logging, and security helpers.
 
 ```text
 Configured model provider ── packages/brain ──┐
-Slack / Telegram ── extensions ──────┼── apps/api ── packages/data-provider
-Browser and HTML apps ── HTTP / SSE ─┘                    │
+Slack / Telegram ── extensions ─────────┼── apps/api ── packages/data-provider
+Browser and HTML apps ── HTTP / SSE ─         ┘           │
                                                           ▼
                                            ~/.workboost/workspace
 ```

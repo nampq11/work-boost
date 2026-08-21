@@ -1,5 +1,6 @@
 import type { Models, Provider } from '@earendil-works/pi-ai';
 import { assertEquals } from '@std/assert';
+import { FakeTime } from '@std/testing/time';
 import { type AuthLoginEvent, AuthService } from '@work-boost/brain';
 
 Deno.test('AuthService expires a login and aborts the provider flow', async () => {
@@ -22,22 +23,28 @@ Deno.test('AuthService expires a login and aborts the provider flow', async () =
       }),
     logout: () => Promise.resolve(),
   } as unknown as Models;
+  const time = new FakeTime();
   const service = new AuthService({
     ai: { provider: 'openai-codex', model: 'gpt-5.4-mini' },
     models,
     loginTimeoutMs: 5,
     terminalCleanupMs: 10_000,
   });
-  const session = await service.startLogin({ provider: 'openai-codex', type: 'oauth' });
-  const events: AuthLoginEvent[] = [];
-  service.subscribe(session.loginId, (event) => events.push(event));
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  try {
+    const session = await service.startLogin({ provider: 'openai-codex', type: 'oauth' });
+    const events: AuthLoginEvent[] = [];
+    service.subscribe(session.loginId, (event) => events.push(event));
+    time.tick(6);
+    await Promise.resolve();
 
-  assertEquals(aborted, true);
-  assertEquals(events.at(-1), {
-    type: 'failed',
-    code: 'AUTH_LOGIN_EXPIRED',
-    message: 'Login expired. Start again.',
-  });
-  service.dispose();
+    assertEquals(aborted, true);
+    assertEquals(events.at(-1), {
+      type: 'failed',
+      code: 'AUTH_LOGIN_EXPIRED',
+      message: 'Login expired. Start again.',
+    });
+  } finally {
+    service.dispose();
+    time.restore();
+  }
 });

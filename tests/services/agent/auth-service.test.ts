@@ -125,3 +125,48 @@ Deno.test('AuthService exposes only safe connected status metadata', async () =>
   });
   service.dispose();
 });
+
+Deno.test('AuthService reports refresh_failed when auth check fails', async () => {
+  const models = createModels(async () => ({
+    type: 'oauth',
+    access: 'secret',
+    refresh: 'secret',
+    expires: Date.now() + 60_000,
+  }));
+  models.checkAuth = () => Promise.reject(new Error('refresh failed'));
+  const service = new AuthService({ ai, models });
+  try {
+    assertEquals((await service.getStatus()).auth, {
+      supported: true,
+      type: 'oauth',
+      status: 'refresh_failed',
+      source: 'OAuth',
+    });
+  } finally {
+    service.dispose();
+  }
+});
+
+Deno.test('AuthService reports refresh_failed when auth resolution fails', async () => {
+  const models = createModels(
+    async () => ({
+      type: 'oauth',
+      access: 'secret',
+      refresh: 'secret',
+      expires: Date.now() + 60_000,
+    }),
+    true,
+  );
+  models.getAuth = () => Promise.reject(new Error('OAuth refresh failed'));
+  const service = new AuthService({ ai, models });
+  try {
+    assertEquals((await service.getStatus()).auth, {
+      supported: true,
+      type: 'oauth',
+      status: 'refresh_failed',
+      source: 'OAuth',
+    });
+  } finally {
+    service.dispose();
+  }
+});

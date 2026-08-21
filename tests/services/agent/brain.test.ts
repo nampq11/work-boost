@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from '@std/assert';
-import { Brain, createBrain } from '@work-boost/brain';
+import { AIUnavailableError, Brain, createBrain } from '@work-boost/brain';
 import type {
   ConfigManager,
   DailyWorkRepository,
@@ -36,6 +36,11 @@ function createFakeDataLayer(): DataLayer {
   };
 }
 
+const noCredentialsAuthContext = {
+  env: async () => undefined,
+  fileExists: async () => false,
+};
+
 Deno.test('createBrain returns a Brain instance', () => {
   const brain = createBrain({ dataLayer: createFakeDataLayer() });
   assertEquals(brain instanceof Brain, true);
@@ -57,14 +62,28 @@ Deno.test('Brain removeSession returns true after a session has been created', a
 });
 
 Deno.test('Brain stream throws when the configured provider has no credentials', async () => {
-  const brain = createBrain({ dataLayer: createFakeDataLayer() });
-  await assertRejects(() => brain.stream('hello', { sessionId: 'err-test' }), Error);
+  const brain = createBrain({
+    dataLayer: createFakeDataLayer(),
+    authContext: noCredentialsAuthContext,
+  });
+  const error = await assertRejects(
+    () => brain.stream('hello', { sessionId: 'err-test' }),
+    AIUnavailableError,
+  );
+  assertEquals(error.code, 'AI_UNAVAILABLE');
   brain.dispose();
 });
 
 Deno.test('Brain stream propagates provider failures as errors', async () => {
-  const brain = createBrain({ dataLayer: createFakeDataLayer() });
-  await assertRejects(() => brain.stream('hello', { sessionId: 'no-key' }), Error);
+  const brain = createBrain({
+    dataLayer: createFakeDataLayer(),
+    authContext: noCredentialsAuthContext,
+  });
+  const error = await assertRejects(
+    () => brain.stream('hello', { sessionId: 'no-key' }),
+    AIUnavailableError,
+  );
+  assertEquals(error.code, 'AI_UNAVAILABLE');
   brain.dispose();
 });
 

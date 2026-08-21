@@ -5,6 +5,8 @@
     ".": "./mod.ts",
     "./agent": "./src/agent.ts",
     "./agent.ts": "./src/agent.ts",
+    "./auth": "./src/auth.ts",
+    "./auth.ts": "./src/auth.ts",
     "./config": "./src/config.ts",
     "./config.ts": "./src/config.ts",
     "./debt": "./src/debt.ts",

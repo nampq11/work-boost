@@ -1,39 +1,6 @@
+import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
 import type { ActiveDocument, WorkspaceEvent } from './types.ts';
-
-export interface AuthStatus {
-  provider: string;
-  model: string;
-  auth: {
-    supported: boolean;
-    type: 'oauth' | 'unsupported';
-    status: 'connected' | 'not_connected' | 'refresh_failed' | 'unsupported';
-    source?: string;
-  };
-}
-
-export interface AuthLoginSession {
-  loginId: string;
-  provider: string;
-  type: 'oauth';
-  status: 'running';
-  eventsUrl: string;
-  expiresAt: string;
-}
-
-export type AuthLoginEvent =
-  | { type: 'started'; provider: string; authType: 'oauth' }
-  | { type: 'auth_url'; url: string; instructions?: string }
-  | {
-      type: 'device_code';
-      verificationUri: string;
-      userCode: string;
-      intervalSeconds?: number;
-      expiresInSeconds?: number;
-    }
-  | { type: 'progress'; message: string }
-  | { type: 'completed'; provider: string; status: 'connected' }
-  | { type: 'failed'; code: string; message: string }
-  | { type: 'cancelled'; message: string };
+export type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
 const buildEnvironment = (import.meta as ImportMeta & { env?: Record<string, string> }).env ?? {};
 const workspaceBase = buildEnvironment.VITE_WORKSPACE_API ?? '/api/workspace';
 const apiBase = buildEnvironment.VITE_API_BASE ?? '/api';
@@ -132,10 +99,10 @@ export const api = {
       body: JSON.stringify({ message, sessionId }),
     }),
   getAuthStatus: () => request<AuthStatus>(`${apiBase}/auth/status`),
-  startAuthLogin: (reauthenticate = false) =>
+  startAuthLogin: (provider: string, reauthenticate = false) =>
     request<AuthLoginSession>(`${apiBase}/auth/login`, {
       method: 'POST',
-      body: JSON.stringify({ provider: 'openai-codex', type: 'oauth', reauthenticate }),
+      body: JSON.stringify({ provider, type: 'oauth', reauthenticate }),
     }),
   subscribeAuthLogin: (
     loginId: string,

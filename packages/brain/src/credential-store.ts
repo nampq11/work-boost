@@ -11,6 +11,48 @@ type AuthFile = Record<string, unknown>;
 const DEFAULT_AUTH_RELATIVE_PATH = '.pi/agent/auth.json';
 const LOCK_RETRY_MS = 25;
 const LOCK_TIMEOUT_MS = 30_000;
+const LOCK_STALE_MS = LOCK_TIMEOUT_MS;
+
+interface LockMetadata {
+  pid: number;
+  createdAt: number;
+}
+
+async function isStaleLock(path: string): Promise<boolean> {
+  let stat: Deno.FileInfo;
+  try {
+    stat = await Deno.stat(path);
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return false;
+    throw error;
+  }
+
+  if (!stat.mtime || Date.now() - stat.mtime.getTime() < LOCK_STALE_MS) return false;
+
+  try {
+    const metadata = JSON.parse(await Deno.readTextFile(path)) as Partial<LockMetadata>;
+    if (
+      typeof metadata.pid !== 'number' ||
+      !Number.isInteger(metadata.pid) ||
+      typeof metadata.createdAt !== 'number'
+    ) {
+      return true;
+    }
+
+    if (metadata.pid === Deno.pid) return false;
+    try {
+      Deno.kill(metadata.pid, 0 as unknown as Deno.Signal);
+      return false;
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) return true;
+      return false;
+    }
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return false;
+    if (error instanceof SyntaxError) return true;
+    throw error;
+  }
+}
 
 async function chmodIfSupported(path: string): Promise<void> {
   try {
@@ -49,6 +91,7 @@ function parseCredential(value: unknown): Credential | undefined {
 
   const credential = value as Record<string, unknown>;
   if (credential.type === 'api_key') {
+    if ('key' in credential && typeof credential.key !== 'string') return undefined;
     return value as Credential;
   }
   if (
@@ -88,7 +131,9 @@ async function writeAtomically(path: string, value: AuthFile): Promise<void> {
   const temporaryPath = `${path}.${crypto.randomUUID()}.tmp`;
 
   try {
-    await Deno.writeTextFile(temporaryPath, JSON.stringify(value, null, 2) + '\n');
+    await Deno.writeTextFile(temporaryPath, JSON.stringify(value, null, 2) + '\n', {
+      mode: 0o600,
+    });
     await chmodIfSupported(temporaryPath);
     await Deno.rename(temporaryPath, path);
     await chmodIfSupported(path);
@@ -116,7 +161,8 @@ export class FileCredentialStore implements CredentialStore {
   private readonly chains = new Map<string, Promise<unknown>>();
 
   constructor(options: FileCredentialStoreOptions = {}) {
-    this.path = resolveAuthPath(options.path ?? getDefaultAuthPath());
+    const configuredPath = options.path?.trim();
+    this.path = resolveAuthPath(configuredPath || getDefaultAuthPath());
   }
 
   private async acquireLock(signal?: AbortSignal): Promise<() => Promise<void>> {
@@ -127,7 +173,13 @@ export class FileCredentialStore implements CredentialStore {
     while (true) {
       signal?.throwIfAborted();
       try {
-        await Deno.mkdir(lockPath);
+        const lock = await Deno.open(lockPath, { createNew: true, write: true, mode: 0o600 });
+        try {
+          const metadata: LockMetadata = { pid: Deno.pid, createdAt: Date.now() };
+          await lock.write(new TextEncoder().encode(JSON.stringify(metadata)));
+        } finally {
+          lock.close();
+        }
         return async () => {
           try {
             await Deno.remove(lockPath);
@@ -137,6 +189,15 @@ export class FileCredentialStore implements CredentialStore {
         };
       } catch (error) {
         if (!(error instanceof Deno.errors.AlreadyExists)) throw error;
+        if (await isStaleLock(lockPath)) {
+          try {
+            await Deno.remove(lockPath);
+            continue;
+          } catch (removeError) {
+            if (!(removeError instanceof Deno.errors.NotFound)) throw removeError;
+            continue;
+          }
+        }
         if (Date.now() - startedAt >= LOCK_TIMEOUT_MS) {
           throw new Error(`Timed out waiting for pi credential lock: ${lockPath}`);
         }

@@ -1,4 +1,4 @@
-import type { AuthLoginEvent, AuthPort, AuthServiceError } from '@work-boost/brain';
+import { type AuthLoginEvent, type AuthPort, AuthServiceError } from '@work-boost/brain';
 import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
 
 const LOGIN_ID_PATTERN =
@@ -15,8 +15,8 @@ function noStore(response: Response): Response {
 }
 
 function authErrorResponse(error: unknown, requestId: string): Response {
-  if (error && typeof error === 'object' && 'code' in error && 'status' in error) {
-    const authError = error as AuthServiceError;
+  if (error instanceof AuthServiceError) {
+    const authError = error;
     return errorResponse(authError.code, authError.message, authError.status, undefined, requestId);
   }
   return errorResponse(
@@ -110,6 +110,7 @@ export function handleAuthLoginEvents(
   }
 
   let unsubscribe: () => void = () => undefined;
+  let keepAliveTimer: ReturnType<typeof setInterval> | undefined;
   let closed = false;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -117,6 +118,7 @@ export function handleAuthLoginEvents(
       const close = () => {
         if (closed) return;
         closed = true;
+        if (keepAliveTimer) clearInterval(keepAliveTimer);
         unsubscribe();
         controller.close();
       };
@@ -127,11 +129,17 @@ export function handleAuthLoginEvents(
           close();
         }
       });
+      if (!closed) {
+        keepAliveTimer = setInterval(() => {
+          if (!closed) controller.enqueue(encoder.encode(':\n\n'));
+        }, 15_000);
+      }
       req.signal.addEventListener(
         'abort',
         () => {
           if (closed) return;
           closed = true;
+          if (keepAliveTimer) clearInterval(keepAliveTimer);
           unsubscribe();
           auth.disconnect(loginId);
           controller.close();
@@ -142,6 +150,7 @@ export function handleAuthLoginEvents(
     cancel() {
       if (closed) return;
       closed = true;
+      if (keepAliveTimer) clearInterval(keepAliveTimer);
       unsubscribe();
       auth.disconnect(loginId);
     },

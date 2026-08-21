@@ -1,43 +1,19 @@
 import type { AuthEvent, AuthType, Models, Provider } from '@earendil-works/pi-ai';
+import type {
+  AuthLoginEvent,
+  AuthLoginSession,
+  AuthStatus,
+  AuthStatusValue,
+} from '@work-boost/data-schemas/auth.ts';
 import type { ResolvedAIConfig } from '@work-boost/data-schemas/config.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 
-export type AuthStatusValue = 'connected' | 'not_connected' | 'refresh_failed' | 'unsupported';
-
-export interface AuthStatus {
-  provider: string;
-  model: string;
-  auth: {
-    supported: boolean;
-    type: 'oauth' | 'unsupported';
-    status: AuthStatusValue;
-    source?: string;
-  };
-}
-
-export type AuthLoginEvent =
-  | { type: 'started'; provider: string; authType: 'oauth' }
-  | { type: 'auth_url'; url: string; instructions?: string }
-  | {
-      type: 'device_code';
-      verificationUri: string;
-      userCode: string;
-      intervalSeconds?: number;
-      expiresInSeconds?: number;
-    }
-  | { type: 'progress'; message: string }
-  | { type: 'completed'; provider: string; status: 'connected' }
-  | { type: 'failed'; code: string; message: string }
-  | { type: 'cancelled'; message: string };
-
-export interface AuthLoginSession {
-  loginId: string;
-  provider: string;
-  type: 'oauth';
-  status: 'running';
-  eventsUrl: string;
-  expiresAt: string;
-}
+export type {
+  AuthLoginEvent,
+  AuthLoginSession,
+  AuthStatus,
+  AuthStatusValue,
+} from '@work-boost/data-schemas/auth.ts';
 
 export type AuthLoginTerminalStatus = 'completed' | 'failed' | 'cancelled';
 
@@ -319,7 +295,9 @@ export class AuthService {
     if (session.disconnectTimer) clearTimeout(session.disconnectTimer);
     session.disconnectTimer = setTimeout(() => {
       session.disconnectTimer = undefined;
-      if (!session.terminal && session.subscribers.size === 0) this.cancelLogin(loginId);
+      if (!session.terminal && session.subscribers.size === 0) {
+        void this.cancelLogin(loginId).catch(() => undefined);
+      }
     }, this.disconnectGraceMs);
   }
 
@@ -399,7 +377,14 @@ export class AuthService {
     }
     if (event.type === 'auth_url') {
       const url = safePublicUrl(event.url);
-      if (!url) return;
+      if (!url) {
+        this.finish(session, 'failed', {
+          type: 'failed',
+          code: 'AUTH_SERVICE_UNAVAILABLE',
+          message: 'The provider returned an invalid authorization URL. Try again.',
+        });
+        return;
+      }
       this.emit(session, {
         type: 'auth_url',
         url,

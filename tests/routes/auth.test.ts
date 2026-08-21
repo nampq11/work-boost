@@ -1,8 +1,10 @@
 import { assertEquals, assertStringIncludes } from '@std/assert';
-import type { AuthLoginEvent, AuthPort } from '@work-boost/brain';
+import { type AuthLoginEvent, type AuthPort, AuthServiceError } from '@work-boost/brain';
 import {
   handleAuthLogin,
+  handleAuthLoginCancel,
   handleAuthLoginEvents,
+  handleAuthLogout,
   handleAuthStatus,
 } from '../../apps/api/src/routes/auth.ts';
 
@@ -91,4 +93,58 @@ Deno.test('auth SSE returns ordered safe events and rejects unknown IDs', async 
   );
   assertEquals(missing.status, 404);
   assertStringIncludes(await missing.text(), 'AUTH_LOGIN_NOT_FOUND');
+});
+
+Deno.test('auth login validates request fields and maps service errors', async () => {
+  const invalidBodies: unknown[] = [
+    undefined,
+    null,
+    { provider: 123, type: 'oauth' },
+    { provider: '', type: 'oauth' },
+    { provider: 'openai-codex', type: 'password' },
+    { provider: 'openai-codex', type: 'oauth', reauthenticate: 'yes' },
+  ];
+
+  for (const body of invalidBodies) {
+    const request = new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      headers: { 'content-type': 'application/json' },
+    });
+    const response = await handleAuthLogin(request, createAuth(), 'validation-request');
+    assertEquals(response.status, 400);
+    assertStringIncludes(await response.text(), 'VALIDATION_ERROR');
+  }
+
+  const failingAuth: AuthPort = {
+    ...createAuth(),
+    startLogin: () =>
+      Promise.reject(new AuthServiceError('AUTH_LOGIN_IN_PROGRESS', 'Already logging in', 409)),
+  };
+  const response = await handleAuthLogin(
+    new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ provider: 'openai-codex', type: 'oauth' }),
+      headers: { 'content-type': 'application/json' },
+    }),
+    failingAuth,
+    'error-request',
+  );
+  assertEquals(response.status, 409);
+  const payload = await response.json();
+  assertEquals(payload.error.code, 'AUTH_LOGIN_IN_PROGRESS');
+});
+
+Deno.test('auth cancel and logout handle invalid IDs and successful logout', async () => {
+  const invalidCancel = await handleAuthLoginCancel(
+    createAuth(),
+    'not-a-login-id',
+    'cancel-request',
+  );
+  assertEquals(invalidCancel.status, 404);
+  assertStringIncludes(await invalidCancel.text(), 'AUTH_LOGIN_NOT_FOUND');
+
+  const logout = await handleAuthLogout(createAuth(), 'logout-request');
+  assertEquals(logout.status, 200);
+  assertStringIncludes(await logout.text(), 'not_connected');
 });

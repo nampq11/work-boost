@@ -35,6 +35,7 @@ export interface ApiServerConfig {
   rateLimitWindowMs?: number;
   rateLimitMaxRequests?: number;
   enableWebSocket?: boolean;
+  trustProxy?: boolean;
   apiPrefix?: string;
   db?: Database;
   agent?: AgentPort;
@@ -143,7 +144,7 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
-function createRateLimiter(windowMs: number, maxRequests: number) {
+function createRateLimiter(windowMs: number, maxRequests: number, trustProxy: boolean) {
   const entries = new Map<string, RateLimitEntry>();
 
   // Periodic cleanup of expired entries
@@ -156,12 +157,14 @@ function createRateLimiter(windowMs: number, maxRequests: number) {
     }
   }, windowMs);
 
-  return function checkRateLimit(request: Request): Response | null {
-    // Extract client IP from headers or connection info
-    const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      request.headers.get('x-real-ip') ||
-      'unknown';
+  return function checkRateLimit(request: Request, info?: Deno.ServeHandlerInfo): Response | null {
+    const forwardedIp = trustProxy
+      ? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        request.headers.get('x-real-ip')?.trim()
+      : undefined;
+    const connectionIp =
+      info?.remoteAddr && 'hostname' in info.remoteAddr ? info.remoteAddr.hostname : undefined;
+    const ip = forwardedIp || connectionIp || 'unknown';
 
     const now = Date.now();
     let entry = entries.get(ip);
@@ -220,6 +223,7 @@ export function createServer(config: ApiServerConfig) {
   const checkRateLimit = createRateLimiter(
     config.rateLimitWindowMs || 15 * 60 * 1000,
     config.rateLimitMaxRequests || 100,
+    config.trustProxy === true,
   );
 
   // Workspace HTML-apps + broker API router (spec Phase 3)
@@ -324,7 +328,7 @@ export function createServer(config: ApiServerConfig) {
       // ==============================================================
       const authBase = buildApiPath('/auth');
       if (pathname === authBase || pathname.startsWith(`${authBase}/`)) {
-        const rateLimitResponse = checkRateLimit(req);
+        const rateLimitResponse = checkRateLimit(req, info);
         if (rateLimitResponse) {
           logResponse(req, rateLimitResponse, ctx);
           return addCorsHeaders(req, addSecurityHeaders(rateLimitResponse), corsOrigins);
@@ -337,6 +341,7 @@ export function createServer(config: ApiServerConfig) {
             undefined,
             ctx.requestId,
           );
+          logResponse(req, response, ctx);
           return addCorsHeaders(req, addSecurityHeaders(response), corsOrigins);
         }
 
@@ -379,7 +384,7 @@ export function createServer(config: ApiServerConfig) {
       // ==============================================================
       if (pathname.startsWith(buildApiPath('/message'))) {
         // Apply rate limiting to API routes
-        const rateLimitResponse = checkRateLimit(req);
+        const rateLimitResponse = checkRateLimit(req, info);
         if (rateLimitResponse) {
           logResponse(req, rateLimitResponse, ctx);
           return rateLimitResponse;

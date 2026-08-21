@@ -218,6 +218,7 @@ Validation and errors:
 
 - `400 VALIDATION_ERROR`: malformed request.
 - `409 AUTH_LOGIN_IN_PROGRESS`: another login is active.
+- `409 AUTH_ALREADY_CONNECTED`: the provider is already connected and `reauthenticate` is not `true`; set `reauthenticate: true` to start the login flow.
 - `409 AUTH_PROVIDER_NOT_ACTIVE`: requested provider is not the configured provider.
 - `422 AUTH_OAUTH_UNSUPPORTED`: active provider has no OAuth login flow.
 - `503 AUTH_SERVICE_UNAVAILABLE`: the login flow cannot be initialized.
@@ -333,7 +334,7 @@ The UI must not render or store any credential fields. It may retain the `loginI
 Suggested client additions:
 
 - `api.getAuthStatus()`
-- `api.startAuthLogin()`
+- `api.startAuthLogin(provider, reauthenticate)`
 - `api.subscribeAuthLogin(loginId, onEvent, onError)`
 - `api.cancelAuthLogin(loginId)`
 - `api.logoutAuth()`
@@ -363,6 +364,7 @@ AUTH_LOGIN_CANCELLED
 AUTH_PROVIDER_NOT_ACTIVE
 AUTH_OAUTH_UNSUPPORTED
 AUTH_SERVICE_UNAVAILABLE
+AUTH_REFRESH_FAILED
 AUTH_REFRESH_FAILED
 ```
 
