@@ -73,6 +73,7 @@ export async function handleMessage(
     }
 
     const { message, sessionId } = validation.data!;
+    const activeSessionId = sessionId || 'default';
 
     logger.info('Processing async message request', {
       requestId,
@@ -83,7 +84,7 @@ export async function handleMessage(
     const response = successResponse(
       {
         message: 'Message accepted for processing',
-        sessionId: sessionId || 'default',
+        sessionId: activeSessionId,
         messageId: requestId,
         timestamp: new Date().toISOString(),
       },
@@ -94,13 +95,13 @@ export async function handleMessage(
     // Process message asynchronously (don't await)
     agent
       .stream(message, {
-        sessionId: sessionId || 'default',
+        sessionId: activeSessionId,
         signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
       })
       .then(() => {
         logger.info('Async message processing completed', {
           requestId,
-          sessionId: sessionId || 'default',
+          sessionId: activeSessionId,
         });
       })
       .catch((error) => {
@@ -144,23 +145,24 @@ export async function handleMessageSync(
     }
 
     const { message, sessionId } = validation.data!;
+    const activeSessionId = sessionId || 'default';
 
     logger.info('Processing sync message request', {
       requestId,
-      sessionId: sessionId || 'default',
+      sessionId: activeSessionId,
       messageLength: message.length,
     });
 
     try {
       const response = await agent.stream(message, {
-        sessionId: sessionId || 'default',
+        sessionId: activeSessionId,
         signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
       });
 
       return successResponse(
         {
           response,
-          sessionId: sessionId || 'default',
+          sessionId: activeSessionId,
           timestamp: new Date().toISOString(),
         },
         200,

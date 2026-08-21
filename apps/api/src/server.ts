@@ -230,7 +230,7 @@ export function createServer(config: ApiServerConfig) {
   let httpServer: Deno.HttpServer | undefined;
 
   function buildApiPath(route: string): string {
-    if (!apiPrefix || apiPrefix === '') return route;
+    if (!apiPrefix) return route;
     return apiPrefix + route;
   }
 

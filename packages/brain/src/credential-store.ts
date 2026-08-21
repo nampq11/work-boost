@@ -12,6 +12,14 @@ const DEFAULT_AUTH_RELATIVE_PATH = '.pi/agent/auth.json';
 const LOCK_RETRY_MS = 25;
 const LOCK_TIMEOUT_MS = 30_000;
 
+async function chmodIfSupported(path: string): Promise<void> {
+  try {
+    await Deno.chmod(path, 0o600);
+  } catch {
+    // chmod is not available on every supported filesystem.
+  }
+}
+
 export interface FileCredentialStoreOptions {
   path?: string;
 }
@@ -81,17 +89,9 @@ async function writeAtomically(path: string, value: AuthFile): Promise<void> {
 
   try {
     await Deno.writeTextFile(temporaryPath, JSON.stringify(value, null, 2) + '\n');
-    try {
-      await Deno.chmod(temporaryPath, 0o600);
-    } catch {
-      // chmod is not available on every supported filesystem.
-    }
+    await chmodIfSupported(temporaryPath);
     await Deno.rename(temporaryPath, path);
-    try {
-      await Deno.chmod(path, 0o600);
-    } catch {
-      // chmod is not available on every supported filesystem.
-    }
+    await chmodIfSupported(path);
   } catch (error) {
     try {
       await Deno.remove(temporaryPath);

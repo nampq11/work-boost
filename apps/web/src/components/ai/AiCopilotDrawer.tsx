@@ -28,6 +28,12 @@ export function AiCopilotDrawer() {
   const [copied, setCopied] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
+  function clearLoginSession(): void {
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
+    setLoginSession(null);
+  }
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -68,22 +74,16 @@ export function AiCopilotDrawer() {
     } else if (event.type === 'progress') {
       setAuthProgress(event.message);
     } else if (event.type === 'completed') {
-      unsubscribeRef.current?.();
-      unsubscribeRef.current = null;
-      setLoginSession(null);
+      clearLoginSession();
       setDeviceCode(null);
       setAuthError('');
       void refreshAuthStatus();
     } else if (event.type === 'failed') {
-      unsubscribeRef.current?.();
-      unsubscribeRef.current = null;
-      setLoginSession(null);
+      clearLoginSession();
       setAuthError(event.message);
       void refreshAuthStatus();
     } else if (event.type === 'cancelled') {
-      unsubscribeRef.current?.();
-      unsubscribeRef.current = null;
-      setLoginSession(null);
+      clearLoginSession();
       setAuthError('Login cancelled.');
       void refreshAuthStatus();
     }
@@ -97,8 +97,8 @@ export function AiCopilotDrawer() {
     setAuthProgress('Starting secure login...');
     try {
       const session = await api.startAuthLogin(authStatus?.auth.status === 'refresh_failed');
+      clearLoginSession();
       setLoginSession(session);
-      unsubscribeRef.current?.();
       unsubscribeRef.current = api.subscribeAuthLogin(session.loginId, handleAuthEvent, () => {
         setAuthError('The login progress connection was interrupted.');
       });
@@ -124,9 +124,7 @@ export function AiCopilotDrawer() {
   async function cancelLogin() {
     const session = loginSession;
     if (!session) return;
-    unsubscribeRef.current?.();
-    unsubscribeRef.current = null;
-    setLoginSession(null);
+    clearLoginSession();
     setDeviceCode(null);
     setAuthProgress('');
     try {

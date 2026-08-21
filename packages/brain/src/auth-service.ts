@@ -150,7 +150,7 @@ function isAbortError(error: unknown): boolean {
 export class AuthService {
   readonly ai: ResolvedAIConfig;
   private readonly models: Models;
-  private apiPrefix: string;
+  private readonly apiPrefix: string;
   private readonly loginTimeoutMs: number;
   private readonly terminalCleanupMs: number;
   private readonly disconnectGraceMs: number;
@@ -399,15 +399,12 @@ export class AuthService {
     }
     if (event.type === 'auth_url') {
       const url = safePublicUrl(event.url);
-      if (url) {
-        this.emit(session, {
-          type: 'auth_url',
-          url,
-          ...(event.instructions
-            ? { instructions: sanitizePublicMessage(event.instructions) }
-            : {}),
-        });
-      }
+      if (!url) return;
+      this.emit(session, {
+        type: 'auth_url',
+        url,
+        ...(event.instructions ? { instructions: sanitizePublicMessage(event.instructions) } : {}),
+      });
       return;
     }
     if (event.type === 'device_code') {

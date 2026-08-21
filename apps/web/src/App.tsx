@@ -1,5 +1,4 @@
-import React from 'react';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { AiCopilotDrawer } from './components/ai/AiCopilotDrawer.tsx';
 import { EditorContainer } from './components/editor/EditorContainer.tsx';
 import { AppHeader } from './components/layout/AppHeader.tsx';
