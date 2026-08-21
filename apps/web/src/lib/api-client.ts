@@ -25,7 +25,7 @@ export class ApiError extends Error {
 
 export interface AssistantResponseEvent {
   type: string;
-  response: {
+  response?: {
     id: string;
     status: string;
     outputText: string;
@@ -38,10 +38,19 @@ async function* readAssistantEvents(
   responseId: string,
   signal?: AbortSignal,
 ): AsyncGenerator<AssistantResponseEvent> {
-  const response = await fetch(`${apiBase}/v1/responses/${encodeURIComponent(responseId)}`, {
-    headers: { Accept: 'text/event-stream' },
-    signal,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}/v1/responses/${encodeURIComponent(responseId)}`, {
+      headers: { Accept: 'text/event-stream' },
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new ApiError(
+      'NETWORK_ERROR',
+      error instanceof Error ? error.message : 'Response stream failed',
+    );
+  }
   if (!response.ok || !response.body) {
     const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<unknown>;
     throw new ApiError(

@@ -78,7 +78,9 @@ export class AssistantService {
   private readonly tasks = new Map<string, Promise<void>>();
   private readonly listeners = new Map<string, Set<ResponseListener>>();
   private readonly events = new Map<string, ResponseEvent[]>();
+  private readonly eventSnapshots = new Map<string, AssistantResponse>();
   private readonly locks = new Map<string, Promise<void>>();
+  private readonly deleting = new Set<string>();
   private readonly ready: Promise<void>;
 
   constructor(
@@ -151,6 +153,18 @@ export class AssistantService {
     await this.dataLayer.fs.writeTextAtomic(threadPath(stored.thread.id), JSON.stringify(stored));
   }
 
+  private async withStoredThread<T>(
+    threadId: string,
+    operation: (stored: StoredThread) => Promise<T>,
+  ): Promise<T | undefined> {
+    return this.withLock(threadId, async () => {
+      if (this.deleting.has(threadId)) return undefined;
+      const stored = this.getStored(threadId);
+      if (!stored) return undefined;
+      return operation(stored);
+    });
+  }
+
   private emit(event: ResponseEvent): void {
     const responseListeners = this.listeners.get(event.response.id);
     for (const listener of responseListeners ?? []) listener(event);
@@ -167,7 +181,12 @@ export class AssistantService {
     };
     const events = this.events.get(responseId) ?? [];
     events.push(recordedEvent);
-    if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
+    if (events.length > MAX_EVENTS) {
+      const trimCount = events.length - (MAX_EVENTS - 1);
+      const removed = events.splice(0, trimCount);
+      const snapshot = removed.at(-1);
+      if (snapshot) this.eventSnapshots.set(responseId, { ...snapshot.response });
+    }
     this.events.set(responseId, events);
     this.emit(recordedEvent);
   }
@@ -215,6 +234,7 @@ export class AssistantService {
   ): Promise<AssistantThread | undefined> {
     await this.ready;
     return this.withLock(threadId, async () => {
+      if (this.deleting.has(threadId)) return undefined;
       const stored = this.getStored(threadId);
       if (!stored) return undefined;
       if (input.title !== undefined) stored.thread.title = input.title?.trim() || null;
@@ -227,21 +247,42 @@ export class AssistantService {
 
   async deleteThread(threadId: string): Promise<boolean> {
     await this.ready;
-    return this.withLock(threadId, async () => {
+    const pendingTasks = await this.withLock(threadId, async () => {
       const stored = this.getStored(threadId);
-      if (!stored) return false;
+      if (!stored) return undefined;
+      this.deleting.add(threadId);
+      const tasks: Promise<void>[] = [];
       for (const response of stored.responses) {
         this.controllers.get(response.id)?.abort();
         this.controllers.delete(response.id);
+        const task = this.tasks.get(response.id);
+        if (task) tasks.push(task);
+      }
+      return tasks;
+    });
+    if (!pendingTasks) return false;
+    await Promise.allSettled(pendingTasks);
+    return this.withLock(threadId, async () => {
+      const stored = this.getStored(threadId);
+      if (!stored) {
+        this.deleting.delete(threadId);
+        return false;
+      }
+      for (const response of stored.responses) {
         this.responses.delete(response.id);
         this.events.delete(response.id);
+        this.eventSnapshots.delete(response.id);
         this.tasks.delete(response.id);
         this.listeners.delete(response.id);
       }
       this.agent.removeSession(threadId);
       this.threads.delete(threadId);
-      await this.dataLayer.fs.remove(threadPath(threadId));
-      return true;
+      try {
+        await this.dataLayer.fs.remove(threadPath(threadId));
+        return true;
+      } finally {
+        this.deleting.delete(threadId);
+      }
     });
   }
 
@@ -261,7 +302,12 @@ export class AssistantService {
 
   getResponseEvents(responseId: string): ResponseEvent[] {
     const response = this.responses.get(responseId);
-    return response ? [...(this.events.get(responseId) ?? [])] : [];
+    if (!response) return [];
+    const snapshot = this.eventSnapshots.get(responseId);
+    const events = this.events.get(responseId) ?? [];
+    return snapshot
+      ? [{ type: 'response.started', response: { ...snapshot } }, ...events]
+      : [...events];
   }
 
   subscribeResponse(responseId: string, listener: ResponseListener): () => void {
@@ -277,6 +323,7 @@ export class AssistantService {
   async createResponse(threadId: string, input: string): Promise<AssistantResponse | undefined> {
     await this.ready;
     return this.withLock(threadId, async () => {
+      if (this.deleting.has(threadId)) return undefined;
       const stored = this.getStored(threadId);
       if (!stored) return undefined;
       const timestamp = now();
@@ -308,7 +355,7 @@ export class AssistantService {
       this.recordEvent(response.id, { type: 'response.created', response });
       const controller = new AbortController();
       this.controllers.set(response.id, controller);
-      const task = this.executeResponse(stored, response, controller);
+      const task = this.executeResponse(response, controller);
       this.tasks.set(response.id, task);
       void task.then(
         () => this.tasks.delete(response.id),
@@ -319,16 +366,16 @@ export class AssistantService {
   }
 
   private async executeResponse(
-    stored: StoredThread,
     response: AssistantResponse,
     controller: AbortController,
   ): Promise<void> {
     response.status = 'running';
     this.recordEvent(response.id, { type: 'response.started', response });
-    await this.save(stored);
+    await this.withStoredThread(response.threadId, (stored) => this.save(stored));
+    if (this.deleting.has(response.threadId)) return;
 
     try {
-      const inputMessage = stored.messages.find(
+      const inputMessage = this.getStored(response.threadId)?.messages.find(
         (message) => message.id === response.inputMessageId,
       );
       if (!inputMessage) throw new Error('The response input message is missing.');
@@ -336,7 +383,7 @@ export class AssistantService {
         sessionId: response.threadId,
         signal: controller.signal,
         onText: (delta) => {
-          if (response.status !== 'running') return;
+          if (response.status !== 'running' || this.deleting.has(response.threadId)) return;
           response.outputText += delta;
           this.recordEvent(response.id, {
             type: 'response.output_text.delta',
@@ -346,37 +393,47 @@ export class AssistantService {
         },
       });
       if (response.status !== 'running') return;
-      response.outputText = output;
-      const outputMessage: AssistantMessage = {
-        id: crypto.randomUUID(),
-        object: 'thread.message',
-        threadId: response.threadId,
-        role: 'assistant',
-        content: output,
-        createdAt: now(),
-      };
-      stored.messages.push(outputMessage);
-      response.outputMessageId = outputMessage.id;
-      response.status = 'completed';
-      response.completedAt = now();
-      stored.thread.updatedAt = response.completedAt;
-      await this.save(stored);
-      this.recordEvent(response.id, { type: 'response.completed', response });
+      const persisted = await this.withStoredThread(response.threadId, async (stored) => {
+        if (response.status !== 'running') return false;
+        response.outputText = output;
+        const outputMessage: AssistantMessage = {
+          id: crypto.randomUUID(),
+          object: 'thread.message',
+          threadId: response.threadId,
+          role: 'assistant',
+          content: output,
+          createdAt: now(),
+        };
+        stored.messages.push(outputMessage);
+        response.outputMessageId = outputMessage.id;
+        response.status = 'completed';
+        response.completedAt = now();
+        stored.thread.updatedAt = response.completedAt;
+        await this.save(stored);
+        return true;
+      });
+      if (persisted) this.recordEvent(response.id, { type: 'response.completed', response });
     } catch (error) {
       if ((response.status as ResponseStatus) === 'cancelled') return;
-      response.status = controller.signal.aborted ? 'cancelled' : 'failed';
-      response.error = controller.signal.aborted
-        ? { code: 'CANCELLED', message: 'The response was cancelled.' }
-        : {
-            code: 'AI_UNAVAILABLE',
-            message: error instanceof Error ? error.message : 'The AI provider is unavailable.',
-          };
-      response.completedAt = now();
-      await this.save(stored);
-      this.recordEvent(response.id, {
-        type: response.status === 'cancelled' ? 'response.cancelled' : 'response.failed',
-        response,
+      const persisted = await this.withStoredThread(response.threadId, async (stored) => {
+        response.status = controller.signal.aborted ? 'cancelled' : 'failed';
+        response.error = controller.signal.aborted
+          ? { code: 'CANCELLED', message: 'The response was cancelled.' }
+          : {
+              code: 'AI_UNAVAILABLE',
+              message: error instanceof Error ? error.message : 'The AI provider is unavailable.',
+            };
+        response.completedAt = now();
+        await this.save(stored);
+        return true;
       });
+      if (persisted) {
+        const finalStatus = response.status as ResponseStatus;
+        this.recordEvent(response.id, {
+          type: finalStatus === 'cancelled' ? 'response.cancelled' : 'response.failed',
+          response,
+        });
+      }
     } finally {
       this.controllers.delete(response.id);
     }
@@ -387,13 +444,16 @@ export class AssistantService {
     const response = this.responses.get(responseId);
     if (!response) return undefined;
     if (terminal(response.status)) return response;
-    const stored = this.getStored(response.threadId);
-    if (!stored) return undefined;
-    response.status = 'cancelled';
-    response.error = { code: 'CANCELLED', message: 'The response was cancelled.' };
-    response.completedAt = now();
-    this.controllers.get(responseId)?.abort();
-    await this.save(stored);
+    const persisted = await this.withStoredThread(response.threadId, async (stored) => {
+      if (terminal(response.status)) return false;
+      response.status = 'cancelled';
+      response.error = { code: 'CANCELLED', message: 'The response was cancelled.' };
+      response.completedAt = now();
+      this.controllers.get(responseId)?.abort();
+      await this.save(stored);
+      return true;
+    });
+    if (!persisted) return undefined;
     this.recordEvent(responseId, { type: 'response.cancelled', response });
     return response;
   }

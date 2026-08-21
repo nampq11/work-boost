@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert';
 import type { AgentPort } from '@work-boost/brain';
-import { createDataLayer, type DataLayer } from '@work-boost/data-provider';
+import { type DataLayer, createDataLayer } from '@work-boost/data-provider';
 import { handleAssistantRequest } from '../../apps/api/src/routes/assistant.ts';
 import { AssistantService } from '../../apps/api/src/services/assistant-service.ts';
 
@@ -40,14 +40,24 @@ async function request(
 async function waitForCompletion(service: AssistantService, responseId: string) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const response = await service.getResponse(responseId);
-    if (response?.status === 'completed' || response?.status === 'failed') return response;
-    if (response?.status === 'completed' || response?.status === 'failed') {
-      await service.waitForResponse(responseId);
+    if (
+      response?.status === 'completed' ||
+      response?.status === 'failed' ||
+      response?.status === 'cancelled'
+    ) {
       return response;
     }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error('Response did not complete');
+}
+
+async function waitForRunning(service: AssistantService, responseId: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if ((await service.getResponse(responseId))?.status === 'running') return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error('Response did not start');
 }
 
 Deno.test('assistant API creates threads, starts responses, and lists durable messages', async () => {
@@ -102,4 +112,77 @@ Deno.test('assistant response GET supports SSE replay and cancellation', async (
   );
   assertEquals(sseResponse.headers.get('content-type'), 'text/event-stream; charset=utf-8');
   assertStringIncludes(await sseResponse.text(), 'response.completed');
+});
+
+Deno.test('assistant response streams deltas before cancellation', async () => {
+  const root = await Deno.makeTempDir({ prefix: 'work-boost-assistant-cancel-test-' });
+  const dataLayer = createDataLayer(root);
+  await dataLayer.fs.init();
+  let resolveStream!: (output: string) => void;
+  let resolveStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    resolveStarted = resolve;
+  });
+  const agent: AgentPort = {
+    stream: async (_message, options) => {
+      options?.onText?.('partial');
+      resolveStarted();
+      return await new Promise<string>((resolve) => {
+        resolveStream = resolve;
+        options?.signal?.addEventListener('abort', () => resolve('partial'));
+      });
+    },
+    removeSession: () => true,
+  };
+  const service = new AssistantService(dataLayer, agent);
+  const thread = await service.createThread();
+  const response = await service.createResponse(thread.id, 'Hello');
+  assert(response);
+  await started;
+  await waitForRunning(service, response.id);
+
+  const streamResponse = await handleAssistantRequest(
+    new Request(`http://localhost/v1/responses/${response.id}`, {
+      headers: { accept: 'text/event-stream' },
+    }),
+    `/v1/responses/${response.id}`,
+    service,
+    crypto.randomUUID(),
+  );
+  const streamText = streamResponse.text();
+  await service.cancelResponse(response.id);
+  const body = await streamText;
+
+  assertStringIncludes(body, 'response.output_text.delta');
+  assertStringIncludes(body, 'response.cancelled');
+  assertEquals(body.includes('response.completed'), false);
+  resolveStream('partial');
+});
+
+Deno.test('deleting a running assistant thread waits for the response task', async () => {
+  const root = await Deno.makeTempDir({ prefix: 'work-boost-assistant-delete-test-' });
+  const dataLayer = createDataLayer(root);
+  await dataLayer.fs.init();
+  let resolveStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    resolveStarted = resolve;
+  });
+  const agent: AgentPort = {
+    stream: async (_message, options) =>
+      await new Promise<string>((resolve) => {
+        resolveStarted();
+        options?.signal?.addEventListener('abort', () => resolve('late output'));
+      }),
+    removeSession: () => true,
+  };
+  const service = new AssistantService(dataLayer, agent);
+  const thread = await service.createThread();
+  const response = await service.createResponse(thread.id, 'Hello');
+  assert(response);
+  await started;
+  await waitForRunning(service, response.id);
+
+  assertEquals(await service.deleteThread(thread.id), true);
+  assertEquals(await service.getThread(thread.id), undefined);
+  assertEquals((await service.listThreads(10)).items, []);
 });

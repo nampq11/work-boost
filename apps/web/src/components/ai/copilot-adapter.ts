@@ -1,6 +1,6 @@
 import type { ChatModelAdapter, ThreadMessage } from '@assistant-ui/react';
 import type { AssistantResponseEvent } from '../../lib/api-client.ts';
-import { api, ApiError } from '../../lib/api-client.ts';
+import { ApiError, api } from '../../lib/api-client.ts';
 
 export interface CopilotApiClient {
   sendMessage: (
@@ -52,14 +52,14 @@ export function createCopilotAdapter(
             if (event.delta) outputText += event.delta;
             if (event.type === 'response.failed') {
               throw new ApiError(
-                event.response.error?.code ?? 'AI_UNAVAILABLE',
-                event.response.error?.message ?? 'The assistant is unavailable.',
+                event.response?.error?.code ?? 'AI_UNAVAILABLE',
+                event.response?.error?.message ?? 'The assistant is unavailable.',
               );
             }
             if (event.type === 'response.cancelled') {
               throw new DOMException('The response was cancelled.', 'AbortError');
             }
-            if (event.response.outputText && !event.delta) outputText = event.response.outputText;
+            if (event.response?.outputText && !event.delta) outputText = event.response.outputText;
             if (outputText) yield { content: [{ type: 'text' as const, text: outputText }] };
           }
         } catch (error) {

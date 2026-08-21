@@ -39,7 +39,7 @@ Omit if the decision was made unilaterally with not external input.
 
 ### Status lifecycle
 
-```
+```text
 proposed → active → superseded
                  ↘ retired      (decision no longer relevant, not replaced)
 ```

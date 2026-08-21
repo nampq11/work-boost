@@ -7,7 +7,7 @@
  */
 
 import { Agent } from '@earendil-works/pi-agent-core';
-import { createModels, InMemoryCredentialStore } from '@earendil-works/pi-ai';
+import { InMemoryCredentialStore, createModels } from '@earendil-works/pi-ai';
 import type { AuthContext, CredentialStore, Model } from '@earendil-works/pi-ai';
 import { googleProvider } from '@earendil-works/pi-ai/providers/google';
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex';

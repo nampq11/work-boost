@@ -1,3 +1,4 @@
+import { logger } from '@work-boost/shared/logger/logger.ts';
 import type {
   AssistantResponse,
   AssistantService,
@@ -5,6 +6,9 @@ import type {
 } from '../services/assistant-service.ts';
 import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
 import { isValidSessionId, sanitizeInput } from '../utils/security.ts';
+
+const MAX_THREAD_TITLE_LENGTH = 200;
+const MAX_THREAD_METADATA_BYTES = 16 * 1024;
 
 function notFound(message: string, requestId: string): Response {
   return errorResponse(ERROR_CODES.NOT_FOUND, message, 404, undefined, requestId);
@@ -22,10 +26,39 @@ async function jsonBody(req: Request): Promise<Record<string, unknown>> {
 function isMetadata(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
+function threadFields(
+  body: Record<string, unknown>,
+  requestId: string,
+): { title?: string | null; metadata?: Record<string, unknown> } | Response {
+  if (body.title !== undefined && body.title !== null && typeof body.title !== 'string') {
+    return invalid('title must be a string or null', requestId);
+  }
+  if (typeof body.title === 'string' && body.title.length > MAX_THREAD_TITLE_LENGTH) {
+    return invalid(`title must not exceed ${MAX_THREAD_TITLE_LENGTH} characters`, requestId);
+  }
+  if (body.metadata !== undefined && !isMetadata(body.metadata)) {
+    return invalid('metadata must be an object', requestId);
+  }
+  if (body.metadata !== undefined) {
+    const metadataSize = new TextEncoder().encode(JSON.stringify(body.metadata)).byteLength;
+    if (metadataSize > MAX_THREAD_METADATA_BYTES) {
+      return invalid(`metadata must not exceed ${MAX_THREAD_METADATA_BYTES} bytes`, requestId);
+    }
+  }
+  return {
+    title:
+      typeof body.title === 'string' ? sanitizeInput(body.title) : (body.title as null | undefined),
+    metadata: body.metadata as Record<string, unknown> | undefined,
+  };
+}
 
 function sseFrame(event: ResponseEvent): string {
   const eventName = event.type;
-  return `event: ${eventName}\ndata: ${JSON.stringify(event)}\n\n`;
+  const payload =
+    event.type === 'response.output_text.delta'
+      ? { type: event.type, delta: event.delta ?? '' }
+      : event;
+  return `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`;
 }
 
 function responseStream(
@@ -34,6 +67,8 @@ function responseStream(
   response: AssistantResponse,
 ): Response {
   let unsubscribe: () => void = () => undefined;
+  let closeStream: () => void = () => undefined;
+  let keepAliveTimer: ReturnType<typeof setInterval> | undefined;
   let closed = false;
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -41,9 +76,12 @@ function responseStream(
       const close = () => {
         if (closed) return;
         closed = true;
+        if (keepAliveTimer !== undefined) clearInterval(keepAliveTimer);
+        req.signal.removeEventListener('abort', close);
         unsubscribe();
         controller.close();
       };
+      closeStream = close;
       const send = (event: ResponseEvent) => {
         if (closed) return;
         controller.enqueue(encoder.encode(sseFrame(event)));
@@ -66,10 +104,12 @@ function responseStream(
       }
       if (closed) return;
       req.signal.addEventListener('abort', close, { once: true });
+      keepAliveTimer = setInterval(() => {
+        if (!closed) controller.enqueue(encoder.encode(': keep-alive\n\n'));
+      }, 15_000);
     },
     cancel() {
-      closed = true;
-      unsubscribe();
+      closeStream();
     },
   });
 
@@ -106,7 +146,21 @@ export async function handleAssistantRequest(
   service: AssistantService,
   requestId: string,
 ): Promise<Response> {
-  await service.waitUntilReady();
+  try {
+    await service.waitUntilReady();
+  } catch (error) {
+    logger.error('[assistant route] Assistant service failed to initialize', {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return errorResponse(
+      ERROR_CODES.ASSISTANT_SERVICE_UNAVAILABLE,
+      'The assistant service is unavailable.',
+      503,
+      undefined,
+      requestId,
+    );
+  }
   const segments = path.split('/').filter(Boolean);
   const version = segments.shift();
   if (version !== 'v1') {
@@ -120,16 +174,9 @@ export async function handleAssistantRequest(
     if (segments.length === 0) {
       if (req.method === 'POST') {
         const body = await jsonBody(req);
-        if (body.title !== undefined && body.title !== null && typeof body.title !== 'string') {
-          return invalid('title must be a string or null', requestId);
-        }
-        if (body.metadata !== undefined && !isMetadata(body.metadata)) {
-          return invalid('metadata must be an object', requestId);
-        }
-        const thread = await service.createThread({
-          title: body.title as string | null | undefined,
-          metadata: body.metadata as Record<string, unknown> | undefined,
-        });
+        const fields = threadFields(body, requestId);
+        if (fields instanceof Response) return fields;
+        const thread = await service.createThread(fields);
         return successResponse(thread, 201, requestId);
       }
       if (req.method === 'GET') {
@@ -151,16 +198,9 @@ export async function handleAssistantRequest(
       if (req.method === 'GET') return successResponse(thread, 200, requestId);
       if (req.method === 'PATCH') {
         const body = await jsonBody(req);
-        if (body.title !== undefined && body.title !== null && typeof body.title !== 'string') {
-          return invalid('title must be a string or null', requestId);
-        }
-        if (body.metadata !== undefined && !isMetadata(body.metadata)) {
-          return invalid('metadata must be an object', requestId);
-        }
-        const updated = await service.updateThread(threadId, {
-          title: body.title as string | null | undefined,
-          metadata: body.metadata as Record<string, unknown> | undefined,
-        });
+        const fields = threadFields(body, requestId);
+        if (fields instanceof Response) return fields;
+        const updated = await service.updateThread(threadId, fields);
         return successResponse(updated, 200, requestId);
       }
       if (req.method === 'DELETE') {

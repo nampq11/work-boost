@@ -35,6 +35,10 @@ Deno.test('AI provider failures map to a stable 503 response', async () => {
 Deno.test('sync message processing receives client cancellation', async () => {
   const controller = new AbortController();
   let agentSignal: AbortSignal | undefined;
+  let resolveStreamStarted!: () => void;
+  const streamStarted = new Promise<void>((resolve) => {
+    resolveStreamStarted = resolve;
+  });
   let resolveStream!: (response: string) => void;
   const stream = new Promise<string>((resolve) => {
     resolveStream = resolve;
@@ -42,6 +46,7 @@ Deno.test('sync message processing receives client cancellation', async () => {
   const agent = {
     stream: (_message: string, options?: { signal?: AbortSignal }) => {
       agentSignal = options?.signal;
+      resolveStreamStarted();
       return stream;
     },
     removeSession: () => false,
@@ -58,7 +63,7 @@ Deno.test('sync message processing receives client cancellation', async () => {
     'request-cancel',
   );
 
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await streamStarted;
   controller.abort();
   assertEquals(agentSignal?.aborted, true);
   resolveStream('done');

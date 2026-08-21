@@ -5,12 +5,13 @@ import type { Database } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { ExtensionManager } from '../../../extensions/manager.ts';
 import {
+  type RequestContext,
   createRequestContext,
   logError,
   logRequest,
   logResponse,
-  type RequestContext,
 } from './middleware/logging.ts';
+import { handleAssistantRequest } from './routes/assistant.ts';
 import {
   handleAuthLogin,
   handleAuthLoginCancel,
@@ -19,9 +20,8 @@ import {
   handleAuthStatus,
 } from './routes/auth.ts';
 import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
-import { handleAssistantRequest } from './routes/assistant.ts';
+import { type WorkspaceRouter, createWorkspaceRouter } from './routes/workspace.ts';
 import { AssistantService } from './services/assistant-service.ts';
-import { createWorkspaceRouter, type WorkspaceRouter } from './routes/workspace.ts';
 import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
 
 // ============================================================================

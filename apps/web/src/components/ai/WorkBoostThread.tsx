@@ -1,5 +1,6 @@
 import {
   ActionBarPrimitive,
+  AuiIf,
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
@@ -54,7 +55,9 @@ function AssistantMessage() {
   });
   const assistantContent = (
     <>
-      <MessagePrimitive.Parts components={{ Text: AssistantMarkdown }} />
+      <MessagePrimitive.Parts>
+        {({ part }) => (part.type === 'text' ? <AssistantMarkdown /> : null)}
+      </MessagePrimitive.Parts>
       <MessagePrimitive.Error>
         <AssistantError />
       </MessagePrimitive.Error>
@@ -90,19 +93,18 @@ function AssistantError() {
     if (status?.type !== 'incomplete' || status.reason !== 'error') return undefined;
     return status.error;
   });
-  return (
-    <p className="text-sm text-[var(--accent-red)]">{String(error ?? 'The assistant failed.')}</p>
-  );
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  return <p className="text-sm text-[var(--accent-red)]">{message || 'The assistant failed.'}</p>;
 }
 
 function Welcome() {
   return (
-    <ThreadPrimitive.Empty>
+    <AuiIf condition={(state) => state.thread.isEmpty}>
       <div className="px-3 py-10 text-center text-sm leading-relaxed text-[var(--text-muted)]">
         <p className="font-medium text-[var(--text-primary)]">How can I help you today?</p>
         <p className="mt-2">Summarize notes, query daily tasks, or record debt entries.</p>
       </div>
-    </ThreadPrimitive.Empty>
+    </AuiIf>
   );
 }
 
@@ -143,7 +145,9 @@ export function WorkBoostThread() {
       <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
         <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           <Welcome />
-          <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage }} />
+          <ThreadPrimitive.Messages>
+            {({ message }) => (message.role === 'user' ? <UserMessage /> : <AssistantMessage />)}
+          </ThreadPrimitive.Messages>
         </ThreadPrimitive.Viewport>
         <Composer />
       </ThreadPrimitive.Root>

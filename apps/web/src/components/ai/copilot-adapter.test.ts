@@ -54,3 +54,15 @@ Deno.test('copilot adapter rethrows API errors instead of creating assistant mes
 Deno.test('latest user text rejects an empty turn', async () => {
   await assertRejects(async () => getLatestUserText([userMessage('  ')]));
 });
+
+Deno.test('copilot adapter propagates cancellation errors unchanged', async () => {
+  const abortError = new DOMException('Aborted', 'AbortError');
+  const adapter = createCopilotAdapter('page-session', {
+    sendMessage: () => Promise.reject(abortError),
+  });
+
+  const received = await assertRejects(async () => {
+    await adapter.run(runOptions([userMessage('hello')], new AbortController().signal));
+  });
+  assertEquals(received, abortError);
+});
