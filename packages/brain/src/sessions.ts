@@ -52,14 +52,9 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
     if (entry) entry.lastUsedAt = Date.now();
   }
 
-  function shouldTrimTranscript(agent: Agent): boolean {
-    return agent.state.messages.length > maxMessages;
-  }
-
   function trimTranscript(agent: Agent): void {
-    if (shouldTrimTranscript(agent)) {
-      agent.state.messages = agent.state.messages.slice(-maxMessages);
-    }
+    if (agent.state.messages.length <= maxMessages) return;
+    agent.state.messages = agent.state.messages.slice(-maxMessages);
   }
 
   function cleanup(): void {

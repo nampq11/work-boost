@@ -1,6 +1,6 @@
 export { Brain, createBrain } from './brain.ts';
 export type { BrainDeps } from './brain.ts';
-export type { AgentPort } from './ports/agent.ts';
+export type { AgentPort } from './types.ts';
 export { getWorkspaceTools } from './tools/index.ts';
 export {
   createCreateDebtTool,
@@ -19,6 +19,6 @@ export {
   createReadWorkspaceFileTool,
   createListWorkspaceFilesTool,
 } from './tools/workspace-file-tools.ts';
-export { SYSTEM_PROMPT } from './prompts/system-prompt.ts';
+export { SYSTEM_PROMPT } from './system-prompt.ts';
 export { createSessionStore } from './sessions.ts';
 export type { SessionStore, SessionStoreOptions } from './sessions.ts';

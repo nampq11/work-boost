@@ -9,19 +9,23 @@ import { successResult } from './result.ts';
  * Format a debt document into a concise summary string with file path.
  */
 function formatDebtSummary(doc: DebtDocument): string {
-  const fm = doc.frontmatter;
-  const directionText = fm.direction === DebtDirection.LENT ? 'cho vay' : 'vay';
-  const statusText =
-    fm.status === DebtStatus.PAID
-      ? '✅ Đã trả'
-      : fm.status === DebtStatus.CANCELLED
-        ? '❌ Đã hủy'
-        : '⏳ Chờ thanh toán';
+  const frontmatter = doc.frontmatter;
+  const directionText = frontmatter.direction === DebtDirection.LENT ? 'cho vay' : 'vay';
 
-  const amount = new Intl.NumberFormat('vi-VN').format(fm.amount);
-  const dateStr = fm.debtDate;
+  let statusText: string;
+  if (frontmatter.status === DebtStatus.PAID) {
+    statusText = '✅ Đã trả';
+  } else if (frontmatter.status === DebtStatus.CANCELLED) {
+    statusText = '❌ Đã hủy';
+  } else {
+    statusText = '⏳ Chờ thanh toán';
+  }
 
-  return `💰 ${directionText} ${fm.personName}: ${amount} ${fm.currency} (${dateStr}) - ${statusText}\n📄 File: ${doc.filePath}${doc.reason ? `\n📝 Lý do: ${doc.reason}` : ''}`;
+  const amount = new Intl.NumberFormat('vi-VN').format(frontmatter.amount);
+
+  return `💰 ${directionText} ${frontmatter.personName}: ${amount} ${frontmatter.currency} (${frontmatter.debtDate}) - ${statusText}\n📄 File: ${doc.filePath}${
+    doc.reason ? `\n📝 Lý do: ${doc.reason}` : ''
+  }`;
 }
 
 const createDebtParams = Type.Object({
@@ -149,18 +153,23 @@ export function createGetDebtSummaryTool(debts: DebtRepository): AgentTool<any> 
 
       const currencyKeys = Object.keys(summary.currencies);
       const defaultCurrency = currencyKeys.length === 1 ? currencyKeys[0] : 'VND';
-      const formatAmount = (amount: number) =>
-        `${amount.toLocaleString('vi-VN')} ${defaultCurrency}`;
+      function formatAmount(amount: number): string {
+        return `${amount.toLocaleString('vi-VN')} ${defaultCurrency}`;
+      }
 
       const parts: string[] = [];
       if (summary.totalLent > 0) {
         parts.push(
-          `💰 Bạn được nợ: ${formatAmount(summary.totalLent)} (${summary.pendingLentCount} khoản chưa trả)`,
+          `💰 Bạn được nợ: ${formatAmount(
+            summary.totalLent,
+          )} (${summary.pendingLentCount} khoản chưa trả)`,
         );
       }
       if (summary.totalBorrowed > 0) {
         parts.push(
-          `📥 Bạn cần trả: ${formatAmount(summary.totalBorrowed)} (${summary.pendingBorrowedCount} khoản chưa trả)`,
+          `📥 Bạn cần trả: ${formatAmount(
+            summary.totalBorrowed,
+          )} (${summary.pendingBorrowedCount} khoản chưa trả)`,
         );
       }
 

@@ -1,4 +1,3 @@
-import type { MessageButton, SendMessageOptions } from '@work-boost/brain/ports/messaging.ts';
 import type { Platform as EntityPlatform } from '@work-boost/data-schemas/subscription.ts';
 
 // Re-export Platform from entity for convenience
@@ -25,5 +24,13 @@ export interface BotService {
   handleWebhook(request: Request): Promise<Response>;
 }
 
-export type SendOptions = SendMessageOptions;
-export type KeyboardButton = MessageButton;
+export interface SendOptions {
+  parseMode?: 'HTML' | 'Markdown' | 'None';
+  keyboard?: unknown;
+}
+
+export interface KeyboardButton {
+  text: string;
+  callback_data?: string;
+  url?: string;
+}

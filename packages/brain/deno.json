@@ -2,9 +2,6 @@
   "name": "@work-boost/brain",
   "version": "0.2.0",
   "exports": {
-    ".": "./mod.ts",
-    "./ports/agent.ts": "./src/ports/agent.ts",
-    "./ports/messaging.ts": "./src/ports/messaging.ts",
-    "./ports/index.ts": "./src/ports/index.ts"
+    ".": "./mod.ts"
   }
 }

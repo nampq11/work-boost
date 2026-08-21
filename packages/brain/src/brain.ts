@@ -12,8 +12,8 @@ import type { Model } from '@earendil-works/pi-ai';
 import { googleProvider } from '@earendil-works/pi-ai/providers/google';
 import type { DataLayer } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import type { AgentPort } from './ports/agent.ts';
-import { SYSTEM_PROMPT } from './prompts/index.ts';
+import type { AgentPort } from './types.ts';
+import { SYSTEM_PROMPT } from './system-prompt.ts';
 import { createSessionStore } from './sessions.ts';
 import { getWorkspaceTools } from './tools/index.ts';
 
