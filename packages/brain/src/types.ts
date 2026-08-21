@@ -12,6 +12,15 @@ export class AIUnavailableError extends Error {
     this.model = model;
   }
 }
+
+export interface AgentToolEvent {
+  type: 'started' | 'completed';
+  toolCallId: string;
+  toolName: string;
+  args: unknown;
+  result?: unknown;
+  isError?: boolean;
+}
 /**
  * Minimal agent interface consumed by all platform services (API, Slack, Telegram).
  *
@@ -22,6 +31,7 @@ export interface AgentStreamOptions {
   sessionId?: string;
   signal?: AbortSignal;
   onText?: (text: string) => void;
+  onTool?: (event: AgentToolEvent) => void;
 }
 
 export interface AgentPort {

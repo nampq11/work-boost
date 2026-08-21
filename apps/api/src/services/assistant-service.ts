@@ -1,4 +1,4 @@
-import type { AgentPort } from '@work-boost/brain';
+import type { AgentPort, AgentToolEvent } from '@work-boost/brain';
 import type { DataLayer } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 
@@ -25,6 +25,14 @@ export interface AssistantMessage {
   content: string;
   createdAt: string;
 }
+export interface AssistantToolCall {
+  id: string;
+  name: string;
+  args: unknown;
+  status: 'running' | 'completed';
+  result?: unknown;
+  isError?: boolean;
+}
 
 export interface AssistantResponse {
   id: string;
@@ -34,6 +42,7 @@ export interface AssistantResponse {
   inputMessageId: string;
   outputMessageId: string | null;
   outputText: string;
+  toolCalls: AssistantToolCall[];
   error: { code: string; message: string } | null;
   createdAt: string;
   completedAt: string | null;
@@ -44,6 +53,8 @@ export interface ResponseEvent {
     | 'response.created'
     | 'response.started'
     | 'response.output_text.delta'
+    | 'response.tool_call.started'
+    | 'response.tool_call.completed'
     | 'response.completed'
     | 'response.failed'
     | 'response.cancelled';
@@ -110,6 +121,7 @@ export class AssistantService {
           throw new Error('invalid assistant thread shape');
         }
         for (const response of stored.responses) {
+          response.toolCalls ??= [];
           if (response.status === 'queued' || response.status === 'running') {
             response.status = 'failed';
             response.error = {
@@ -177,6 +189,7 @@ export class AssistantService {
       response: {
         ...event.response,
         error: event.response.error ? { ...event.response.error } : null,
+        toolCalls: event.response.toolCalls.map((toolCall) => ({ ...toolCall })),
       },
     };
     const events = this.events.get(responseId) ?? [];
@@ -189,6 +202,38 @@ export class AssistantService {
     }
     this.events.set(responseId, events);
     this.emit(recordedEvent);
+  }
+
+  private recordToolEvent(response: AssistantResponse, event: AgentToolEvent): void {
+    const existing = response.toolCalls.find((toolCall) => toolCall.id === event.toolCallId);
+    if (event.type === 'started') {
+      if (!existing) {
+        response.toolCalls.push({
+          id: event.toolCallId,
+          name: event.toolName,
+          args: event.args,
+          status: 'running',
+        });
+      }
+      this.recordEvent(response.id, { type: 'response.tool_call.started', response });
+      return;
+    }
+
+    if (existing) {
+      existing.status = 'completed';
+      existing.result = event.result;
+      existing.isError = event.isError;
+    } else {
+      response.toolCalls.push({
+        id: event.toolCallId,
+        name: event.toolName,
+        args: event.args,
+        status: 'completed',
+        result: event.result,
+        isError: event.isError,
+      });
+    }
+    this.recordEvent(response.id, { type: 'response.tool_call.completed', response });
   }
 
   private getStored(threadId: string): StoredThread | undefined {
@@ -343,6 +388,7 @@ export class AssistantService {
         inputMessageId: inputMessage.id,
         outputMessageId: null,
         outputText: '',
+        toolCalls: [],
         error: null,
         createdAt: timestamp,
         completedAt: null,
@@ -390,6 +436,10 @@ export class AssistantService {
             response,
             delta,
           });
+        },
+        onTool: (toolEvent) => {
+          if (response.status !== 'running' || this.deleting.has(response.threadId)) return;
+          this.recordToolEvent(response, toolEvent);
         },
       });
       if (response.status !== 'running') return;

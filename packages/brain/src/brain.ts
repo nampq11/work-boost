@@ -143,6 +143,8 @@ export class Brain implements AgentPort {
   ): Promise<string> {
     const signal = options?.signal;
     const onText = options?.onText;
+    const onTool = options?.onTool;
+    const toolArguments = new Map<string, unknown>();
     const { agent } = this.store.getOrCreate(sessionId, () => this.createAgent());
 
     let accumulatedText = '';
@@ -161,6 +163,26 @@ export class Brain implements AgentPort {
           .map((block) => block.text ?? '')
           .join('');
         accumulatedText += text ? text + '\n\n' : '';
+      }
+      if (event.type === 'tool_execution_start') {
+        toolArguments.set(event.toolCallId, event.args);
+        onTool?.({
+          type: 'started',
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: event.args,
+        });
+      }
+      if (event.type === 'tool_execution_end') {
+        onTool?.({
+          type: 'completed',
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: toolArguments.get(event.toolCallId) ?? {},
+          result: event.result,
+          isError: event.isError,
+        });
+        toolArguments.delete(event.toolCallId);
       }
     });
 

@@ -6,11 +6,12 @@ import {
   ThreadPrimitive,
   useAuiState,
 } from '@assistant-ui/react';
-import type { ThreadMessage } from '@assistant-ui/react';
+import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 import { StreamdownTextPrimitive } from '@assistant-ui/react-streamdown';
 import { Copy, PaperPlaneRight, Stop } from '@phosphor-icons/react';
 import React from 'react';
 import { MessagePair } from './MessagePair.tsx';
+import { ToolTimeline } from './ToolCall.tsx';
 
 function getMessageText(content: ThreadMessage['content']): string {
   return content
@@ -47,8 +48,15 @@ function UserMessage() {
 }
 
 function AssistantMessage() {
-  const assistantText = useAuiState((state) => getMessageText(state.message.content));
+  const messageContent = useAuiState((state) => state.message.content);
+  const assistantText = getMessageText(messageContent);
+  const hasToolCall = messageContent.some((part) => part.type === 'tool-call');
+  const toolCalls = messageContent.filter(
+    (part): part is ToolCallMessagePart => part.type === 'tool-call',
+  );
+  const firstToolCallId = toolCalls[0]?.toolCallId;
   const status = useAuiState((state) => state.message.status);
+  const isMessageRunning = status?.type === 'running';
   const userMessage = useAuiState((state) => {
     const previousMessage = state.thread.messages[state.message.index - 1];
     return previousMessage?.role === 'user' ? getMessageText(previousMessage.content) : '';
@@ -56,7 +64,13 @@ function AssistantMessage() {
   const assistantContent = (
     <>
       <MessagePrimitive.Parts>
-        {({ part }) => (part.type === 'text' ? <AssistantMarkdown /> : null)}
+        {({ part }) => {
+          if (part.type === 'text') return <AssistantMarkdown />;
+          if (part.type === 'tool-call' && part.toolCallId === firstToolCallId) {
+            return <ToolTimeline parts={toolCalls} isMessageRunning={isMessageRunning} />;
+          }
+          return null;
+        }}
       </MessagePrimitive.Parts>
       <MessagePrimitive.Error>
         <AssistantError />
@@ -68,7 +82,7 @@ function AssistantMessage() {
     <MessagePrimitive.Root className="group flex flex-col items-start gap-1">
       <MessagePair
         userMessage={userMessage}
-        loading={status?.type === 'running' && !assistantText}
+        loading={isMessageRunning && !assistantText && !hasToolCall}
         assistantContent={assistantContent}
         actions={
           <ActionBarPrimitive.Root className="flex items-center px-1" hideWhenRunning>

@@ -1,9 +1,16 @@
 import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
 import type { ActiveDocument, WorkspaceEvent } from './types.ts';
 export type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
-const buildEnvironment = (import.meta as ImportMeta & { env?: Record<string, string> }).env ?? {};
-const workspaceBase = buildEnvironment.VITE_WORKSPACE_API ?? '/api/workspace';
-const apiBase = buildEnvironment.VITE_API_BASE ?? '/api';
+const buildEnvironment =
+  (
+    import.meta as ImportMeta & {
+      env?: { DEV?: boolean; VITE_API_BASE?: string; VITE_WORKSPACE_API?: string };
+    }
+  ).env ?? {};
+// Keep long-lived SSE connections off Vite's Deno proxy; aborted reloads can terminate the dev server.
+const defaultApiBase = buildEnvironment.DEV ? 'http://localhost:3001/api' : '/api';
+const workspaceBase = buildEnvironment.VITE_WORKSPACE_API ?? `${defaultApiBase}/workspace`;
+const apiBase = buildEnvironment.VITE_API_BASE ?? defaultApiBase;
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -23,12 +30,22 @@ export class ApiError extends Error {
   }
 }
 
+export interface AssistantToolCall {
+  id: string;
+  name: string;
+  args: unknown;
+  status: 'running' | 'completed';
+  result?: unknown;
+  isError?: boolean;
+}
+
 export interface AssistantResponseEvent {
   type: string;
   response?: {
     id: string;
     status: string;
     outputText: string;
+    toolCalls: AssistantToolCall[];
     error: { code: string; message: string } | null;
   };
   delta?: string;

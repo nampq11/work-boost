@@ -1,4 +1,9 @@
-import type { ChatModelAdapter, ThreadMessage } from '@assistant-ui/react';
+import type {
+  ChatModelAdapter,
+  ThreadAssistantMessagePart,
+  ThreadMessage,
+  ToolCallMessagePart,
+} from '@assistant-ui/react';
 import type { AssistantResponseEvent } from '../../lib/api-client.ts';
 import { ApiError, api } from '../../lib/api-client.ts';
 
@@ -22,6 +27,55 @@ export interface CopilotApiClient {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+function stringifyToolValue(value: unknown): string {
+  try {
+    const serialized = JSON.stringify(value, null, 2);
+    return serialized === undefined ? String(value) : serialized;
+  } catch {
+    return String(value);
+  }
+}
+
+function toToolCallPart(
+  toolCall: NonNullable<AssistantResponseEvent['response']>['toolCalls'][number],
+): ToolCallMessagePart {
+  const part: ToolCallMessagePart = {
+    type: 'tool-call',
+    toolCallId: toolCall.id,
+    toolName: toolCall.name,
+    args: (toolCall.args ?? {}) as ToolCallMessagePart['args'],
+    argsText: stringifyToolValue(toolCall.args ?? {}),
+  };
+  if (toolCall.status === 'completed') {
+    return { ...part, result: toolCall.result, isError: toolCall.isError };
+  }
+  return part;
+}
+
+function appendText(content: ThreadAssistantMessagePart[], text: string): void {
+  const lastPart = content.at(-1);
+  if (lastPart?.type === 'text') {
+    content[content.length - 1] = { ...lastPart, text: lastPart.text + text };
+    return;
+  }
+  content.push({ type: 'text', text });
+}
+
+function applyToolCalls(
+  content: ThreadAssistantMessagePart[],
+  toolCalls: NonNullable<AssistantResponseEvent['response']>['toolCalls'],
+): void {
+  for (const toolCall of toolCalls) {
+    const part = toToolCallPart(toolCall);
+    const existingIndex = content.findIndex(
+      (contentPart) =>
+        contentPart.type === 'tool-call' && contentPart.toolCallId === part.toolCallId,
+    );
+    if (existingIndex === -1) content.push(part);
+    else content[existingIndex] = part;
+  }
 }
 
 export function getLatestUserText(messages: readonly ThreadMessage[]): string {
@@ -48,8 +102,12 @@ export function createCopilotAdapter(
         try {
           const response = await createResponse(await threadId, text, abortSignal);
           let outputText = '';
+          const content: ThreadAssistantMessagePart[] = [];
           for await (const event of streamResponse(response.id, abortSignal)) {
-            if (event.delta) outputText += event.delta;
+            if (event.delta) {
+              outputText += event.delta;
+              appendText(content, event.delta);
+            }
             if (event.type === 'response.failed') {
               throw new ApiError(
                 event.response?.error?.code ?? 'AI_UNAVAILABLE',
@@ -59,8 +117,17 @@ export function createCopilotAdapter(
             if (event.type === 'response.cancelled') {
               throw new DOMException('The response was cancelled.', 'AbortError');
             }
-            if (event.response?.outputText && !event.delta) outputText = event.response.outputText;
-            if (outputText) yield { content: [{ type: 'text' as const, text: outputText }] };
+            if (
+              event.type === 'response.completed' &&
+              event.response?.outputText &&
+              !event.delta &&
+              !outputText
+            ) {
+              outputText = event.response.outputText;
+              appendText(content, outputText);
+            }
+            if (event.response?.toolCalls) applyToolCalls(content, event.response.toolCalls);
+            if (content.length > 0) yield { content: [...content] };
           }
         } catch (error) {
           if (isAbortError(error) || error instanceof ApiError) throw error;

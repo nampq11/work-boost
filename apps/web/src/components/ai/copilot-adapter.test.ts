@@ -66,3 +66,103 @@ Deno.test('copilot adapter propagates cancellation errors unchanged', async () =
   });
   assertEquals(received, abortError);
 });
+
+Deno.test('copilot adapter exposes tool calls as assistant-ui message parts', async () => {
+  const adapter = createCopilotAdapter('page-session', {
+    createResponse: async () => ({ id: 'response-1' }),
+    streamResponse: async function* () {
+      yield {
+        type: 'response.tool_call.started',
+        response: {
+          id: 'response-1',
+          status: 'running',
+          outputText: '',
+          toolCalls: [
+            { id: 'tool-1', name: 'get_current_time', args: {}, status: 'running' as const },
+          ],
+          error: null,
+        },
+      };
+      yield {
+        type: 'response.tool_call.completed',
+        response: {
+          id: 'response-1',
+          status: 'running',
+          outputText: '',
+          toolCalls: [
+            {
+              id: 'tool-1',
+              name: 'get_current_time',
+              args: {},
+              status: 'completed' as const,
+              result: { content: [{ type: 'text', text: '09:30' }] },
+            },
+          ],
+          error: null,
+        },
+      };
+    },
+  });
+
+  const updates = [];
+  const stream = adapter.run(
+    runOptions([userMessage('What time is it?')], new AbortController().signal),
+  );
+  for await (const update of stream as AsyncGenerator<{ content: readonly unknown[] }>) {
+    updates.push(update);
+  }
+
+  assertEquals(updates.length, 2);
+  assertEquals(updates[0]?.content[0], {
+    type: 'tool-call',
+    toolCallId: 'tool-1',
+    toolName: 'get_current_time',
+    args: {},
+    argsText: '{}',
+  });
+  const completedPart = updates[1]?.content[0] as { result?: unknown } | undefined;
+  if (!completedPart) throw new Error('The completed tool call update is missing.');
+  assertEquals(completedPart.result, {
+    content: [{ type: 'text', text: '09:30' }],
+  });
+});
+
+Deno.test('copilot adapter preserves tool calls before following assistant text', async () => {
+  const adapter = createCopilotAdapter('page-session', {
+    createResponse: async () => ({ id: 'response-1' }),
+    streamResponse: async function* () {
+      yield {
+        type: 'response.tool_call.completed',
+        response: {
+          id: 'response-1',
+          status: 'running',
+          outputText: '',
+          toolCalls: [
+            {
+              id: 'tool-1',
+              name: 'get_current_time',
+              args: {},
+              status: 'completed' as const,
+              result: { content: [{ type: 'text', text: '09:30' }] },
+            },
+          ],
+          error: null,
+        },
+      };
+      yield { type: 'response.output_text.delta', delta: 'The time is 09:30.' };
+    },
+  });
+
+  let finalContent: readonly unknown[] = [];
+  const stream = adapter.run(
+    runOptions([userMessage('What time is it?')], new AbortController().signal),
+  );
+  for await (const update of stream as AsyncGenerator<{ content: readonly unknown[] }>) {
+    finalContent = update.content;
+  }
+
+  assertEquals(
+    finalContent.map((part) => (part as { type: string }).type),
+    ['tool-call', 'text'],
+  );
+});
