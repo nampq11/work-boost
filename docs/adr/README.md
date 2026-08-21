@@ -56,7 +56,6 @@ proposed → active → superseded
 
 | ID | Title | Status |
 |----|-------|--------|
-
 | [0001](0001-assistant-ui-integration.md) | Integrate assistant-ui at the frontend boundary | active |
 | [0002](0002-workspace-api-and-concurrency.md) | Define explicit browser workspace contracts | active |
 | [0003](0003-sandbox-workspace-html-apps.md) | Sandbox workspace HTML apps | active |
