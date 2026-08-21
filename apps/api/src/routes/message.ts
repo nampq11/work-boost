@@ -9,6 +9,7 @@ import {
 import { isValidSessionId, sanitizeInput } from '../utils/security.ts';
 
 const AGENT_TIMEOUT_MS = 120_000;
+const REDACTED_SESSION_ID = '[redacted]';
 
 interface MessageRequestBody {
   message: string;
@@ -77,7 +78,7 @@ export async function handleMessage(
 
     logger.info('Processing async message request', {
       requestId,
-      sessionId,
+      sessionId: sessionId ? REDACTED_SESSION_ID : undefined,
       messageLength: message.length,
     });
 
@@ -101,7 +102,7 @@ export async function handleMessage(
       .then(() => {
         logger.info('Async message processing completed', {
           requestId,
-          sessionId: activeSessionId,
+          sessionId: REDACTED_SESSION_ID,
         });
       })
       .catch((error) => {
@@ -149,7 +150,7 @@ export async function handleMessageSync(
 
     logger.info('Processing sync message request', {
       requestId,
-      sessionId: activeSessionId,
+      sessionId: REDACTED_SESSION_ID,
       messageLength: message.length,
     });
 
@@ -215,7 +216,7 @@ export async function handleMessageReset(
 
     logger.info('Processing reset request', {
       requestId,
-      sessionId: sessionId || 'current',
+      sessionId: sessionId ? REDACTED_SESSION_ID : 'current',
     });
 
     if (sessionId) {
