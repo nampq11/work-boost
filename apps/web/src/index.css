@@ -360,3 +360,133 @@ input[type="number"] {
     padding-top: 8vh;
   }
 }
+
+.copilot-markdown {
+  min-width: 0;
+}
+
+.copilot-markdown > :first-child {
+  margin-top: 0;
+}
+
+.copilot-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.copilot-markdown p,
+.copilot-markdown ul,
+.copilot-markdown ol,
+.copilot-markdown pre,
+.copilot-markdown blockquote {
+  margin: 8px 0;
+}
+
+.copilot-markdown ul {
+  list-style: disc;
+  padding-left: 20px;
+}
+
+.copilot-markdown ol {
+  list-style: decimal;
+  padding-left: 20px;
+}
+
+.copilot-markdown a {
+  color: var(--accent-blue);
+  text-decoration: underline;
+}
+
+.copilot-markdown code {
+  border-radius: 4px;
+  background: var(--surface-hover);
+  color: var(--accent-orange);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.9em;
+  padding: 2px 5px;
+}
+
+.copilot-markdown pre {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-sidebar);
+  padding: 12px;
+}
+
+.copilot-markdown pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--text-primary);
+}
+
+.copilot-markdown h1,
+.copilot-markdown h2,
+.copilot-markdown h3 {
+  margin: 12px 0 6px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.copilot-markdown h1 {
+  font-size: 1.35em;
+}
+
+.copilot-markdown h2 {
+  font-size: 1.2em;
+}
+
+.copilot-markdown h3 {
+  font-size: 1.05em;
+}
+
+.copilot-streaming-word {
+  display: inline-block;
+  animation: copilot-word-in 500ms ease-out both;
+}
+
+@keyframes copilot-word-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.copilot-loading-label {
+  background: linear-gradient(
+    110deg,
+    var(--text-muted) 35%,
+    var(--text-primary) 50%,
+    var(--text-muted) 65%
+  );
+  background-size: 250% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: copilot-loading-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes copilot-loading-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copilot-streaming-word {
+    animation: none;
+  }
+
+  .copilot-loading-label {
+    background: none;
+    color: var(--text-muted);
+    -webkit-text-fill-color: currentColor;
+    animation: none;
+  }
+}

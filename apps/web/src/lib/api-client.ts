@@ -30,6 +30,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       headers: { 'Content-Type': 'application/json', ...init?.headers },
     });
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
     throw new ApiError(
       'NETWORK_ERROR',
       error instanceof Error ? error.message : 'Network request failed',
@@ -93,10 +94,11 @@ export const api = {
     request(`${workspaceBase}/debts/create`, { method: 'POST', body: JSON.stringify(data) }),
   settleDebt: (id: string) =>
     request(`${workspaceBase}/debts/${encodeURIComponent(id)}/settle`, { method: 'POST' }),
-  sendMessage: (message: string, sessionId: string) =>
+  sendMessage: (message: string, sessionId: string, signal?: AbortSignal) =>
     request<{ response: string; sessionId: string }>(`${apiBase}/message/sync`, {
       method: 'POST',
       body: JSON.stringify({ message, sessionId }),
+      signal,
     }),
   getAuthStatus: () => request<AuthStatus>(`${apiBase}/auth/status`),
   startAuthLogin: (provider: string, reauthenticate = false) =>

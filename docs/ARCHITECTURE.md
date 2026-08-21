@@ -37,7 +37,10 @@ HTTP request and response details end here. Use package APIs and ports below thi
 
 The Vite and React workspace editor. `App` assembles the editor, file tree, HTML-app viewer, and
 copilot. The Zustand workspace store owns browser state, drafts, optimistic-concurrency revisions,
-and SSE synchronization. `api-client.ts` is its HTTP boundary.
+and SSE synchronization. `api-client.ts` is its HTTP boundary. The Copilot uses an assistant-ui
+local runtime for the current page only; each page creates a UUID session ID and sends one new turn
+to `/api/message/sync`. The Brain remains the server-side transcript owner, and closing the drawer
+does not destroy the runtime.
 
 ### `packages/data-schemas`
 
@@ -105,6 +108,9 @@ holds environment access, logging, and security helpers.
    failure must not prevent the core application from starting.
 8. **OAuth belongs to the API process.** Browser clients receive only authentication status and
    device-code progress; tokens remain in the server-side pi credential store.
+9. **The browser Copilot does not own transcript persistence.** Its assistant-ui runtime is an
+   in-memory presentation state for one page-scoped session. The API and Brain own the transcript,
+   and a refresh deliberately starts a new session ID rather than reusing an old Brain session.
 
 ## System boundaries
 

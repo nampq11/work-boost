@@ -157,7 +157,7 @@ export async function handleMessageSync(
     try {
       const response = await agent.stream(message, {
         sessionId: activeSessionId,
-        signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+        signal: AbortSignal.any([req.signal, AbortSignal.timeout(AGENT_TIMEOUT_MS)]),
       });
 
       return successResponse(
