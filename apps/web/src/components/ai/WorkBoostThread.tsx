@@ -134,34 +134,36 @@ function Welcome() {
   );
 }
 
-function Composer() {
+function CopilotComposer() {
   const isRunning = useAuiState((state) => state.thread.isRunning);
 
   return (
-    <ComposerPrimitive.Root className="relative border-t border-[var(--border)] bg-[var(--surface-app)] p-3">
+    <ComposerPrimitive.Root className="copilot-composer">
       <ComposerPrimitive.Input
-        placeholder="Ask Work Boost..."
-        rows={3}
+        placeholder="Message Work Boost, @ to include context, / for commands"
+        rows={1}
         submitMode="enter"
-        className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--surface-hover)] p-3 pr-10 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)]"
+        className="copilot-composer-input"
       />
-      {isRunning ? (
-        <ComposerPrimitive.Cancel
-          className="absolute bottom-5 right-5 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--accent-red)] hover:bg-[var(--accent-red)]/10"
-          aria-label="Cancel request"
-          title="Cancel request"
-        >
-          <Stop size={14} weight="fill" />
-        </ComposerPrimitive.Cancel>
-      ) : (
-        <ComposerPrimitive.Send
-          className="absolute bottom-5 right-5 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--accent-blue)] hover:bg-[var(--accent-blue)]/10 disabled:opacity-50"
-          aria-label="Send message"
-          title="Send message"
-        >
-          <PaperPlaneRight size={14} weight="fill" />
-        </ComposerPrimitive.Send>
-      )}
+      <div className="copilot-composer-footer">
+        {isRunning ? (
+          <ComposerPrimitive.Cancel
+            className="copilot-composer-send copilot-composer-stop"
+            aria-label="Cancel request"
+            title="Cancel request"
+          >
+            <Stop size={13} weight="fill" />
+          </ComposerPrimitive.Cancel>
+        ) : (
+          <ComposerPrimitive.Send
+            className="copilot-composer-send"
+            aria-label="Send message"
+            title="Send message"
+          >
+            <PaperPlaneRight size={13} weight="fill" />
+          </ComposerPrimitive.Send>
+        )}
+      </div>
     </ComposerPrimitive.Root>
   );
 }
@@ -176,7 +178,7 @@ export function WorkBoostThread() {
             {({ message }) => (message.role === 'user' ? <UserMessage /> : <AssistantMessage />)}
           </ThreadPrimitive.Messages>
         </ThreadPrimitive.Viewport>
-        <Composer />
+        <CopilotComposer />
       </ThreadPrimitive.Root>
     </div>
   );
