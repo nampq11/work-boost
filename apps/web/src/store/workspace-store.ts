@@ -13,6 +13,7 @@ interface WorkspaceState {
   draft: string;
   isDirty: boolean;
   documentRevision: number;
+  recentFiles: Map<string, Date>;
   loadFiles: () => Promise<void>;
   selectFile: (path: string, force?: boolean) => Promise<boolean>;
   updateBody: (body: string) => void;
@@ -22,6 +23,46 @@ interface WorkspaceState {
   trash: (path: string) => Promise<{ trashId: string; originalPath: string }>;
   restore: (trashId: string) => Promise<void>;
   createFolder: (path: string) => Promise<void>;
+}
+
+const RECENT_FILES_KEY = 'workboost:recent-files';
+const MAX_RECENT_FILES = 20;
+
+function loadRecentFiles(): Map<string, Date> {
+  try {
+    const stored = localStorage.getItem(RECENT_FILES_KEY);
+    if (!stored) return new Map();
+    const parsed = JSON.parse(stored) as Record<string, string>;
+    const map = new Map<string, Date>();
+    for (const [path, dateStr] of Object.entries(parsed)) {
+      map.set(path, new Date(dateStr));
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveRecentFiles(recentFiles: Map<string, Date>): void {
+  try {
+    const obj: Record<string, string> = {};
+    const sorted = Array.from(recentFiles.entries())
+      .sort((a, b) => b[1].getTime() - a[1].getTime())
+      .slice(0, MAX_RECENT_FILES);
+    for (const [path, date] of sorted) {
+      obj[path] = date.toISOString();
+    }
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(obj));
+  } catch {
+    /* storage is optional */
+  }
+}
+
+function addToRecentFiles(recentFiles: Map<string, Date>, path: string): Map<string, Date> {
+  const updated = new Map(recentFiles);
+  updated.set(path, new Date());
+  saveRecentFiles(updated);
+  return updated;
 }
 
 function classify(path: string): FileNode['kind'] {
@@ -138,6 +179,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   draft: '',
   isDirty: false,
   documentRevision: 0,
+  recentFiles: loadRecentFiles(),
   async loadFiles() {
     set({ isLoading: true, error: null });
     try {
@@ -161,6 +203,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (state.isDirty && !force) await state.save();
     if (!force && get().activePath !== previousPath) return false;
     if (requestToken !== selectionToken) return false;
+
+    // Track recent file access
+    set({ recentFiles: addToRecentFiles(get().recentFiles, path) });
+
     if (path.toLowerCase().endsWith('.html')) {
       set((current) => ({
         activePath: path,

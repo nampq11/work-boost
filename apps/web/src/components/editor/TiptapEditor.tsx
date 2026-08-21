@@ -3,16 +3,28 @@ import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import React from 'react';
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
+import {
+  TextHOne,
+  TextHTwo,
+  TextB,
+  TextItalic,
+  ListChecks,
+  Code,
+  ListBullets,
+  Quotes,
+} from '@phosphor-icons/react';
 import { htmlToMarkdown, markdownToHtml } from '../../lib/markdown-parser.ts';
+import { Button } from '../ui/Button.tsx';
 
 interface TiptapEditorProps {
   value: string;
   onChange: (value: string) => void;
 }
+
 export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
   const renderedValue = useRef(value);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
@@ -27,49 +39,98 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
       renderedValue.current = markdown;
       onChange(markdown);
     },
-    editorProps: { attributes: { class: 'tiptap-content', spellcheck: 'true' } },
+    editorProps: {
+      attributes: {
+        class: 'tiptap-content prose dark:prose-invert max-w-none focus:outline-none min-h-[300px]',
+        spellcheck: 'false',
+      },
+    },
   });
+
   useEffect(() => {
     if (editor && renderedValue.current !== value) {
       editor.commands.setContent(markdownToHtml(value), { emitUpdate: false });
       renderedValue.current = value;
     }
   }, [editor, value]);
-  if (!editor) return <div className="editor-loading">Loading editor...</div>;
+
+  if (!editor) {
+    return <div className="p-8 text-sm text-[var(--text-muted)]">Loading editor...</div>;
+  }
+
   return (
-    <div className="editor-shell">
-      <div className="editor-toolbar">
-        <button
+    <div className="flex flex-col min-h-[400px]">
+      {/* Sleek Floating Toolbar */}
+      <div className="sticky top-0 z-10 flex items-center gap-0.5 py-1.5 px-1 mb-4 border-b border-[var(--border)] bg-[var(--surface-app)] backdrop-blur-sm select-none">
+        <Button
+          variant={editor.isActive('heading', { level: 1 }) ? 'secondary' : 'ghost'}
+          size="icon"
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={editor.isActive('heading', { level: 1 }) ? 'selected' : ''}
+          title="Heading 1"
         >
-          H1
-        </button>
-        <button
+          <TextHOne size={16} />
+        </Button>
+        <Button
+          variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'}
+          size="icon"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          title="Heading 2"
+        >
+          <TextHTwo size={16} />
+        </Button>
+        <div className="w-[1px] h-4 bg-[var(--border)] mx-1.5" />
+        <Button
+          variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
+          size="icon"
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className={editor.isActive('bold') ? 'selected' : ''}
+          title="Bold (Ctrl+B)"
         >
-          Bold
-        </button>
-        <button
+          <TextB size={16} weight="bold" />
+        </Button>
+        <Button
+          variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
+          size="icon"
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={editor.isActive('italic') ? 'selected' : ''}
+          title="Italic (Ctrl+I)"
         >
-          Italic
-        </button>
-        <button
+          <TextItalic size={16} />
+        </Button>
+        <div className="w-[1px] h-4 bg-[var(--border)] mx-1.5" />
+        <Button
+          variant={editor.isActive('taskList') ? 'secondary' : 'ghost'}
+          size="icon"
           onClick={() => editor.chain().focus().toggleTaskList().run()}
-          className={editor.isActive('taskList') ? 'selected' : ''}
+          title="Task List"
         >
-          Tasks
-        </button>
-        <button
+          <ListChecks size={16} />
+        </Button>
+        <Button
+          variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
+          size="icon"
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          title="Bullet List"
+        >
+          <ListBullets size={16} />
+        </Button>
+        <Button
+          variant={editor.isActive('blockquote') ? 'secondary' : 'ghost'}
+          size="icon"
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          title="Quote"
+        >
+          <Quotes size={16} />
+        </Button>
+        <Button
+          variant={editor.isActive('codeBlock') ? 'secondary' : 'ghost'}
+          size="icon"
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          className={editor.isActive('codeBlock') ? 'selected' : ''}
+          title="Code Block"
         >
-          Code
-        </button>
+          <Code size={16} />
+        </Button>
       </div>
+
+      {/* Editor Surface */}
       <EditorContent editor={editor} />
     </div>
   );

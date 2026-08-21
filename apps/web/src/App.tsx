@@ -69,7 +69,20 @@ export function App() {
       <div className="app-body">
         <Sidebar />
         <main className="main-viewport">
-          {error && <div className="conflict-banner">{error}</div>}
+          {error && (
+            <div className="mx-6 mt-4 p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Lỗi kết nối workspace:</span>
+                <span>{error}</span>
+              </div>
+              <button
+                onClick={() => void useWorkspaceStore.getState().loadFiles()}
+                className="underline font-medium hover:opacity-80"
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
           {activePath?.toLowerCase().endsWith('.html') ? (
             <HtmlAppViewer path={activePath} />
           ) : (
