@@ -8,4 +8,5 @@ export * from './src/debt.ts';
 
 // Export new markdown-based schemas
 export * from './src/config.ts';
+export * from './src/auth.ts';
 export * from './src/agent.ts';

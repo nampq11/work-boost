@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from '@std/assert';
-import { Brain, createBrain } from '@work-boost/brain';
+import { AIUnavailableError, Brain, createBrain } from '@work-boost/brain';
 import type {
   ConfigManager,
   DailyWorkRepository,
@@ -36,41 +36,58 @@ function createFakeDataLayer(): DataLayer {
   };
 }
 
+const noCredentialsAuthContext = {
+  env: async () => undefined,
+  fileExists: async () => false,
+};
+
 Deno.test('createBrain returns a Brain instance', () => {
-  const brain = createBrain({ apiKey: 'test-key', dataLayer: createFakeDataLayer() });
+  const brain = createBrain({ dataLayer: createFakeDataLayer() });
   assertEquals(brain instanceof Brain, true);
   brain.dispose();
 });
 
 Deno.test('Brain removeSession returns false for non-existent session', () => {
-  const brain = createBrain({ apiKey: 'test-key', dataLayer: createFakeDataLayer() });
+  const brain = createBrain({ dataLayer: createFakeDataLayer() });
   assertEquals(brain.removeSession('nonexistent'), false);
   brain.dispose();
 });
 
 Deno.test('Brain removeSession returns true after a session has been created', async () => {
-  const brain = createBrain({ apiKey: 'test-key', dataLayer: createFakeDataLayer() });
-  // First stream creates the session; we expect it to reject because the fake
-  // API key cannot reach the model provider, but the session entry is still
-  // registered by getOrCreate before prompt is called.
+  const brain = createBrain({ dataLayer: createFakeDataLayer() });
+  // The session entry is registered before the provider request runs.
   await brain.stream('hello', { sessionId: 'chat-1' }).catch(() => {});
   assertEquals(brain.removeSession('chat-1'), true);
   brain.dispose();
 });
 
-Deno.test('Brain stream throws on invalid API key (error is propagated)', async () => {
-  const brain = createBrain({ apiKey: 'invalid-key', dataLayer: createFakeDataLayer() });
-  await assertRejects(() => brain.stream('hello', { sessionId: 'err-test' }), Error);
+Deno.test('Brain stream throws when the configured provider has no credentials', async () => {
+  const brain = createBrain({
+    dataLayer: createFakeDataLayer(),
+    authContext: noCredentialsAuthContext,
+  });
+  const error = await assertRejects(
+    () => brain.stream('hello', { sessionId: 'err-test' }),
+    AIUnavailableError,
+  );
+  assertEquals(error.code, 'AI_UNAVAILABLE');
   brain.dispose();
 });
 
-Deno.test('Brain stream throws when no API key is provided', async () => {
-  const brain = createBrain({ apiKey: '', dataLayer: createFakeDataLayer() });
-  await assertRejects(() => brain.stream('hello', { sessionId: 'no-key' }), Error);
+Deno.test('Brain stream propagates provider failures as errors', async () => {
+  const brain = createBrain({
+    dataLayer: createFakeDataLayer(),
+    authContext: noCredentialsAuthContext,
+  });
+  const error = await assertRejects(
+    () => brain.stream('hello', { sessionId: 'no-key' }),
+    AIUnavailableError,
+  );
+  assertEquals(error.code, 'AI_UNAVAILABLE');
   brain.dispose();
 });
 
 Deno.test('Brain dispose stops background timers without throwing', () => {
-  const brain = createBrain({ apiKey: 'test-key', dataLayer: createFakeDataLayer() });
-  brain.dispose(); // should not throw
+  const brain = createBrain({ dataLayer: createFakeDataLayer() });
+  brain.dispose();
 });

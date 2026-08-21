@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import type { AgentPort } from '@work-boost/brain';
+import type { AgentPort, AuthPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { ExtensionManager } from '../../../extensions/manager.ts';
@@ -11,6 +11,13 @@ import {
   logRequest,
   logResponse,
 } from './middleware/logging.ts';
+import {
+  handleAuthLogin,
+  handleAuthLoginCancel,
+  handleAuthLoginEvents,
+  handleAuthLogout,
+  handleAuthStatus,
+} from './routes/auth.ts';
 import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
 import { type WorkspaceRouter, createWorkspaceRouter } from './routes/workspace.ts';
 import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
@@ -28,9 +35,11 @@ export interface ApiServerConfig {
   rateLimitWindowMs?: number;
   rateLimitMaxRequests?: number;
   enableWebSocket?: boolean;
+  trustProxy?: boolean;
   apiPrefix?: string;
   db?: Database;
   agent?: AgentPort;
+  auth?: AuthPort;
   extensionManager?: ExtensionManager;
 }
 
@@ -135,7 +144,7 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
-function createRateLimiter(windowMs: number, maxRequests: number) {
+function createRateLimiter(windowMs: number, maxRequests: number, trustProxy: boolean) {
   const entries = new Map<string, RateLimitEntry>();
 
   // Periodic cleanup of expired entries
@@ -148,12 +157,14 @@ function createRateLimiter(windowMs: number, maxRequests: number) {
     }
   }, windowMs);
 
-  return function checkRateLimit(request: Request): Response | null {
-    // Extract client IP from headers or connection info
-    const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      request.headers.get('x-real-ip') ||
-      'unknown';
+  return function checkRateLimit(request: Request, info?: Deno.ServeHandlerInfo): Response | null {
+    const forwardedIp = trustProxy
+      ? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        request.headers.get('x-real-ip')?.trim()
+      : undefined;
+    const connectionIp =
+      info?.remoteAddr && 'hostname' in info.remoteAddr ? info.remoteAddr.hostname : undefined;
+    const ip = forwardedIp || connectionIp || 'unknown';
 
     const now = Date.now();
     let entry = entries.get(ip);
@@ -212,6 +223,7 @@ export function createServer(config: ApiServerConfig) {
   const checkRateLimit = createRateLimiter(
     config.rateLimitWindowMs || 15 * 60 * 1000,
     config.rateLimitMaxRequests || 100,
+    config.trustProxy === true,
   );
 
   // Workspace HTML-apps + broker API router (spec Phase 3)
@@ -222,7 +234,7 @@ export function createServer(config: ApiServerConfig) {
   let httpServer: Deno.HttpServer | undefined;
 
   function buildApiPath(route: string): string {
-    if (!apiPrefix || apiPrefix === '') return route;
+    if (!apiPrefix) return route;
     return apiPrefix + route;
   }
 
@@ -312,11 +324,67 @@ export function createServer(config: ApiServerConfig) {
       }
 
       // ==============================================================
+      // Authentication routes (with rate limiting)
+      // ==============================================================
+      const authBase = buildApiPath('/auth');
+      if (pathname === authBase || pathname.startsWith(`${authBase}/`)) {
+        const rateLimitResponse = checkRateLimit(req, info);
+        if (rateLimitResponse) {
+          logResponse(req, rateLimitResponse, ctx);
+          return addCorsHeaders(req, addSecurityHeaders(rateLimitResponse), corsOrigins);
+        }
+        if (!config.auth) {
+          const response = errorResponse(
+            ERROR_CODES.AUTH_SERVICE_UNAVAILABLE,
+            'Authentication service is unavailable',
+            503,
+            undefined,
+            ctx.requestId,
+          );
+          logResponse(req, response, ctx);
+          return addCorsHeaders(req, addSecurityHeaders(response), corsOrigins);
+        }
+
+        let response: Response;
+        const loginPathPrefix = `${authBase}/login/`;
+        const loginEventsMatch =
+          pathname.startsWith(loginPathPrefix) && pathname.endsWith('/events')
+            ? pathname.slice(loginPathPrefix.length, -'/events'.length)
+            : undefined;
+        const loginCancelMatch =
+          pathname.startsWith(loginPathPrefix) && pathname.endsWith('/cancel')
+            ? pathname.slice(loginPathPrefix.length, -'/cancel'.length)
+            : undefined;
+
+        if (pathname === `${authBase}/status` && method === 'GET') {
+          response = await handleAuthStatus(config.auth, ctx.requestId);
+        } else if (pathname === `${authBase}/login` && method === 'POST') {
+          response = await handleAuthLogin(req, config.auth, ctx.requestId);
+        } else if (loginEventsMatch !== undefined && method === 'GET') {
+          response = handleAuthLoginEvents(req, config.auth, loginEventsMatch, ctx.requestId);
+        } else if (loginCancelMatch !== undefined && method === 'POST') {
+          response = await handleAuthLoginCancel(config.auth, loginCancelMatch, ctx.requestId);
+        } else if (pathname === `${authBase}/logout` && method === 'POST') {
+          response = await handleAuthLogout(config.auth, ctx.requestId);
+        } else {
+          response = errorResponse(
+            ERROR_CODES.NOT_FOUND,
+            `Route ${method} ${pathname} not found`,
+            404,
+            undefined,
+            ctx.requestId,
+          );
+        }
+        logResponse(req, response, ctx);
+        return addCorsHeaders(req, addSecurityHeaders(response), corsOrigins);
+      }
+
+      // ==============================================================
       // API Routes (with rate limiting)
       // ==============================================================
       if (pathname.startsWith(buildApiPath('/message'))) {
         // Apply rate limiting to API routes
-        const rateLimitResponse = checkRateLimit(req);
+        const rateLimitResponse = checkRateLimit(req, info);
         if (rateLimitResponse) {
           logResponse(req, rateLimitResponse, ctx);
           return rateLimitResponse;
@@ -416,6 +484,7 @@ export function createServer(config: ApiServerConfig) {
         if (!isCancellationError(error)) throw error;
       }
       await config.extensionManager?.disposeAll();
+      config.auth?.dispose?.();
     },
   };
 }

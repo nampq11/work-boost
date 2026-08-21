@@ -16,6 +16,9 @@
     "tailwindcss": "npm:tailwindcss@4.1.11",
     "zustand": "npm:zustand@5.0.15",
     "@phosphor-icons/react": "npm:@phosphor-icons/react@2.1.7",
+    "@phosphor-icons/react": "npm:@phosphor-icons/react@2.1.7",
+    "@work-boost/data-schemas/auth": "../../packages/data-schemas/src/auth.ts",
+    "@work-boost/data-schemas/auth.ts": "../../packages/data-schemas/src/auth.ts",
     "clsx": "npm:clsx@2.1.1",
     "tailwind-merge": "npm:tailwind-merge@2.5.5",
     "class-variance-authority": "npm:class-variance-authority@0.7.1",
@@ -26,7 +29,8 @@
     "@radix-ui/react-select": "npm:@radix-ui/react-select@2.1.4",
     "@radix-ui/react-tabs": "npm:@radix-ui/react-tabs@1.1.3",
     "@radix-ui/react-tooltip": "npm:@radix-ui/react-tooltip@1.1.6",
-    "@radix-ui/react-toast": "npm:@radix-ui/react-toast@1.2.4"
+    "@radix-ui/react-toast": "npm:@radix-ui/react-toast@1.2.4",
+    "react-resizable-panels": "npm:react-resizable-panels@4.12.3"
   },
   "tasks": {
     "dev": "vite --host localhost --port 3000",

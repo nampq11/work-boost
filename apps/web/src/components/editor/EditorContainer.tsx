@@ -1,13 +1,13 @@
+import { Code, Coins, Eye, FileText, FloppyDisk } from '@phosphor-icons/react';
 import React, { useEffect, useState } from 'react';
-import { Code, Eye, FloppyDisk, FileText, Coins } from '@phosphor-icons/react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
-import { useWorkspaceStore } from '../../store/workspace-store.ts';
+import type { FileNode } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
+import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { Button } from '../ui/Button.tsx';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
 import { SourceEditor } from './SourceEditor.tsx';
 import { TiptapEditor } from './TiptapEditor.tsx';
-import type { FileNode } from '../../lib/types.ts';
 
 export function EditorContainer() {
   const document = useWorkspaceStore((state) => state.activeDocument);
@@ -80,20 +80,18 @@ export function EditorContainer() {
               <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] m-0">
                 Recent Notes
               </h2>
-              <p className="text-xs text-[var(--text-secondary)] m-0">
-                Pick up where you left off
-              </p>
+              <p className="text-xs text-[var(--text-secondary)] m-0">Pick up where you left off</p>
             </div>
 
             {/* Recent Notes Grid - centered when odd number of items */}
-            <div className={`grid gap-2 w-full ${recentNotes.length === 1 ? 'grid-cols-1 max-w-xs' : 'grid-cols-2'}`}>
+            <div
+              className={`grid gap-2 w-full ${recentNotes.length === 1 ? 'grid-cols-1 max-w-xs' : 'grid-cols-2'}`}
+            >
               {recentNotes.slice(0, 6).map((note) => {
                 const displayName = note.name.replace(/\.(md|html)$/, '');
                 const timeAgo = formatTimeAgo(note.accessedAt);
                 const Icon =
-                  note.kind === 'debt' || note.kind === 'debt-archive'
-                    ? Coins
-                    : FileText;
+                  note.kind === 'debt' || note.kind === 'debt-archive' ? Coins : FileText;
                 const iconColor =
                   note.kind === 'debt' || note.kind === 'debt-archive'
                     ? 'text-[var(--accent-green)]'
@@ -112,9 +110,7 @@ export function EditorContainer() {
                         {displayName}
                       </span>
                     </div>
-                    <span className="text-xs text-[var(--text-secondary)]">
-                      {timeAgo}
-                    </span>
+                    <span className="text-xs text-[var(--text-secondary)]">{timeAgo}</span>
                   </button>
                 );
               })}
@@ -122,20 +118,10 @@ export function EditorContainer() {
 
             {/* Quick Actions */}
             <div className="flex justify-center gap-3 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openPalette}
-                className="gap-1.5"
-              >
+              <Button variant="outline" size="sm" onClick={openPalette} className="gap-1.5">
                 <span>New Note</span>
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openPalette}
-                className="gap-1.5"
-              >
+              <Button variant="outline" size="sm" onClick={openPalette} className="gap-1.5">
                 <span>New Debt</span>
               </Button>
             </div>

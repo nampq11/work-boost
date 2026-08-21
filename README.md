@@ -35,7 +35,16 @@ Work Boost is a personal AI assistant for boosting your work and life. It answer
 Create a `.env` file in the project root:
 
 ```bash
-# Required - Google AI for chat and summaries
+# AI provider (optional; changes require an API restart)
+AI_PROVIDER=zai              # zai | openai-codex | openrouter | google
+AI_MODEL=                    # Provider default, except OpenRouter which requires one
+PI_AUTH_PATH=                # Defaults to ~/.pi/agent/auth.json
+
+# Provider API keys are fallbacks when the selected provider has no pi credential
+ZAI_API_KEY=your_zai_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+GEMINI_API_KEY=your_gemini_api_key
+# GOOGLE_API_KEY is supported as a legacy Gemini fallback
 GOOGLE_API_KEY=your_google_api_key
 
 # Environment
@@ -59,6 +68,27 @@ TELEGRAM_WEBHOOK_SECRET=your-webhook-secret
 # Daily Summary Schedule (optional)
 DAILY_SUMMARY_SCHEDULE="0 9 * * *"  # 9:00 AM daily
 ```
+
+The same AI settings can be stored in `.workboost/config.json`:
+
+```json
+{
+  "ai": {
+    "provider": "zai",
+    "model": "glm-5.2"
+  }
+}
+```
+
+Supported provider defaults are Z.ai (`glm-5.2`), OpenAI Codex (`gpt-5.4-mini`), and Google
+Gemini (`gemini-2.5-flash`). OpenRouter requires an explicit model. Environment variables override
+workspace configuration. Credentials are read from `~/.pi/agent/auth.json` by default, and OAuth
+refreshes are written back safely without changing other providers. Existing workspaces without AI
+settings continue to use Google Gemini for backward compatibility. Provider changes take effect
+after an API restart; there is no automatic provider fallback. When `AI_PROVIDER=openai-codex`,
+the browser Copilot drawer can start device-code login without exposing tokens to the browser.
+OAuth credentials remain in the server-side pi credential file and can be removed with the
+drawer's Log out action.
 
 ## Setting Up Telegram Bot
 

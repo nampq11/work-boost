@@ -1,9 +1,15 @@
 import type { AgentPort } from '@work-boost/brain';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
+import {
+  ERROR_CODES,
+  errorResponse,
+  isAIUnavailableError,
+  successResponse,
+} from '../utils/response.ts';
 import { isValidSessionId, sanitizeInput } from '../utils/security.ts';
 
 const AGENT_TIMEOUT_MS = 120_000;
+const REDACTED_SESSION_ID = '[redacted]';
 
 interface MessageRequestBody {
   message: string;
@@ -68,17 +74,18 @@ export async function handleMessage(
     }
 
     const { message, sessionId } = validation.data!;
+    const activeSessionId = sessionId || 'default';
 
     logger.info('Processing async message request', {
       requestId,
-      sessionId,
+      sessionId: sessionId ? REDACTED_SESSION_ID : undefined,
       messageLength: message.length,
     });
 
     const response = successResponse(
       {
         message: 'Message accepted for processing',
-        sessionId: sessionId || 'default',
+        sessionId: activeSessionId,
         messageId: requestId,
         timestamp: new Date().toISOString(),
       },
@@ -89,13 +96,13 @@ export async function handleMessage(
     // Process message asynchronously (don't await)
     agent
       .stream(message, {
-        sessionId: sessionId || 'default',
+        sessionId: activeSessionId,
         signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
       })
       .then(() => {
         logger.info('Async message processing completed', {
           requestId,
-          sessionId: sessionId || 'default',
+          sessionId: REDACTED_SESSION_ID,
         });
       })
       .catch((error) => {
@@ -139,31 +146,44 @@ export async function handleMessageSync(
     }
 
     const { message, sessionId } = validation.data!;
+    const activeSessionId = sessionId || 'default';
 
     logger.info('Processing sync message request', {
       requestId,
-      sessionId: sessionId || 'default',
+      sessionId: REDACTED_SESSION_ID,
       messageLength: message.length,
     });
 
     try {
       const response = await agent.stream(message, {
-        sessionId: sessionId || 'default',
+        sessionId: activeSessionId,
         signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
       });
 
       return successResponse(
         {
           response,
-          sessionId: sessionId || 'default',
+          sessionId: activeSessionId,
           timestamp: new Date().toISOString(),
         },
         200,
         requestId,
       );
     } catch (streamError) {
+      logger.error('Agent stream failed', {
+        requestId,
+        error: streamError instanceof Error ? streamError.name : 'UnknownError',
+      });
+      if (isAIUnavailableError(streamError)) {
+        return errorResponse(
+          ERROR_CODES.AI_UNAVAILABLE,
+          'The AI provider is unavailable',
+          503,
+          undefined,
+          requestId,
+        );
+      }
       const errorMsg = streamError instanceof Error ? streamError.message : String(streamError);
-      logger.error('Agent stream failed', { requestId, error: errorMsg });
       return errorResponse(
         ERROR_CODES.INTERNAL_ERROR,
         `Message processing failed: ${errorMsg}`,
@@ -196,7 +216,7 @@ export async function handleMessageReset(
 
     logger.info('Processing reset request', {
       requestId,
-      sessionId: sessionId || 'current',
+      sessionId: sessionId ? REDACTED_SESSION_ID : 'current',
     });
 
     if (sessionId) {
