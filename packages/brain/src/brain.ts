@@ -7,7 +7,7 @@
  */
 
 import { Agent } from '@earendil-works/pi-agent-core';
-import { InMemoryCredentialStore, createModels } from '@earendil-works/pi-ai';
+import { createModels, InMemoryCredentialStore } from '@earendil-works/pi-ai';
 import type { AuthContext, CredentialStore, Model } from '@earendil-works/pi-ai';
 import { googleProvider } from '@earendil-works/pi-ai/providers/google';
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex';
@@ -20,7 +20,7 @@ import { AuthService } from './auth-service.ts';
 import { createSessionStore } from './sessions.ts';
 import { SYSTEM_PROMPT } from './system-prompt.ts';
 import { getWorkspaceTools } from './tools/index.ts';
-import { AIUnavailableError, type AgentPort } from './types.ts';
+import { AIUnavailableError, type AgentPort, type AgentStreamOptions } from './types.ts';
 
 export interface BrainDeps {
   dataLayer: DataLayer;
@@ -120,16 +120,11 @@ export class Brain implements AgentPort {
    * assistant response text. Tool calls execute directly against markdown
    * files, so the model never sees raw file content unless it asks to.
    */
-  async stream(
-    message: string,
-    options?: { sessionId?: string; signal?: AbortSignal },
-  ): Promise<string> {
+  async stream(message: string, options?: AgentStreamOptions): Promise<string> {
     const sessionId = options?.sessionId || 'default';
 
     const previous = this.queues.get(sessionId) ?? Promise.resolve();
-    const current = previous
-      .catch(() => {})
-      .then(() => this.runTurn(sessionId, message, options?.signal));
+    const current = previous.catch(() => {}).then(() => this.runTurn(sessionId, message, options));
     this.queues.set(sessionId, current);
 
     try {
@@ -141,12 +136,25 @@ export class Brain implements AgentPort {
     }
   }
 
-  private async runTurn(sessionId: string, message: string, signal?: AbortSignal): Promise<string> {
+  private async runTurn(
+    sessionId: string,
+    message: string,
+    options?: AgentStreamOptions,
+  ): Promise<string> {
+    const signal = options?.signal;
+    const onText = options?.onText;
     const { agent } = this.store.getOrCreate(sessionId, () => this.createAgent());
 
     let accumulatedText = '';
 
     const unsubscribe = agent.subscribe((event) => {
+      if (
+        event.type === 'message_update' &&
+        event.assistantMessageEvent.type === 'text_delta' &&
+        onText
+      ) {
+        onText(event.assistantMessageEvent.delta);
+      }
       if (event.type === 'message_end' && event.message.role === 'assistant') {
         const text = event.message.content
           .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
@@ -157,12 +165,8 @@ export class Brain implements AgentPort {
     });
 
     try {
-      if (signal) {
-        if (signal.aborted) {
-          throw new Error('Operation aborted');
-        }
-        signal.addEventListener('abort', () => agent.abort(), { once: true });
-      }
+      if (signal?.aborted) throw new Error('Operation aborted');
+      signal?.addEventListener('abort', () => agent.abort(), { once: true });
 
       await agent.prompt(message);
 

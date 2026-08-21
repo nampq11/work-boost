@@ -1,17 +1,13 @@
 import { AssistantRuntimeProvider, useLocalRuntime } from '@assistant-ui/react';
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { api } from '../../lib/api-client.ts';
 import { createCopilotAdapter } from './copilot-adapter.ts';
 
 interface CopilotRuntimeContextValue {
-  sessionId: string;
   resetConversation: () => void;
 }
 
 const CopilotRuntimeContext = createContext<CopilotRuntimeContextValue | null>(null);
-
-function createSessionId(): string {
-  return crypto.randomUUID();
-}
 
 export function useCopilotRuntime(): CopilotRuntimeContextValue {
   const context = useContext(CopilotRuntimeContext);
@@ -20,18 +16,17 @@ export function useCopilotRuntime(): CopilotRuntimeContextValue {
 }
 
 export function CopilotRuntimeProvider({ children }: React.PropsWithChildren) {
-  const [sessionId, setSessionId] = useState(createSessionId);
-  const adapter = useMemo(() => createCopilotAdapter(sessionId), [sessionId]);
+  const [threadId, setThreadId] = useState<Promise<string>>(() =>
+    api.createThread().then((thread) => thread.id),
+  );
+  const adapter = useMemo(() => createCopilotAdapter(threadId), [threadId]);
   const runtime = useLocalRuntime(adapter);
   const resetConversation = useCallback(() => {
     runtime.thread.cancelRun();
     runtime.thread.reset();
-    setSessionId(createSessionId());
+    setThreadId(api.createThread().then((thread) => thread.id));
   }, [runtime]);
-  const contextValue = useMemo(
-    () => ({ sessionId, resetConversation }),
-    [resetConversation, sessionId],
-  );
+  const contextValue = useMemo(() => ({ resetConversation }), [resetConversation]);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>

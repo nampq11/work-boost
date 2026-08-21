@@ -5,11 +5,11 @@ import type { Database } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { ExtensionManager } from '../../../extensions/manager.ts';
 import {
-  type RequestContext,
   createRequestContext,
   logError,
   logRequest,
   logResponse,
+  type RequestContext,
 } from './middleware/logging.ts';
 import {
   handleAuthLogin,
@@ -19,7 +19,9 @@ import {
   handleAuthStatus,
 } from './routes/auth.ts';
 import { handleMessage, handleMessageReset, handleMessageSync } from './routes/message.ts';
-import { type WorkspaceRouter, createWorkspaceRouter } from './routes/workspace.ts';
+import { handleAssistantRequest } from './routes/assistant.ts';
+import { AssistantService } from './services/assistant-service.ts';
+import { createWorkspaceRouter, type WorkspaceRouter } from './routes/workspace.ts';
 import { ERROR_CODES, errorResponse, successResponse } from './utils/response.ts';
 
 // ============================================================================
@@ -135,6 +137,16 @@ function addSecurityHeaders(response: Response): Response {
   });
 }
 
+function addNoStoreHeader(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'no-store');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // ============================================================================
 // Rate Limiting (in-memory token bucket per IP)
 // ============================================================================
@@ -230,6 +242,8 @@ export function createServer(config: ApiServerConfig) {
   const workspaceRouter: WorkspaceRouter | undefined = config.db
     ? createWorkspaceRouter({ dataLayer: config.db.dataLayer, apiPrefix })
     : undefined;
+  const assistantService =
+    config.db && config.agent ? new AssistantService(config.db.dataLayer, config.agent) : undefined;
 
   let httpServer: Deno.HttpServer | undefined;
 
@@ -382,6 +396,25 @@ export function createServer(config: ApiServerConfig) {
       // ==============================================================
       // API Routes (with rate limiting)
       // ==============================================================
+      const assistantBase = buildApiPath('/v1');
+      if (
+        assistantService &&
+        (pathname === assistantBase || pathname.startsWith(`${assistantBase}/`))
+      ) {
+        const rateLimitResponse = checkRateLimit(req, info);
+        if (rateLimitResponse) {
+          logResponse(req, rateLimitResponse, ctx);
+          return addCorsHeaders(req, addSecurityHeaders(rateLimitResponse), corsOrigins);
+        }
+        const response = await handleAssistantRequest(
+          req,
+          pathname.slice(apiPrefix.length),
+          assistantService,
+          ctx.requestId,
+        );
+        logResponse(req, response, ctx);
+        return addCorsHeaders(req, addNoStoreHeader(addSecurityHeaders(response)), corsOrigins);
+      }
       if (pathname.startsWith(buildApiPath('/message'))) {
         // Apply rate limiting to API routes
         const rateLimitResponse = checkRateLimit(req, info);

@@ -12,7 +12,7 @@ export {
 export { AI_UNAVAILABLE_CODE, AIUnavailableError } from './types.ts';
 export { Brain, createBrain } from './brain.ts';
 export type { BrainDeps } from './brain.ts';
-export type { AgentPort } from './types.ts';
+export type { AgentPort, AgentStreamOptions } from './types.ts';
 export { getWorkspaceTools } from './tools/index.ts';
 export {
   createCreateDebtTool,
