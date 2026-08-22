@@ -21,13 +21,21 @@ function resolveApiHost(defaultHost: string): string {
 
 function resolveApiPort(defaultPort: number): number {
   const rawPort = Deno.env.get('WORKBOOST_PORT');
-  if (rawPort === undefined) return defaultPort;
+  if (rawPort === undefined) return 0;
+  }
+  if (rawPort === "0") {
+    // Special value: let OS assign a free port (for Tauri sidecar)
+    return 0;
   const parsedPort = Number(rawPort);
   if (Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
     return parsedPort;
   }
   console.warn(`[DEBUG] Invalid WORKBOOST_PORT '${rawPort}'; falling back to ${defaultPort}`);
-  return defaultPort;
+  return 0;
+  }
+  if (rawPort === "0") {
+    // Special value: let OS assign a free port (for Tauri sidecar)
+    return 0;
 }
 
 function resolveApiPrefix(defaultPrefix: string): string {
@@ -86,7 +94,13 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     extensionManager,
   });
 
-  await server.start();
+  const boundPort = await server.start();
+  
+  // Report bound port to parent when running as Tauri sidecar
+  if (Deno.env.get('WORKBOOST_PORT') === '0') {
+    console.log(`PORT:${boundPort}`);
+  }
+  
   logger.info('API server is running and ready to accept requests', undefined, 'green');
 
   let shuttingDown = false;

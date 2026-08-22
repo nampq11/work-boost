@@ -10,6 +10,7 @@ interface CopilotAuthPanelProps {
   loginSession: AuthLoginSession | null;
   deviceCode: Extract<AuthLoginEvent, { type: 'device_code' }> | null;
   authProgress: string;
+  authUrl: string | null;
   onRetry: () => void;
   onStartLogin: () => void;
   onCancelLogin: () => void;
@@ -23,6 +24,7 @@ export function CopilotAuthPanel({
   loginSession,
   deviceCode,
   authProgress,
+  authUrl,
   onRetry,
   onStartLogin,
   onCancelLogin,
@@ -97,6 +99,16 @@ export function CopilotAuthPanel({
               <p className="text-[var(--text-muted)]">
                 {authProgress || 'Waiting for authorization...'}
               </p>
+              {authUrl && (
+                <a
+                  href={authUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block mt-2 text-center text-[var(--accent-blue)] underline"
+                >
+                  Open authorization link
+                </a>
+              )}
               <Button variant="secondary" onClick={onCancelLogin}>
                 Cancel
               </Button>

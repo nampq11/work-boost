@@ -504,6 +504,10 @@ export function createServer(config: ApiServerConfig) {
               undefined,
               'green',
             );
+            // Report bound port to parent when running as Tauri sidecar
+            if (Deno.env.get('WORKBOOST_PORT') === '0') {
+              console.log(`PORT:${port}`);
+            }
           },
         },
         handleRequest,

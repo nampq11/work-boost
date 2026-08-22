@@ -1,4 +1,4 @@
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -21,20 +21,7 @@ fn api_base(port: u16) -> String {
     format!("http://127.0.0.1:{port}/api")
 }
 
-fn pick_free_port(preferred: u16) -> u16 {
-    // Prefer the conventional port; if it is taken (e.g. a leftover sidecar) fall back to an
-    // OS-assigned free loopback port.
-    if TcpListener::bind(("127.0.0.1", preferred)).is_ok() {
-        return preferred;
-    }
-    let listener =
-        TcpListener::bind(("127.0.0.1", 0)).expect("failed to bind a loopback listener for a port");
-    let port = listener.local_addr().unwrap().port();
-    drop(listener);
-    port
-}
-
-/// Waits until the API is accepting connections on `127.0.0.1:<port>`. A TCP connect is sufficient:
+/// Wait until the API is accepting connections on `127.0.0.1:<port>`. A TCP connect is sufficient:
 /// once `Deno.serve` binds the socket the server is ready to accept requests.
 fn wait_for_listening(port: u16, timeout: Duration) -> Result<(), String> {
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
@@ -50,30 +37,38 @@ fn wait_for_listening(port: u16, timeout: Duration) -> Result<(), String> {
     }
 }
 
-/// Spawn the compiled Deno API as a sidecar bound to `127.0.0.1:<port>` and relay its output to the
-/// host stderr so OS-level startup failures are visible rather than a silent blank window. Returns
-/// the child handle so the caller can kill it on exit.
+/// Spawn the compiled Deno API as a sidecar bound to `127.0.0.1:0` (port 0 lets the OS assign a free port).
+/// The sidecar will report its bound port via stdout in the format "PORT:12345".
+/// Returns the child handle and the bound port.
 fn spawn_sidecar(
     app: &tauri::App,
-    port: u16,
-) -> Result<CommandChild, Box<dyn std::error::Error>> {
+) -> Result<(CommandChild, u16), Box<dyn std::error::Error>> {
     let (mut rx, child) = app
         .shell()
-        // Use the basename so the runtime resolves `{exe_dir}/workboost-api`, matching where the
-        // bundler places externalBin binaries (it strips the `binaries/` source prefix and the
-        // `-<target-triple>` suffix). `externalBin` keeps the `binaries/` source path.
         .sidecar("workboost-api")
         .expect("failed to resolve API sidecar")
-        .env("WORKBOOST_PORT", port.to_string())
         .env("WORKBOOST_HOST", "127.0.0.1")
+        .env("WORKBOOST_PORT", "0")
         .spawn()?;
+
+    // Relay output to stderr for visibility, and capture the bound port
+    let port_rx = std::sync::Arc::new(std::sync::Mutex::new(None::<u16>));
+    let port_rx_clone = port_rx.clone();
 
     tauri::async_runtime::spawn(async move {
         use tauri_plugin_shell::process::CommandEvent;
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    eprintln!("[api sidecar] {}", String::from_utf8_lossy(&line));
+                    let text = String::from_utf8_lossy(&line);
+                    // Capture PORT:XXXX from sidecar output
+                    if let Some(rest) = text.strip_prefix("PORT:") {
+                        if let Ok(port) = rest.trim().parse::<u16>() {
+                            *port_rx_clone.lock().unwrap() = Some(port);
+                        }
+                    } else if !text.is_empty() {
+                        eprintln!("[api sidecar] {}", text.trim_end());
+                    }
                 }
                 CommandEvent::Stderr(line) => {
                     eprintln!("[api sidecar] {}", String::from_utf8_lossy(&line));
@@ -86,7 +81,17 @@ fn spawn_sidecar(
         }
     });
 
-    Ok(child)
+    // Wait up to 20 seconds for the sidecar to report its bound port
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Some(port) = *port_rx.lock().unwrap() {
+            return Ok((child, port));
+        }
+        if Instant::now() > deadline {
+            return Err("API sidecar did not report its bound port in time".into());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 pub fn run() {
@@ -95,12 +100,10 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![get_api_base])
         .setup(|app| {
-            // The API runs as a sidecar on a loopback port in both dev and release, so the webview
-            // always resolves its base through `get_api_base()` (no Vite proxy, no separate terminal).
-            // The port is passed via env so the API binds 127.0.0.1 (never 0.0.0.0), which keeps the
-            // auth and assistant routes off the LAN.
-            let port = pick_free_port(3001);
-            let child = spawn_sidecar(app, port).expect("failed to spawn API sidecar");
+            // The sidecar binds port 0 and reports the bound port back to us,
+            // eliminating the race condition where another process could claim the port.
+            let (child, port) = spawn_sidecar(app).expect("failed to spawn API sidecar");
+
             // Wait until the API accepts connections so the webview's first request does not race
             // server startup. On failure, log it; the webview surfaces connection errors next.
             if let Err(err) = wait_for_listening(port, Duration::from_secs(20)) {
