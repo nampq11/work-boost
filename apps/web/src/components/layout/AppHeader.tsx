@@ -3,6 +3,8 @@ import React from 'react';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { Button } from '../ui/Button.tsx';
+import { isTauri } from '../../lib/tauri.ts';
+import { WindowControls } from './WindowControls.tsx';
 
 export function AppHeader() {
   const activePath = useWorkspaceStore((state) => state.activePath);
@@ -15,7 +17,10 @@ export function AppHeader() {
   const breadcrumbs = activePath ? activePath.split('/') : [];
 
   return (
-    <header className="h-12 border-b border-[var(--border)] bg-[var(--surface-app)] px-3.5 flex items-center justify-between select-none shrink-0">
+    <header
+      data-tauri-drag-region={isTauri() ? 'deep' : undefined}
+      className="h-12 border-b border-[var(--border)] bg-[var(--surface-app)] px-3.5 flex items-center justify-between select-none shrink-0"
+    >
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
@@ -90,6 +95,7 @@ export function AppHeader() {
           <Sparkle size={14} weight="fill" />
           <span>Copilot</span>
         </Button>
+        <WindowControls />
       </div>
     </header>
   );

@@ -6,6 +6,8 @@ import {
   type AuthStatus,
   api,
 } from '../../lib/api-client.ts';
+import { openExternalUrl } from '../../lib/external-url.ts';
+import { isTauri } from '../../lib/tauri.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { Button } from '../ui/Button.tsx';
 import { ResizablePanel } from '../ui/resizable.tsx';
@@ -24,6 +26,7 @@ export function AiCopilotDrawer() {
   > | null>(null);
   const [authProgress, setAuthProgress] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authUrl, setAuthUrl] = useState<string | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const loginSessionRef = useRef<AuthLoginSession | null>(null);
   const authRequestRef = useRef(0);
@@ -74,20 +77,39 @@ export function AiCopilotDrawer() {
     if (event.type === 'device_code') {
       setDeviceCode(event);
       setAuthProgress('Waiting for authorization...');
+    } else if (event.type === 'auth_url') {
+      // Browser-flow OAuth: in Tauri, auto-open via opener plugin. In browser,
+      // show a clickable link since window.open without user activation is blocked.
+      setAuthProgress(event.instructions ?? 'Open the link below to authorize...');
+      // Only expose http(s) URLs: the event arrives over SSE, and a javascript:/custom-scheme
+      // value must never reach an anchor href or the OS opener.
+      if (/^https?:\/\//i.test(event.url)) {
+        setAuthUrl(event.url);
+        // Auto-open in Tauri only; browsers block window.open without user activation,
+        // so the panel renders a clickable link instead.
+        if (isTauri()) {
+          void openExternalUrl(event.url).catch(() => setAuthError('Unable to open the browser.'));
+        }
+      } else {
+        console.error('Ignoring non-http auth_url event:', event.url);
+      }
     } else if (event.type === 'progress') {
       setAuthProgress(event.message);
     } else if (event.type === 'completed') {
       clearLoginSession();
       setDeviceCode(null);
       setAuthError('');
+      setAuthUrl(null);
       void refreshAuthStatus();
     } else if (event.type === 'failed') {
       clearLoginSession();
       setAuthError(event.message);
+      setAuthUrl(null);
       void refreshAuthStatus();
     } else if (event.type === 'cancelled') {
       clearLoginSession();
       setAuthError('Login cancelled.');
+      setAuthUrl(null);
       void refreshAuthStatus();
     }
   }
@@ -165,6 +187,7 @@ export function AiCopilotDrawer() {
               loginSession={loginSession}
               deviceCode={deviceCode}
               authProgress={authProgress}
+              authUrl={authUrl}
               onRetry={() => void refreshAuthStatus()}
               onStartLogin={() => void startLogin()}
               onCancelLogin={() => void cancelLogin()}

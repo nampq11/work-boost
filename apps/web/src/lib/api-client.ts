@@ -9,8 +9,30 @@ const buildEnvironment =
   ).env ?? {};
 // Keep long-lived SSE connections off Vite's Deno proxy; aborted reloads can terminate the dev server.
 const defaultApiBase = buildEnvironment.DEV ? 'http://localhost:3001/api' : '/api';
-const workspaceBase = buildEnvironment.VITE_WORKSPACE_API ?? `${defaultApiBase}/workspace`;
-const apiBase = buildEnvironment.VITE_API_BASE ?? defaultApiBase;
+// These are `let` (not `const`) so the desktop bootstrap can override them at runtime with the live
+// loopback base returned by the Tauri `get_api_base` command. The `api` methods close over these
+// bindings, so they pick up the current value on each call.
+let apiBase = buildEnvironment.VITE_API_BASE ?? defaultApiBase;
+let workspaceBase = buildEnvironment.VITE_WORKSPACE_API ?? `${apiBase}/workspace`;
+
+/**
+ * Override the API base at runtime (used by the desktop bootstrap). Recomputes the workspace base
+ * unless a workspace override (`VITE_WORKSPACE_API`) was explicitly configured.
+ */
+export function setApiBase(base: string): void {
+  apiBase = base.replace(/\/+$/, '');
+  if (!buildEnvironment.VITE_WORKSPACE_API) {
+    workspaceBase = `${apiBase}/workspace`;
+  }
+}
+
+export function getApiBase(): string {
+  return apiBase;
+}
+
+export function getWorkspaceBase(): string {
+  return workspaceBase;
+}
 
 interface ApiEnvelope<T> {
   success: boolean;
