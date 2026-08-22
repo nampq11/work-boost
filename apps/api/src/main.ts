@@ -120,3 +120,16 @@ export async function main() {
     enableScheduler: true,
   });
 }
+
+// Start the server when run directly by Deno or as the compiled desktop sidecar.
+if (import.meta.main) {
+  main().catch((error) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error('=== API SERVER START FAILED ===');
+    console.error('Error:', errorMessage);
+    if (errorStack) console.error('Stack:', errorStack);
+    logger.error('Failed to start API server: ' + errorMessage);
+    Deno.exit(1);
+  });
+}
