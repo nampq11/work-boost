@@ -78,8 +78,8 @@ Specifically:
   load a user-level env file (`~/.workboost/.env`) or export the keys before spawning.
 - The sidecar build must use `--unstable` and be smoke-tested for `Deno.cron` (used by
   `schedulerExtension`); the rest of the API's unstable surface (KV) is not used in production.
-- Two code changes are required before the decision is implementable: port/host env parsing in
-  `apps/api/src/main.ts`, and a runtime-configurable API base in `apps/web/src/lib/api-client.ts`.
+- The implementation includes port/host env parsing in `apps/api/src/main.ts` and a
+  runtime-configurable API base in `apps/web/src/lib/api-client.ts`.
 - Dev needs the API running separately (or the sidecar spawned in dev); `beforeDevCommand` only starts
   the web server. Tray/notifications cannot rely on the webview SSE when the window is closed.
 

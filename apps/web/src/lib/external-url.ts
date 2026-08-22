@@ -1,3 +1,5 @@
+import { isTauri } from './tauri.ts';
+
 /**
  * Open a URL in the system browser.
  *
@@ -5,12 +7,13 @@
  * outside the app). Outside Tauri (browser dev, tests, static build) it falls back to a new tab.
  */
 export async function openExternalUrl(url: string): Promise<void> {
-  try {
-    const { openUrl } = await import('@tauri-apps/plugin-opener');
-    await openUrl(url);
+  // Use browser fallback when not running in Tauri
+  if (!isTauri()) {
+    window.open(url, '_blank', 'noopener,noreferrer');
     return;
-  } catch {
-    // Not running inside a Tauri webview; open in a new browser tab instead.
   }
-  window.open(url, '_blank', 'noopener,noreferrer');
+
+  // In Tauri, open in the system browser via the opener plugin
+  const { openUrl } = await import('@tauri-apps/plugin-opener');
+  await openUrl(url);
 }

@@ -1,3 +1,4 @@
+import { isTauri } from '../../lib/tauri.ts';
 import { Copy, Minus, Rectangle, X } from '@phosphor-icons/react';
 import React, { useEffect, useState } from 'react';
 
@@ -10,7 +11,6 @@ import React, { useEffect, useState } from 'react';
  */
 export function WindowControls() {
   const [isMaximized, setIsMaximized] = useState(false);
-  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
   useEffect(() => {
     if (!isTauri) return;
@@ -51,7 +51,7 @@ export function WindowControls() {
       <button
         type="button"
         onClick={minimize}
-        className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors focus-visible:outline-none"
+        className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus-visible:hover:bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)] transition-colors"
         aria-label="Minimize"
         title="Minimize"
       >
@@ -60,7 +60,7 @@ export function WindowControls() {
       <button
         type="button"
         onClick={toggleMaximize}
-        className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors focus-visible:outline-none"
+        className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus-visible:hover:bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)] transition-colors"
         aria-label={isMaximized ? 'Restore' : 'Maximize'}
         title={isMaximized ? 'Restore' : 'Maximize'}
       >
@@ -69,7 +69,7 @@ export function WindowControls() {
       <button
         type="button"
         onClick={close}
-        className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-[var(--accent-red)] transition-colors focus-visible:outline-none"
+        className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-[var(--accent-red)] focus-visible:hover:bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)] transition-colors"
         aria-label="Close"
         title="Close"
       >

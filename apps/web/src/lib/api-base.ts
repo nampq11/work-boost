@@ -1,15 +1,11 @@
 import { getApiBase, setApiBase } from './api-client.ts';
+import { isTauri } from './tauri.ts';
 
 let inFlight: Promise<string> | undefined;
 
-async function resolveFromTauri(): Promise<string | undefined> {
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return await invoke<string>('get_api_base');
-  } catch {
-    // Not running inside a Tauri webview (browser dev, tests, static build). Leave the default base.
-    return undefined;
-  }
+async function resolveFromTauri(): Promise<string> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return await invoke<string>('get_api_base');
 }
 
 /**
@@ -25,6 +21,12 @@ async function resolveFromTauri(): Promise<string | undefined> {
 export function resolveApiBase(): Promise<string> {
   if (inFlight) return inFlight;
   inFlight = (async () => {
+    // Use browser defaults when not running in Tauri
+    if (!isTauri()) {
+      return getApiBase();
+    }
+
+    // In Tauri, fetch the loopback sidecar base from Rust
     const tauriBase = await resolveFromTauri();
     if (tauriBase) setApiBase(tauriBase);
     return getApiBase();
