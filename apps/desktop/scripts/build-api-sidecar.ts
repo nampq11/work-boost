@@ -13,6 +13,9 @@
 //   --include embeds the runtime's non-code assets (HTML apps + broker JS/CSS). `deno compile` only
 //     bundles code modules by default, and packages/runtime reads these files from disk at startup
 //     (seedHtmlApps/readBrokerRuntime), so without --include the sidecar fails immediately.
+//   Compiles against a generated isolated config (see writeIsolatedCompileConfig): compiling with
+//     the root workspace config makes `deno compile` embed ~450MB of unrelated workspace npm
+//     packages (web UI libs, dev tools) into the sidecar.
 //   No `--env-file` is passed; provider secrets come from the shell env or a user-level
 //     `~/.workboost/.env` at runtime, never from the repo bundle.
 
@@ -21,7 +24,9 @@ import { dirname, fromFileUrl, join } from '@std/path';
 // fromFileUrl (not URL().pathname) so Windows drive-letter paths ("file:///C:/...") resolve correctly.
 const scriptDir = dirname(fromFileUrl(import.meta.url));
 const desktopDir = join(scriptDir, '..');
-const repoRoot = join(desktopDir, '..');
+// Two levels up from apps/desktop so import-map paths ("./packages/...") and the compile entry
+// ("apps/api/src/main.ts") resolve against the monorepo root.
+const repoRoot = join(desktopDir, '..', '..');
 
 const hostTriple = await getHostTriple();
 const outputDir = join(desktopDir, 'src-tauri', 'binaries');
@@ -51,9 +56,34 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+// Dev-only tooling mapped in the root import map; never imported by apps/api and each pulls in
+// tens of MB of native binaries when embedded.
+const DEV_ONLY_IMPORTS = new Set(['@biomejs/biome', 'oxlint']);
+
+// `deno compile` resolves import-map paths relative to the config file location, so the isolated
+// config must live in the repo root for the @work-boost/* member paths to keep working. Caller
+// deletes the file after compilation.
+async function writeIsolatedCompileConfig(): Promise<string> {
+  const rootConfig = JSON.parse(await Deno.readTextFile(join(repoRoot, 'deno.json')));
+  // Dropping "workspace" is what stops `deno compile` from packing every workspace member's npm
+  // packages into the binary; the remaining fields keep module resolution identical to dev.
+  for (const key of ['workspace', 'fmt', 'lint', 'deploy', 'tasks', 'allowScripts']) {
+    delete rootConfig[key];
+  }
+  rootConfig.imports = Object.fromEntries(
+    Object.entries(rootConfig.imports ?? {}).filter(([name]) => !DEV_ONLY_IMPORTS.has(name)),
+  );
+  rootConfig.nodeModulesDir = 'none';
+  const configPath = join(repoRoot, '.api-compile.tmp.json');
+  await Deno.writeTextFile(configPath, JSON.stringify(rootConfig, null, 2));
+  return configPath;
+}
+
 async function main() {
-  if (!force && await fileExists(outputPath)) {
-    console.log(`[build-api-sidecar] ${outputPath} already exists; skipping (FORCE=1 to recompile).`);
+  if (!force && (await fileExists(outputPath))) {
+    console.log(
+      `[build-api-sidecar] ${outputPath} already exists; skipping (FORCE=1 to recompile).`,
+    );
     return;
   }
 
@@ -61,29 +91,46 @@ async function main() {
 
   console.log(`[build-api-sidecar] Compiling apps/api -> ${outputPath}`);
 
-  // Run deno compile from repo root
-  const command = new Deno.Command('deno', {
-    args: [
-      'compile',
-      '--allow-all',
-      '--unstable-cron',
-      '--no-check',
-      '--include', 'packages/runtime/src/global.js',
-      '--include', 'packages/runtime/src/theme.css',
-      '--include', 'packages/runtime/src/apps/debt-tracker.html',
-      '--include', 'packages/runtime/src/apps/standup-viewer.html',
-      '--output', outputPath,
-      'apps/api/src/main.ts',
-    ],
-    cwd: repoRoot,
-    stdout: 'inherit',
-    stderr: 'inherit',
-  });
+  const configPath = await writeIsolatedCompileConfig();
 
-  const { success } = await command.output();
+  try {
+    // Run deno compile from repo root
+    const command = new Deno.Command('deno', {
+      args: [
+        'compile',
+        '--allow-all',
+        '--unstable-cron',
+        '--no-check',
+        // Resolve npm packages from the global Deno cache instead of the shared root
+        // node_modules, so only the API's graph can end up in the binary. Requires deps to be
+        // cached (`deno install` in CI) since no local node_modules is consulted.
+        '--node-modules-dir=none',
+        '--config',
+        configPath,
+        '--include',
+        'packages/runtime/src/global.js',
+        '--include',
+        'packages/runtime/src/theme.css',
+        '--include',
+        'packages/runtime/src/apps/debt-tracker.html',
+        '--include',
+        'packages/runtime/src/apps/standup-viewer.html',
+        '--output',
+        outputPath,
+        'apps/api/src/main.ts',
+      ],
+      cwd: repoRoot,
+      stdout: 'inherit',
+      stderr: 'inherit',
+    });
 
-  if (!success) {
-    throw new Error(`[build-api-sidecar] Compilation failed`);
+    const { success } = await command.output();
+
+    if (!success) {
+      throw new Error(`[build-api-sidecar] Compilation failed`);
+    }
+  } finally {
+    await Deno.remove(configPath).catch(() => {});
   }
 
   console.log(`[build-api-sidecar] Done: ${outputPath}`);
