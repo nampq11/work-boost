@@ -6,6 +6,7 @@ import {
   type AuthStatus,
   api,
 } from '../../lib/api-client.ts';
+import { openExternalUrl } from '../../lib/external-url.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { Button } from '../ui/Button.tsx';
 import { ResizablePanel } from '../ui/resizable.tsx';
@@ -74,6 +75,10 @@ export function AiCopilotDrawer() {
     if (event.type === 'device_code') {
       setDeviceCode(event);
       setAuthProgress('Waiting for authorization...');
+    } else if (event.type === 'auth_url') {
+      // Browser-flow OAuth: hand the URL to the OS browser (Tauri opener) or a new tab (browser).
+      setAuthProgress(event.instructions ?? 'Opening your browser to authorize...');
+      void openExternalUrl(event.url).catch(() => setAuthError('Unable to open the browser.'));
     } else if (event.type === 'progress') {
       setAuthProgress(event.message);
     } else if (event.type === 'completed') {
