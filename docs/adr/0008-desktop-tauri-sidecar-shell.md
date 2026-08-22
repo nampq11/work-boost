@@ -28,16 +28,28 @@ Specifically:
 - `apps/desktop` contains only the Tauri Rust shell (`src-tauri`). It points `frontendDist` at the
   `apps/web` build output and `devUrl` at the Vite dev server.
 - The API is compiled with `deno compile` into a single executable and listed under
-  `bundle.externalBin` (with the `-<target-triple>` suffix). The Rust `setup()` spawns it on a
-  loopback port and kills it on exit.
+  `bundle.externalBin` (with the `-<target-triple>` suffix). Compile with the catch-all `--unstable`,
+  not `--unstable-kv --unstable-cron`: Deno issue #21814 breaks KV in compiled binaries, and
+  production does not open KV anyway. The Rust `setup()` spawns it bound to `127.0.0.1:<port>` and
+  kills it on exit.
+- The sidecar reads the loopback port/host from env (`WORKBOOST_PORT`, `WORKBOOST_HOST`) rather than
+  the hardcoded `3001`/`0.0.0.0` in `apps/api/src/main.ts`. Binding loopback is a security
+  requirement; `/api`, `/auth`, `/v1`, and `/message` are not loopback-gated (only workspace routes
+  are).
 - A `get_api_base()` Tauri command returns the live `http://127.0.0.1:<port>/api` base; the webview
-  calls it at startup and falls back to `VITE_API_BASE`/the default when running outside Tauri.
+  calls it at startup and falls back to `VITE_API_BASE`/the default when running outside Tauri. This
+  requires refactoring `apps/web/src/lib/api-client.ts` so the base is not a module-load constant,
+  and gating render until the base resolves.
 - The API CORS allowlist is extended with the Tauri webview origins (`tauri://localhost` on
   macOS/Linux, `http://tauri.localhost` on Windows).
-- OAuth URLs are opened in the system browser via `tauri-plugin-opener`; credential handling stays in
-  the API's `AuthService` (see ADR 0007).
+- OAuth URLs are opened in the system browser via `tauri-plugin-opener`, registered in Rust and
+  granted the `opener:default` permission (which already allows `https://`); credential handling
+  stays in the API's `AuthService` (see ADR 0007). No `plugins.opener` block in `tauri.conf.json`.
 - Workspace persistence stays with the API. The desktop frontend keeps using the API's
   `/workspace/fs/*` and `/workspace/events` routes; no Tauri `fs` permission scope is added.
+- The webview capability set is `core:default` + `opener:default`; no `shell:*` permission (the
+  sidecar is spawned from Rust only). A scoped CSP replaces `csp: null` to allow the invoke IPC
+  (`ipc: http://ipc.localhost`) and cross-origin calls to `http://127.0.0.1:*`.
 
 ## Options considered
 
@@ -61,15 +73,20 @@ Specifically:
   Tauri webview origins or fetch/SSE calls fail.
 - The frontend bootstrap must tolerate the absence of Tauri (for the browser build and tests) and must
   resolve the API base at runtime rather than baking a fixed port.
-- Packaging must not embed real credentials; AI/provider settings should come from the workspace-local
-  `.workboost/config.json` and the `~/.pi` credential file.
-- Re-evaluate if the API stops being runnable as a `deno compile` sidecar (e.g. the `--unstable-kv` /
-  `--unstable-cron` behavior is not preserved), or if a server-based (non-local) deployment becomes the
-  primary model.
+- Packaging must not embed real credentials. `.workboost/config.json` only holds non-secret AI
+  provider/model; real keys come from env vars and the `~/.pi` credential store, so the shell must
+  load a user-level env file (`~/.workboost/.env`) or export the keys before spawning.
+- The sidecar build must use `--unstable` and be smoke-tested for `Deno.cron` (used by
+  `schedulerExtension`); the rest of the API's unstable surface (KV) is not used in production.
+- Two code changes are required before the decision is implementable: port/host env parsing in
+  `apps/api/src/main.ts`, and a runtime-configurable API base in `apps/web/src/lib/api-client.ts`.
+- Dev needs the API running separately (or the sidecar spawned in dev); `beforeDevCommand` only starts
+  the web server. Tray/notifications cannot rely on the webview SSE when the window is closed.
 
 ## Advice
 
-This captures the recommendation from the desktop shell spec. It is recorded as `proposed` because two
-open items should be validated before the decision becomes `active`: (1) `deno compile` preserving the
-API's `--unstable-kv` / `--unstable-cron` behavior inside the sidecar, and (2) the loopback port
-strategy for exposing the resolved API base to the frontend.
+This captures the recommendation from the desktop shell spec, refined by a review of that spec against
+the codebase and Tauri 2 / Deno docs (see the review note in `docs/plans/`). It is recorded as
+`proposed` because the remaining validation is the runtime blast radius of compiling the API: confirm
+`Deno.cron` still fires inside the compiled sidecar, and decide whether dev spawns the sidecar too or
+keeps the Vite proxy plus a separate `deno task dev` terminal. After that, promote to `active`.
