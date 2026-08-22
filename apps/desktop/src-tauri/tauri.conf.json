@@ -1,0 +1,52 @@
+{
+  "productName": "Work Boost",
+  "version": "0.1.0",
+  "identifier": "com.workboost.desktop",
+  "build": {
+    "beforeDevCommand": {
+      "cwd": "../../web",
+      "script": "deno task dev",
+      "wait": false
+    },
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": {
+      "cwd": "../../web",
+      "script": "deno task build",
+      "wait": true
+    },
+    "frontendDist": "../../web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Work Boost",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self' customprotocol:",
+        "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:3001",
+        "style-src": "'unsafe-inline' 'self'",
+        "img-src": "'self' asset: http://asset.localhost blob: data:"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/workboost-api"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
