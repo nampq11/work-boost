@@ -1,9 +1,15 @@
+// Sidecar plumbing is only compiled for bundled builds: `tauri build` enables the
+// `custom-protocol` feature, `tauri dev` does not. In dev the shell points at a separately
+// started `deno task dev` API instead, so a stale sidecar binary can never break startup.
+#[cfg(feature = "custom-protocol")]
 use std::net::TcpStream;
 use std::sync::Mutex;
+#[cfg(feature = "custom-protocol")]
 use std::time::{Duration, Instant};
 
 use tauri::{Manager, State};
 use tauri_plugin_shell::process::CommandChild;
+#[cfg(feature = "custom-protocol")]
 use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
@@ -21,8 +27,13 @@ fn api_base(port: u16) -> String {
     format!("http://127.0.0.1:{port}/api")
 }
 
+/// Conventional port of a separately started dev API (`deno task dev` in apps/api).
+#[cfg(not(feature = "custom-protocol"))]
+const DEV_API_PORT: u16 = 3001;
+
 /// Wait until the API is accepting connections on `127.0.0.1:<port>`. A TCP connect is sufficient:
 /// once `Deno.serve` binds the socket the server is ready to accept requests.
+#[cfg(feature = "custom-protocol")]
 fn wait_for_listening(port: u16, timeout: Duration) -> Result<(), String> {
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     let deadline = Instant::now() + timeout;
@@ -40,6 +51,7 @@ fn wait_for_listening(port: u16, timeout: Duration) -> Result<(), String> {
 /// Spawn the compiled Deno API as a sidecar bound to `127.0.0.1:0` (port 0 lets the OS assign a free port).
 /// The sidecar will report its bound port via stdout in the format "PORT:12345".
 /// Returns the child handle and the bound port.
+#[cfg(feature = "custom-protocol")]
 fn spawn_sidecar(
     app: &tauri::App,
 ) -> Result<(CommandChild, u16), Box<dyn std::error::Error>> {
@@ -100,24 +112,38 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![get_api_base])
         .setup(|app| {
-            // The sidecar binds port 0 and reports the bound port back to us,
-            // eliminating the race condition where another process could claim the port.
-            let (child, port) = spawn_sidecar(app)?;
+            #[cfg(feature = "custom-protocol")]
+            {
+                // The sidecar binds port 0 and reports the bound port back to us,
+                // eliminating the race condition where another process could claim the port.
+                let (child, port) = spawn_sidecar(app)?;
 
-            // The sidecar only reports its port after Deno.serve starts accepting connections, so
-            // a TCP-connect failure here means the child died right after reporting. Fail fast:
-            // managing state with a dead base would leave every webview request erroring with no
-            // recovery path.
-            if let Err(err) = wait_for_listening(port, Duration::from_secs(20)) {
-                let _ = child.kill();
-                return Err(err.into());
+                // The sidecar only reports its port after Deno.serve starts accepting connections,
+                // so a TCP-connect failure here means the child died right after reporting. Fail
+                // fast: managing state with a dead base would leave every webview request erroring
+                // with no recovery path.
+                if let Err(err) = wait_for_listening(port, Duration::from_secs(20)) {
+                    let _ = child.kill();
+                    return Err(err.into());
+                }
+
+                app.manage(ApiState {
+                    base: api_base(port),
+                    child: Mutex::new(Some(child)),
+                });
             }
-            let base = api_base(port);
 
-            app.manage(ApiState {
-                base,
-                child: Mutex::new(Some(child)),
-            });
+            #[cfg(not(feature = "custom-protocol"))]
+            {
+                // Dev build (`tauri dev`): expect the API running separately via `deno task dev`.
+                // If it is not up yet, the webview surfaces connection errors and recovers once it
+                // starts - no sidecar lifecycle to fight while iterating.
+                app.manage(ApiState {
+                    base: api_base(DEV_API_PORT),
+                    child: Mutex::new(None),
+                });
+            }
+
             Ok(())
         })
         .build(tauri::generate_context!())

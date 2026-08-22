@@ -10,8 +10,9 @@ and OAuth (ADR 0008).
 ```text
 apps/desktop/
 ├── package.json                # convenience scripts (dev/build/check)
+├── deno.json                   # workspace member registration (type-checks build scripts)
 ├── scripts/
-│   └── build-api-sidecar.sh    # compile apps/api into src-tauri/binaries/workboost-api-<triple>
+│   └── build-api-sidecar.ts    # compile apps/api into src-tauri/binaries/workboost-api-<triple>
 └── src-tauri/
     ├── Cargo.toml
     ├── build.rs
@@ -35,18 +36,20 @@ apps/desktop/
 ## Build & run
 
 ```sh
-# Dev: builds the sidecar, starts Vite, and runs the shell in a native window. The API is spawned as a
-# sidecar automatically (no separate terminal needed).
+# Terminal 1: start the API on the conventional dev port (3001)
+deno task dev
+
+# Terminal 2: starts Vite and opens the shell in a native window pointing at that API
 cd apps/desktop && npm run dev
 
-# Production: builds the frontend + sidecar, compiles the Rust shell, bundles the installer
+# Production: rebuilds the sidecar, builds the frontend + Rust shell, bundles the installer
 cd apps/desktop && npm run build
 ```
 
-`npm run dev` runs `build:api` first (Tauri requires the externalBin sidecar binary to exist even in
-dev), then `tauri dev`. `npm run build` runs `build:api` then `tauri build` (which also builds the
-frontend). Force a sidecar recompile with `FORCE=1 npm run build:api`.
-```sh
+In dev the shell does not spawn the sidecar (`tauri dev` disables the `custom-protocol` feature);
+it points at `http://127.0.0.1:3001`, so a stale sidecar binary can never break startup.
+`npm run build` forces a fresh sidecar compile via `build:api -- --force` before `tauri build`
+(the bundled build spawns the sidecar itself; no separate terminal).
 
 ## Notes
 
