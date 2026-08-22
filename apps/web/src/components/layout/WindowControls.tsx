@@ -13,12 +13,15 @@ export function WindowControls() {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isTauri()) return;
+    let disposed = false;
     let unlisten: (() => void) | undefined;
+
     // Lazily import so the browser bundle doesn't pull Tauri's window API.
     void import('@tauri-apps/api/window').then(async ({ getCurrentWindow }) => {
       const appWindow = getCurrentWindow();
       const sync = async () => {
+        if (disposed) return;
         try {
           setIsMaximized(await appWindow.isMaximized());
         } catch {
@@ -26,12 +29,18 @@ export function WindowControls() {
         }
       };
       await sync();
+      if (disposed) return;
       unlisten = await appWindow.onResized(sync);
+      if (disposed) unlisten?.();
     });
-    return () => unlisten?.();
-  }, [isTauri]);
 
-  if (!isTauri) return null;
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [isTauri()]);
+
+  if (!isTauri()) return null;
 
   const minimize = () =>
     void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>

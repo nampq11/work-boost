@@ -20,7 +20,7 @@ async function resolveFromTauri(): Promise<string> {
  */
 export function resolveApiBase(): Promise<string> {
   if (inFlight) return inFlight;
-  inFlight = (async () => {
+  const pending = (async () => {
     // Use browser defaults when not running in Tauri
     if (!isTauri()) {
       return getApiBase();
@@ -31,5 +31,9 @@ export function resolveApiBase(): Promise<string> {
     if (tauriBase) setApiBase(tauriBase);
     return getApiBase();
   })();
+  inFlight = pending.catch((error) => {
+    inFlight = undefined;
+    throw error;
+  });
   return inFlight;
 }

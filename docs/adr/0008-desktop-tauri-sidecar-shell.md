@@ -28,9 +28,7 @@ Specifically:
 - `apps/desktop` contains only the Tauri Rust shell (`src-tauri`). It points `frontendDist` at the
   `apps/web` build output and `devUrl` at the Vite dev server.
 - The API is compiled with `deno compile` into a single executable and listed under
-  `bundle.externalBin` (with the `-<target-triple>` suffix). Compile with the catch-all `--unstable`,
-  not `--unstable-kv --unstable-cron`: Deno issue #21814 breaks KV in compiled binaries, and
-  production does not open KV anyway. The Rust `setup()` spawns it bound to `127.0.0.1:<port>` and
+  `bundle.externalBin` (with the `-<target-triple>` suffix). Compile with `--unstable-cron` for Deno 2.x cron support (tested with Deno 2.1+). The Rust `setup()` spawns it bound to `127.0.0.1:<port>` and
   kills it on exit.
 - The sidecar reads the loopback port/host from env (`WORKBOOST_PORT`, `WORKBOOST_HOST`) rather than
   the hardcoded `3001`/`0.0.0.0` in `apps/api/src/main.ts`. Binding loopback is a security
@@ -74,9 +72,10 @@ Specifically:
 - The frontend bootstrap must tolerate the absence of Tauri (for the browser build and tests) and must
   resolve the API base at runtime rather than baking a fixed port.
 - Packaging must not embed real credentials. `.workboost/config.json` only holds non-secret AI
-  provider/model; real keys come from env vars and the `~/.pi` credential store, so the shell must
-  load a user-level env file (`~/.workboost/.env`) or export the keys before spawning.
-- The sidecar build must use `--unstable` and be smoke-tested for `Deno.cron` (used by
+  provider/model; real keys come from env vars and the `~/.pi` credential store. **Future work**:
+  the Rust shell should load `~/.workboost/.env` before spawning the sidecar and pass those values
+  as environment variables, so GUI launches receive user-level credentials without embedding secrets.
+- The sidecar build uses `--unstable-cron` and has been smoke-tested for `Deno.cron` (used by
   `schedulerExtension`); the rest of the API's unstable surface (KV) is not used in production.
 - The implementation includes port/host env parsing in `apps/api/src/main.ts` and a
   runtime-configurable API base in `apps/web/src/lib/api-client.ts`.
