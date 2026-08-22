@@ -5,6 +5,31 @@ import { logger } from '@work-boost/shared/logger/logger.ts';
 import { initializeServices } from './bootstrap.ts';
 import { createServer } from './server.ts';
 
+// Origins the desktop shell (Tauri 2) uses for its webview. The server only grants CORS to exact
+// allowlist entries for these; its http-localhost fallback does not match `tauri://localhost` (non-http
+// protocol) or `http://tauri.localhost` (hostname is not localhost/127.0.0.1).
+const CORS_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'tauri://localhost',
+  'http://tauri.localhost',
+];
+
+function resolveApiHost(defaultHost: string): string {
+  return Deno.env.get('WORKBOOST_HOST') ?? defaultHost;
+}
+
+function resolveApiPort(defaultPort: number): number {
+  const rawPort = Deno.env.get('WORKBOOST_PORT');
+  if (rawPort === undefined) return defaultPort;
+  const parsedPort = Number(rawPort);
+  if (Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
+    return parsedPort;
+  }
+  console.warn(`[DEBUG] Invalid WORKBOOST_PORT '${rawPort}'; falling back to ${defaultPort}`);
+  return defaultPort;
+}
+
 function resolveApiPrefix(defaultPrefix: string): string {
   const configuredPrefix = Deno.env.get('WORKBOOST_API_PREFIX');
   if (configuredPrefix === undefined) {
@@ -50,7 +75,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   const server = createServer({
     port,
     host,
-    corsOrigins: ['http://localhost:3000', 'http://localhost:3001'],
+    corsOrigins: CORS_ORIGINS,
     rateLimitMaxRequests: 100,
     rateLimitWindowMs: 15 * 60 * 1000,
     enableWebSocket: false,
@@ -82,8 +107,10 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
 // Start server when run directly (not when imported by the CLI)
 if (import.meta.main) {
   startApiMode({
-    port: 3001,
-    host: '0.0.0.0',
+    // The desktop shell passes WORKBOOST_HOST/WORKBOOST_PORT to the sidecar; standalone dev runs keep
+    // the historical 0.0.0.0:3001 so the browser shell and `deno task dev` keep behaving as before.
+    host: resolveApiHost('0.0.0.0'),
+    port: resolveApiPort(3001),
     apiPrefix: '/api',
   }).catch((error) => {
     const errorMsg = error instanceof Error ? error.message : String(error);
