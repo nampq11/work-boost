@@ -1,0 +1,7 @@
+{
+  // Registers apps/desktop as a workspace member so `deno check scripts/build-api-sidecar.ts`
+  // resolves the root import map (@std/path) and Deno types. npm/Tauri tooling ignores this file.
+  "compilerOptions": {
+    "lib": ["deno.ns", "DOM", "ESNext"]
+  }
+}

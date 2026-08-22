@@ -16,9 +16,10 @@
 //   No `--env-file` is passed; provider secrets come from the shell env or a user-level
 //     `~/.workboost/.env` at runtime, never from the repo bundle.
 
-import { dirname, join } from '@std/path';
+import { dirname, fromFileUrl, join } from '@std/path';
 
-const scriptDir = dirname(new URL(import.meta.url).pathname);
+// fromFileUrl (not URL().pathname) so Windows drive-letter paths ("file:///C:/...") resolve correctly.
+const scriptDir = dirname(fromFileUrl(import.meta.url));
 const desktopDir = join(scriptDir, '..');
 const repoRoot = join(desktopDir, '..');
 
@@ -26,7 +27,8 @@ const hostTriple = await getHostTriple();
 const outputDir = join(desktopDir, 'src-tauri', 'binaries');
 const outputName = `workboost-api-${hostTriple}`;
 const outputPath = join(outputDir, outputName);
-const force = Deno.env.get('FORCE') === '1';
+// --force CLI flag (not FORCE=1 env prefix) so `npm run build` works in Windows cmd.exe.
+const force = Deno.args.includes('--force') || Deno.env.get('FORCE') === '1';
 
 async function getHostTriple(): Promise<string> {
   const command = new Deno.Command('rustc', {

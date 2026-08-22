@@ -81,10 +81,17 @@ export function AiCopilotDrawer() {
       // Browser-flow OAuth: in Tauri, auto-open via opener plugin. In browser,
       // show a clickable link since window.open without user activation is blocked.
       setAuthProgress(event.instructions ?? 'Open the link below to authorize...');
-      setAuthUrl(event.url);
-      // Try to auto-open in Tauri only
-      if (isTauri()) {
-        void openExternalUrl(event.url).catch(() => setAuthError('Unable to open the browser.'));
+      // Only expose http(s) URLs: the event arrives over SSE, and a javascript:/custom-scheme
+      // value must never reach an anchor href or the OS opener.
+      if (/^https?:\/\//i.test(event.url)) {
+        setAuthUrl(event.url);
+        // Auto-open in Tauri only; browsers block window.open without user activation,
+        // so the panel renders a clickable link instead.
+        if (isTauri()) {
+          void openExternalUrl(event.url).catch(() => setAuthError('Unable to open the browser.'));
+        }
+      } else {
+        console.error('Ignoring non-http auth_url event:', event.url);
       }
     } else if (event.type === 'progress') {
       setAuthProgress(event.message);

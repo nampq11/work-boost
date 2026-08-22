@@ -102,12 +102,15 @@ pub fn run() {
         .setup(|app| {
             // The sidecar binds port 0 and reports the bound port back to us,
             // eliminating the race condition where another process could claim the port.
-            let (child, port) = spawn_sidecar(app).expect("failed to spawn API sidecar");
+            let (child, port) = spawn_sidecar(app)?;
 
-            // Wait until the API accepts connections so the webview's first request does not race
-            // server startup. On failure, log it; the webview surfaces connection errors next.
+            // The sidecar only reports its port after Deno.serve starts accepting connections, so
+            // a TCP-connect failure here means the child died right after reporting. Fail fast:
+            // managing state with a dead base would leave every webview request erroring with no
+            // recovery path.
             if let Err(err) = wait_for_listening(port, Duration::from_secs(20)) {
-                eprintln!("[desktop] {err}");
+                let _ = child.kill();
+                return Err(err.into());
             }
             let base = api_base(port);
 

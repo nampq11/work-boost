@@ -16,7 +16,8 @@ async function resolveFromTauri(): Promise<string> {
  * leaves the module defaults in place (VITE_API_BASE, then the dev/prod default), so the browser shell
  * and tests keep working unchanged.
  *
- * Single-flight (concurrent callers get the same result) and never rejects.
+ * Single-flight (concurrent callers get the same result). Rejects when running in Tauri and
+ * the `get_api_base` command fails (e.g. the sidecar did not start); callers must handle rejection.
  */
 export function resolveApiBase(): Promise<string> {
   if (inFlight) return inFlight;
