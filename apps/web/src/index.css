@@ -508,6 +508,11 @@ input[type="number"] {
 .copilot-composer-input:focus,
 .copilot-composer-input:focus-visible {
   border: none;
+  outline: none;
+}
+
+.copilot-composer-input:focus-visible {
+  border: none;
   outline: 2px solid var(--accent-blue);
   outline-offset: 2px;
 }
