@@ -5,8 +5,8 @@
   "description": "Work Boost desktop shell (Tauri 2) - convenience scripts",
   "scripts": {
     "build:api": "bash scripts/build-api-sidecar.sh",
-    "dev": "npx @tauri-apps/cli dev",
-    "build": "npm run build:api && npx @tauri-apps/cli build",
+    "dev": "npm run build:api && npx @tauri-apps/cli dev",
+    "build": "FORCE=1 npm run build:api && npx @tauri-apps/cli build",
     "check": "cd src-tauri && cargo check"
   },
   "devDependencies": {

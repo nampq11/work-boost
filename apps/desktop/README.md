@@ -35,19 +35,18 @@ apps/desktop/
 ## Build & run
 
 ```sh
-# 1. Compile the API sidecar for the host triple
-./apps/desktop/scripts/build-api-sidecar.sh
-
-# 2. Dev: opens the Vite dev URL in a native window.
-#    The API is NOT spawned; start the backend separately from the repo root:
-#        deno task dev
+# Dev: builds the sidecar, starts Vite, and runs the shell in a native window. The API is spawned as a
+# sidecar automatically (no separate terminal needed).
 cd apps/desktop && npm run dev
 
-# 3. Production: builds the frontend, compiles the Rust shell, bundles the sidecar
+# Production: builds the frontend + sidecar, compiles the Rust shell, bundles the installer
 cd apps/desktop && npm run build
 ```
 
-`npm run build` runs `build:api` first (so the sidecar exists before bundling) then `tauri build`.
+`npm run dev` runs `build:api` first (Tauri requires the externalBin sidecar binary to exist even in
+dev), then `tauri dev`. `npm run build` runs `build:api` then `tauri build` (which also builds the
+frontend). Force a sidecar recompile with `FORCE=1 npm run build:api`.
+```sh
 
 ## Notes
 

@@ -25,6 +25,12 @@ HOST_TRIPLE="$(rustc --print host-tuple)"
 OUTPUT_NAME="workboost-api-${HOST_TRIPLE}"
 OUTPUT_DIR="${DESKTOP_DIR}/src-tauri/binaries"
 OUTPUT="${OUTPUT_DIR}/${OUTPUT_NAME}"
+OUTPUT="${OUTPUT_DIR}/${OUTPUT_NAME}"
+
+if [ -f "${OUTPUT}" ] && [ "${FORCE:-0}" != "1" ]; then
+  echo "[build-api-sidecar] ${OUTPUT} already exists; skipping (FORCE=1 to recompile)."
+  exit 0
+fi
 
 mkdir -p "${OUTPUT_DIR}"
 

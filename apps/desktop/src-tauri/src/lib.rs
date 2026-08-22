@@ -11,8 +11,7 @@ fn get_api_base(state: State<'_, ApiState>) -> String {
     state.base.clone()
 }
 
-/// Holds the resolved API base and, in release builds, the spawned sidecar child so it can be
-/// cleaned up on exit. The child is `None` in dev builds (the API is started separately).
+/// Holds the resolved API base and the spawned sidecar child so it can be killed on exit.
 struct ApiState {
     base: String,
     child: Mutex<Option<CommandChild>>,
@@ -22,14 +21,9 @@ fn api_base(port: u16) -> String {
     format!("http://127.0.0.1:{port}/api")
 }
 
-/// In dev the API is started separately (`deno task dev`) so it can load the repo `.env` and bind the
-/// port the webview expects; the webview talks to it over CORS. In release the shell spawns the
-/// compiled sidecar and resolves its loopback base at runtime.
-const DEV_API_BASE: &str = "http://localhost:3001/api";
-
 fn pick_free_port(preferred: u16) -> u16 {
-    // Prefer the conventional port; if it is taken (e.g. a separate `deno task dev` instance)
-    // fall back to an OS-assigned free loopback port.
+    // Prefer the conventional port; if it is taken (e.g. a leftover sidecar) fall back to an
+    // OS-assigned free loopback port.
     if TcpListener::bind(("127.0.0.1", preferred)).is_ok() {
         return preferred;
     }
@@ -65,7 +59,7 @@ fn spawn_sidecar(
 ) -> Result<CommandChild, Box<dyn std::error::Error>> {
     let (mut rx, child) = app
         .shell()
-        // Use the basename so the runtime resolves `{exe_dir}/workboost-api`, which matches where the
+        // Use the basename so the runtime resolves `{exe_dir}/workboost-api`, matching where the
         // bundler places externalBin binaries (it strips the `binaries/` source prefix and the
         // `-<target-triple>` suffix). `externalBin` keeps the `binaries/` source path.
         .sidecar("workboost-api")
@@ -101,28 +95,22 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![get_api_base])
         .setup(|app| {
-            let (base, child) = if cfg!(feature = "custom-protocol") {
-                // Release: the bundled webview talks to a sidecar on a loopback port. The port is
-                // passed via env so the API binds 127.0.0.1 (never 0.0.0.0), which keeps the auth and
-                // assistant routes off the LAN.
-                let port = pick_free_port(3001);
-                let child = spawn_sidecar(app, port).expect("failed to spawn API sidecar");
-                // Wait until the API accepts connections so the webview's first request does not race
-                // server startup. On failure, log it; the webview surfaces connection errors next.
-                if let Err(err) = wait_for_listening(port, Duration::from_secs(20)) {
-                    eprintln!("[desktop] {err}");
-                }
-                (api_base(port), Some(child))
-            } else {
-                // Dev: run the API separately (`deno task dev`) so it loads the repo `.env`; this
-                // keeps `cargo tauri dev` from needing secrets in the shell's env. The webview uses
-                // the dev API base over CORS.
-                (DEV_API_BASE.to_string(), None)
-            };
+            // The API runs as a sidecar on a loopback port in both dev and release, so the webview
+            // always resolves its base through `get_api_base()` (no Vite proxy, no separate terminal).
+            // The port is passed via env so the API binds 127.0.0.1 (never 0.0.0.0), which keeps the
+            // auth and assistant routes off the LAN.
+            let port = pick_free_port(3001);
+            let child = spawn_sidecar(app, port).expect("failed to spawn API sidecar");
+            // Wait until the API accepts connections so the webview's first request does not race
+            // server startup. On failure, log it; the webview surfaces connection errors next.
+            if let Err(err) = wait_for_listening(port, Duration::from_secs(20)) {
+                eprintln!("[desktop] {err}");
+            }
+            let base = api_base(port);
 
             app.manage(ApiState {
                 base,
-                child: Mutex::new(child),
+                child: Mutex::new(Some(child)),
             });
             Ok(())
         })
