@@ -10,13 +10,11 @@ import { useUiStore } from '../../store/ui-store.ts';
 import { Button } from '../ui/Button.tsx';
 import { ResizablePanel } from '../ui/resizable.tsx';
 import { CopilotAuthPanel } from './CopilotAuthPanel.tsx';
-import { useCopilotRuntime } from './CopilotRuntimeProvider.tsx';
 import { WorkBoostThread } from './WorkBoostThread.tsx';
 
 export function AiCopilotDrawer() {
   const open = useUiStore((state) => state.copilotOpen);
   const toggle = useUiStore((state) => state.toggleCopilot);
-  const { resetConversation } = useCopilotRuntime();
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [loginSession, setLoginSession] = useState<AuthLoginSession | null>(null);
@@ -123,20 +121,6 @@ export function AiCopilotDrawer() {
     }
   }
 
-  async function logoutAuth() {
-    setAuthLoading(true);
-    setAuthError('');
-    try {
-      await api.logoutAuth();
-      resetConversation();
-      await refreshAuthStatus();
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Unable to log out.');
-    } finally {
-      setAuthLoading(false);
-    }
-  }
-
   async function cancelLogin() {
     const session = loginSession;
     if (!session) return;
@@ -156,7 +140,7 @@ export function AiCopilotDrawer() {
     toggle();
   }
 
-  const connected = authStatus?.auth.status === 'connected';
+  const isConnected = authStatus?.auth.status === 'connected';
   return (
     <ResizablePanel id="copilot" defaultSize={320} minSize={280} maxSize={640} className="min-w-0">
       <aside className="flex h-full select-none flex-col border-l border-[var(--border)] bg-[var(--surface-sidebar)]">
@@ -171,27 +155,7 @@ export function AiCopilotDrawer() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          {connected && (
-            <div className="flex-none px-4 pt-4">
-              <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface-app)] px-3 py-2 text-xs">
-                <div>
-                  <p className="font-medium text-[var(--text-primary)]">OpenAI Codex connected</p>
-                  <p className="text-[var(--text-muted)]">{authStatus?.model}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void logoutAuth()}
-                  disabled={authLoading}
-                >
-                  Log out
-                </Button>
-              </div>
-              {authError && <p className="mt-2 text-sm text-red-600">{authError}</p>}
-            </div>
-          )}
-
-          {connected ? (
+          {isConnected ? (
             <WorkBoostThread />
           ) : (
             <CopilotAuthPanel

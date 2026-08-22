@@ -470,3 +470,85 @@ input[type="number"] {
     animation: none;
   }
 }
+
+/* Zed-inspired composer: quiet canvas above, compact send area below. */
+.copilot-composer {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 110px;
+  padding: 12px 10px 9px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-app);
+}
+
+.copilot-composer-input {
+  flex: 1;
+  display: block;
+  width: 100%;
+  min-height: 54px;
+  max-height: 150px;
+  padding: 0 2px 8px;
+  overflow-y: auto;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  resize: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.copilot-composer-input::placeholder {
+  color: var(--text-muted);
+}
+
+.copilot-composer-input:focus,
+.copilot-composer-input:focus-visible {
+  border: none;
+  outline: none;
+}
+
+.copilot-composer-input:focus-visible {
+  border: none;
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.copilot-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.copilot-composer-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.copilot-composer-send:not(:disabled):hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.copilot-composer-send:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.copilot-composer-stop {
+  color: var(--accent-red);
+}
