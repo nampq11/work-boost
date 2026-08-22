@@ -21,21 +21,17 @@ function resolveApiHost(defaultHost: string): string {
 
 function resolveApiPort(defaultPort: number): number {
   const rawPort = Deno.env.get('WORKBOOST_PORT');
-  if (rawPort === undefined) return 0;
-  }
-  if (rawPort === "0") {
+  if (rawPort === undefined) return defaultPort;
+  if (rawPort === '0') {
     // Special value: let OS assign a free port (for Tauri sidecar)
     return 0;
+  }
   const parsedPort = Number(rawPort);
   if (Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
     return parsedPort;
   }
   console.warn(`[DEBUG] Invalid WORKBOOST_PORT '${rawPort}'; falling back to ${defaultPort}`);
-  return 0;
-  }
-  if (rawPort === "0") {
-    // Special value: let OS assign a free port (for Tauri sidecar)
-    return 0;
+  return defaultPort;
 }
 
 function resolveApiPrefix(defaultPrefix: string): string {
@@ -94,13 +90,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     extensionManager,
   });
 
-  const boundPort = await server.start();
-  
-  // Report bound port to parent when running as Tauri sidecar
-  if (Deno.env.get('WORKBOOST_PORT') === '0') {
-    console.log(`PORT:${boundPort}`);
-  }
-  
+  await server.start();
   logger.info('API server is running and ready to accept requests', undefined, 'green');
 
   let shuttingDown = false;
@@ -118,22 +108,15 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   Deno.addSignalListener('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
-// Start server when run directly (not when imported by the CLI)
-if (import.meta.main) {
-  startApiMode({
-    // The desktop shell passes WORKBOOST_HOST/WORKBOOST_PORT to the sidecar; standalone dev runs keep
-    // the historical 0.0.0.0:3001 so the browser shell and `deno task dev` keep behaving as before.
-    host: resolveApiHost('0.0.0.0'),
-    port: resolveApiPort(3001),
-    apiPrefix: '/api',
-  }).catch((error) => {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    console.error('=== API SERVER START FAILED ===');
-    console.error('Error:', errorMsg);
-    if (errorStack) console.error('Stack:', errorStack);
-    logger.error('Failed to start API server: ' + errorMsg);
-    // Exit explicitly so startup failures do not become uncaught promise errors.
-    Deno.exit(1);
+export async function main() {
+  const port = resolveApiPort(3001);
+  const host = resolveApiHost('0.0.0.0');
+  const apiPrefix = resolveApiPrefix('/api');
+
+  await startApiMode({
+    port,
+    host,
+    apiPrefix,
+    enableScheduler: true,
   });
 }
