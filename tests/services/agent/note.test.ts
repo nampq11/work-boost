@@ -1,6 +1,6 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { assertEquals, assertRejects } from '@std/assert';
-import { createCreateNoteTool } from '@work-boost/brain';
+import { createNoteTool } from '@work-boost/brain';
 import type { WorkspaceFS } from '@work-boost/data-provider';
 
 function textOf(result: AgentToolResult<unknown>): string {
@@ -54,7 +54,7 @@ function createRecordingFS(isExisting?: (path: string, attemptCount: number) => 
 
 Deno.test('create_note writes to a notes/*.md path', async () => {
   const { fs, writes } = createRecordingFS();
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
   const result = await tool.execute('call_1', { content: 'Hello' });
 
   assertEquals(writes.length, 1);
@@ -66,7 +66,7 @@ Deno.test('create_note writes to a notes/*.md path', async () => {
 
 Deno.test('create_note writes a heading when a title is given', async () => {
   const { fs, writes } = createRecordingFS();
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
   await tool.execute('call_1', { content: 'Body', title: 'My Note' });
 
   assertEquals(writes[0].content.startsWith('# My Note'), true);
@@ -75,7 +75,7 @@ Deno.test('create_note writes a heading when a title is given', async () => {
 
 Deno.test('create_note writes raw content when no title is given', async () => {
   const { fs, writes } = createRecordingFS();
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
   await tool.execute('call_1', { content: 'Just content' });
 
   assertEquals(writes[0].content, 'Just content');
@@ -83,7 +83,7 @@ Deno.test('create_note writes raw content when no title is given', async () => {
 
 Deno.test('create_note rejects empty or whitespace-only content', async () => {
   const { fs, writes } = createRecordingFS();
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
 
   await assertRejects(() => tool.execute('call_1', { content: '' }), Error);
   assertEquals(writes.length, 0);
@@ -94,7 +94,7 @@ Deno.test('create_note rejects empty or whitespace-only content', async () => {
 
 Deno.test('create_note slugs the title into a safe dashed path', async () => {
   const { fs, writes } = createRecordingFS();
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
   await tool.execute('call_1', { content: 'Body', title: 'Ghi chú Tháng 12!' });
 
   const match = writes[0].path.match(/^notes\/([a-z0-9-]+)-\d{8}-\d{6}\.md$/);
@@ -104,7 +104,7 @@ Deno.test('create_note slugs the title into a safe dashed path', async () => {
 
 Deno.test('create_note falls back to "note" for a title that slugs to empty', async () => {
   const { fs, writes } = createRecordingFS();
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
   await tool.execute('call_1', { content: 'Body', title: '!!!' });
 
   const match = writes[0].path.match(/^notes\/([a-z0-9-]+)-\d{8}-\d{6}\.md$/);
@@ -113,7 +113,7 @@ Deno.test('create_note falls back to "note" for a title that slugs to empty', as
 
 Deno.test('create_note never overwrites an existing file', async () => {
   const { fs, writes, overwrites } = createRecordingFS();
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
   await tool.execute('call_1', { content: 'Hello' });
 
   assertEquals(writes.length, 1);
@@ -127,7 +127,7 @@ Deno.test('create_note retries with a counter suffix when the path is taken', as
     occupiedPath ??= path;
     return path === occupiedPath;
   });
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
   const result = await tool.execute('call_1', { content: 'Hello', title: 'Idea' });
 
   assertEquals(attempts.length, 2);
@@ -144,7 +144,7 @@ Deno.test('create_note retries with a counter suffix when the path is taken', as
 
 Deno.test('create_note gives up after repeated collisions without writing', async () => {
   const { fs, attempts, writes } = createRecordingFS(() => true);
-  const tool = createCreateNoteTool(fs);
+  const tool = createNoteTool(fs);
 
   await assertRejects(() => tool.execute('call_1', { content: 'Hello' }), Error);
   assertEquals(attempts.length > 1, true);

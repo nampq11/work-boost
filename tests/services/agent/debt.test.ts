@@ -1,13 +1,6 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { assertEquals, assertRejects } from '@std/assert';
-import {
-  createCreateDebtTool,
-  createDeleteDebtTool,
-  createGetDebtSummaryTool,
-  createListDebtsTool,
-  createSettleDebtTool,
-  getWorkspaceTools,
-} from '@work-boost/brain';
+import { createDebtTool, getWorkspaceTools } from '@work-boost/brain';
 import type { DebtRepository } from '@work-boost/data-provider';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
@@ -114,9 +107,7 @@ function createFakeDebtRepository(debts: DebtDocument[]): DebtRepository {
     },
   };
 
-  const repoWithId = repo as unknown as DebtRepository & { __testId: number };
-  (repoWithId as any).__testId = 1;
-  return repoWithId;
+  return repo;
 }
 
 function sampleDebts(): DebtDocument[] {
@@ -158,10 +149,11 @@ function sampleDebts(): DebtDocument[] {
   ];
 }
 
-Deno.test('create_debt creates a new debt record', async () => {
+Deno.test('debt create creates a new debt record', async () => {
   const repo = createFakeDebtRepository([]);
-  const tool = createCreateDebtTool(repo);
+  const tool = createDebtTool(repo);
   const result = await tool.execute('call_1', {
+    action: 'create',
     personName: 'John',
     amount: 50000,
     direction: 'lent',
@@ -174,10 +166,11 @@ Deno.test('create_debt creates a new debt record', async () => {
   assertEquals(textOf(result).includes('📄'), true);
 });
 
-Deno.test('create_debt defaults currency to VND', async () => {
+Deno.test('debt create defaults currency to VND', async () => {
   const repo = createFakeDebtRepository([]);
-  const tool = createCreateDebtTool(repo);
+  const tool = createDebtTool(repo);
   const result = await tool.execute('call_1', {
+    action: 'create',
     personName: 'John',
     amount: 50000,
     direction: 'borrowed',
@@ -186,67 +179,92 @@ Deno.test('create_debt defaults currency to VND', async () => {
   assertEquals(data.frontmatter.currency, 'VND');
 });
 
-Deno.test('list_debts returns all debts without filters', async () => {
+Deno.test('debt create throws when required fields are missing', async () => {
+  const repo = createFakeDebtRepository([]);
+  const tool = createDebtTool(repo);
+  await assertRejects(() => tool.execute('call_1', { action: 'create' }), Error);
+
+  await assertRejects(
+    () => tool.execute('call_1', { action: 'create', personName: 'John' }),
+    Error,
+  );
+});
+
+Deno.test('debt list returns all debts without filters', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
-  const tool = createListDebtsTool(repo);
-  const result = await tool.execute('call_1', {});
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'list' });
   assertEquals(textOf(result).includes('Charlie'), true);
   assertEquals(textOf(result).includes('Alice'), true);
 });
 
-Deno.test('list_debts filters by personName', async () => {
+Deno.test('debt list filters by personName', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
-  const tool = createListDebtsTool(repo);
-  const result = await tool.execute('call_1', { personName: 'charl' });
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'list', personName: 'charl' });
   const data = (result.details as { data: DebtDocument[] }).data;
   assertEquals(data.length, 1);
   assertEquals(data[0].frontmatter.personName, 'Charlie');
 });
 
-Deno.test('list_debts filters by status and direction', async () => {
+Deno.test('debt list filters by status and direction', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
-  const tool = createListDebtsTool(repo);
-  const result = await tool.execute('call_1', { status: 'pending', direction: 'lent' });
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', {
+    action: 'list',
+    status: 'pending',
+    direction: 'lent',
+  });
   const data = (result.details as { data: DebtDocument[] }).data;
   assertEquals(data.length, 1);
   assertEquals(data[0].frontmatter.direction, DebtDirection.LENT);
 });
 
-Deno.test('list_debts shows empty state', async () => {
+Deno.test('debt list shows empty state', async () => {
   const repo = createFakeDebtRepository([]);
-  const tool = createListDebtsTool(repo);
-  const result = await tool.execute('call_1', {});
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'list' });
   assertEquals(textOf(result), '📭 Không có khoản nợ nào.');
 });
 
-Deno.test('settle_debt marks a pending debt as paid', async () => {
+Deno.test('debt settle marks a pending debt as paid', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
-  const tool = createSettleDebtTool(repo);
-  const result = await tool.execute('call_1', { debtId: 'debt-1' });
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'settle', debtId: 'debt-1' });
   assertEquals(textOf(result).includes('Đã đánh dấu'), true);
   const data = (result.details as { data: DebtDocument }).data;
   assertEquals(data.frontmatter.status, DebtStatus.PAID);
 });
 
-Deno.test('settle_debt throws when debt not found', async () => {
+Deno.test('debt settle throws when debt not found', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
-  const tool = createSettleDebtTool(repo);
-  await assertRejects(() => tool.execute('call_1', { debtId: 'nonexistent' }), Error, 'not found');
+  const tool = createDebtTool(repo);
+  await assertRejects(
+    () => tool.execute('call_1', { action: 'settle', debtId: 'nonexistent' }),
+    Error,
+    'not found',
+  );
 });
 
-Deno.test('settle_debt confirms already-paid debt', async () => {
+Deno.test('debt settle confirms already-paid debt', async () => {
   const debts = sampleDebts();
   debts[0].frontmatter.status = DebtStatus.PAID;
   const repo = createFakeDebtRepository(debts);
-  const tool = createSettleDebtTool(repo);
-  const result = await tool.execute('call_1', { debtId: 'debt-1' });
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'settle', debtId: 'debt-1' });
   assertEquals(textOf(result).includes('được thanh toán rồi'), true);
 });
 
-Deno.test('get_debt_summary calculates net position', async () => {
+Deno.test('debt settle throws when debtId is missing', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
-  const tool = createGetDebtSummaryTool(repo);
-  const result = await tool.execute('call_1', {});
+  const tool = createDebtTool(repo);
+  await assertRejects(() => tool.execute('call_1', { action: 'settle' }), Error);
+});
+
+Deno.test('debt summary calculates net position', async () => {
+  const repo = createFakeDebtRepository(sampleDebts());
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'summary' });
   const data = (result.details as { data: unknown }).data as {
     totalLent: number;
     totalBorrowed: number;
@@ -258,20 +276,24 @@ Deno.test('get_debt_summary calculates net position', async () => {
   assertEquals(textOf(result).includes('được nợ'), true);
 });
 
-Deno.test('delete_debt removes a debt', async () => {
+Deno.test('debt delete removes a debt', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
-  const tool = createDeleteDebtTool(repo);
-  const result = await tool.execute('call_1', { debtId: 'debt-1' });
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'delete', debtId: 'debt-1' });
   assertEquals(textOf(result).includes('Đã xóa'), true);
 });
 
-Deno.test('delete_debt throws when debt not found', async () => {
+Deno.test('debt delete throws when debt not found', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
-  const tool = createDeleteDebtTool(repo);
-  await assertRejects(() => tool.execute('call_1', { debtId: 'nonexistent' }), Error, 'not found');
+  const tool = createDebtTool(repo);
+  await assertRejects(
+    () => tool.execute('call_1', { action: 'delete', debtId: 'nonexistent' }),
+    Error,
+    'not found',
+  );
 });
 
-Deno.test('getWorkspaceTools returns all 12 tools', () => {
+Deno.test('getWorkspaceTools returns the generic tool set', () => {
   const fs = {
     init: () => Promise.resolve(),
     readText: () => Promise.resolve(''),
@@ -280,8 +302,12 @@ Deno.test('getWorkspaceTools returns all 12 tools', () => {
     move: () => Promise.resolve(),
     remove: () => Promise.resolve(),
     listFiles: () => Promise.resolve([]),
-    stat: () => Promise.resolve({ size: 0 }),
+    listByGlob: () => Promise.resolve([]),
+    stat: () => Promise.resolve({ size: 0, modifiedAt: '' }),
     listDirs: () => Promise.resolve([]),
+    exists: () => Promise.resolve(false),
+    mkdir: () => Promise.resolve(),
+    conditionalUpdate: () => Promise.resolve({ status: 'not-found' as const }),
   };
   const tools = getWorkspaceTools({
     fs: fs as never,
@@ -293,17 +319,10 @@ Deno.test('getWorkspaceTools returns all 12 tools', () => {
     debts: createFakeDebtRepository([]) as never,
   });
   const names = tools.map((t) => t.name);
-  assertEquals(names.length, 12);
+  assertEquals(names.length, 5);
   assertEquals(names.includes('get_current_time'), true);
-  assertEquals(names.includes('create_debt'), true);
-  assertEquals(names.includes('list_debts'), true);
-  assertEquals(names.includes('settle_debt'), true);
-  assertEquals(names.includes('get_debt_summary'), true);
-  assertEquals(names.includes('delete_debt'), true);
-  assertEquals(names.includes('save_daily_work'), true);
-  assertEquals(names.includes('get_daily_work'), true);
-  assertEquals(names.includes('list_daily_dates'), true);
-  assertEquals(names.includes('read_workspace_file'), true);
-  assertEquals(names.includes('list_workspace_files'), true);
+  assertEquals(names.includes('debt'), true);
+  assertEquals(names.includes('daily_work'), true);
+  assertEquals(names.includes('workspace'), true);
   assertEquals(names.includes('create_note'), true);
 });

@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert';
-import { createGetCurrentTimeTool } from '@work-boost/brain';
+import { createTimeTool } from '@work-boost/brain';
 import type { ConfigManager } from '@work-boost/data-provider';
 import { WorkspaceConfigSchema } from '@work-boost/data-schemas/config.ts';
 
@@ -19,7 +19,7 @@ function createFakeConfigManager(config: Record<string, unknown> = {}): ConfigMa
 
 Deno.test('get_current_time returns date and time', async () => {
   const configMgr = createFakeConfigManager();
-  const tool = createGetCurrentTimeTool(configMgr);
+  const tool = createTimeTool(configMgr);
 
   const result = await tool.execute('call_1', {});
 
@@ -37,7 +37,7 @@ Deno.test('get_current_time returns date and time', async () => {
 
 Deno.test('get_current_time uses configured timezone', async () => {
   const configMgr = createFakeConfigManager({ timezone: 'America/New_York' });
-  const tool = createGetCurrentTimeTool(configMgr);
+  const tool = createTimeTool(configMgr);
 
   const result = await tool.execute('call_1', {});
   const data = result.details as { data: { timezone: string } };
@@ -46,7 +46,7 @@ Deno.test('get_current_time uses configured timezone', async () => {
 
 Deno.test('get_current_time has no parameters', () => {
   const configMgr = createFakeConfigManager();
-  const tool = createGetCurrentTimeTool(configMgr);
+  const tool = createTimeTool(configMgr);
   assertEquals(tool.name, 'get_current_time');
   assertEquals(tool.parameters.type, 'object');
   assertEquals(Object.keys(tool.parameters.properties || {}).length, 0);

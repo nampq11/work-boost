@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Extracted a shared UI package with design tokens and Base UI dropdown components. #29
 - Consolidated Telegram debt commands into a conversational flow instead of separate commands.
+- Consolidated the Brain's workspace tools into generic action-based tools (`debt`, `daily_work`, `workspace`) with a new `workspace` search (grep) action, replacing the dozen narrow per-operation tools.
 
 ### Fixed
 

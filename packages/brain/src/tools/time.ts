@@ -6,7 +6,7 @@ import { successResult } from './result.ts';
 /**
  * Get the current date and time in the workspace's configured timezone.
  */
-export function createGetCurrentTimeTool(configMgr: ConfigManager): AgentTool<any> {
+export function createTimeTool(configMgr: ConfigManager): AgentTool<any> {
   return {
     name: 'get_current_time',
     label: 'Get Current Time',

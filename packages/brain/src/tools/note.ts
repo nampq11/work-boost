@@ -48,7 +48,7 @@ const MAX_PATH_ATTEMPTS = 100;
  * file path is derived here (slugified title plus a timestamp) and always kept
  * inside `notes/`, so the model can never write to an arbitrary path.
  */
-export function createCreateNoteTool(fs: WorkspaceFS): AgentTool<typeof createNoteParams> {
+export function createNoteTool(fs: WorkspaceFS): AgentTool<typeof createNoteParams> {
   return {
     name: 'create_note',
     label: 'Create Note',

@@ -1,6 +1,6 @@
 import { type AgentToolResult } from '@earendil-works/pi-agent-core';
-import { assertEquals } from '@std/assert';
-import { createGetDailyWorkTool, createListDailyDatesTool } from '@work-boost/brain';
+import { assertEquals, assertRejects } from '@std/assert';
+import { createDailyWorkTool } from '@work-boost/brain';
 import type { DailyWorkRepository } from '@work-boost/data-provider';
 import type { DailyWorkDocument } from '@work-boost/data-schemas/agent.ts';
 
@@ -55,8 +55,8 @@ function createFakeDailyWorkRepository(docs: DailyWorkDocument[] = []): DailyWor
   };
 }
 
-Deno.test('get_daily_work returns the report for a date', async () => {
-  const docs: DailyWorkDocument[] = [
+function sampleDocs(): DailyWorkDocument[] {
+  return [
     {
       frontmatter: {
         id: 'daily_2025-01-15',
@@ -75,24 +75,61 @@ Deno.test('get_daily_work returns the report for a date', async () => {
       filePath: 'daily/2025-01-15.md',
     },
   ];
+}
 
-  const repo = createFakeDailyWorkRepository(docs);
-  const tool = createGetDailyWorkTool(repo);
-  const result = await tool.execute('call_1', { date: '2025-01-15' });
+Deno.test('daily_work save stores a report', async () => {
+  const repo = createFakeDailyWorkRepository([]);
+  const tool = createDailyWorkTool(repo);
+  const result = await tool.execute('call_1', {
+    action: 'save',
+    date: '2025-01-15',
+    completed: [{ project: 'A', task: 'Fix bug' }],
+    incomplete: [],
+    planned: [],
+  });
+
+  assertEquals(textOf(result).includes('Đã lưu báo cáo công việc ngày 2025-01-15'), true);
+  assertEquals(textOf(result).includes('File:'), true);
+});
+
+Deno.test('daily_work save defaults missing sections to empty', async () => {
+  const repo = createFakeDailyWorkRepository([]);
+  const tool = createDailyWorkTool(repo);
+  const result = await tool.execute('call_1', { action: 'save', date: '2025-01-15' });
+  const data = (result.details as { data: DailyWorkDocument }).data;
+  assertEquals(data.report.completed.length, 0);
+  assertEquals(data.report.incomplete.length, 0);
+  assertEquals(data.report.planned.length, 0);
+});
+
+Deno.test('daily_work save throws when date is missing', async () => {
+  const repo = createFakeDailyWorkRepository([]);
+  const tool = createDailyWorkTool(repo);
+  await assertRejects(
+    () => tool.execute('call_1', { action: 'save' }),
+    Error,
+    'Thiếu date để lưu báo cáo công việc.',
+  );
+});
+
+Deno.test('daily_work get returns the report for a date', async () => {
+  const repo = createFakeDailyWorkRepository(sampleDocs());
+  const tool = createDailyWorkTool(repo);
+  const result = await tool.execute('call_1', { action: 'get', date: '2025-01-15' });
 
   assertEquals(textOf(result).includes('2025-01-15'), true);
   assertEquals(textOf(result).includes('Fix bug'), true);
   assertEquals(textOf(result).includes('File:'), true);
 });
 
-Deno.test('get_daily_work reports not found for missing date', async () => {
+Deno.test('daily_work get reports not found for missing date', async () => {
   const repo = createFakeDailyWorkRepository([]);
-  const tool = createGetDailyWorkTool(repo);
-  const result = await tool.execute('call_1', { date: '2025-01-15' });
+  const tool = createDailyWorkTool(repo);
+  const result = await tool.execute('call_1', { action: 'get', date: '2025-01-15' });
   assertEquals(textOf(result), '❌ Không tìm thấy báo cáo công việc ngày 2025-01-15.');
 });
 
-Deno.test('list_daily_dates returns all dates', async () => {
+Deno.test('daily_work list_dates returns all dates', async () => {
   const docs: DailyWorkDocument[] = [
     {
       frontmatter: {
@@ -123,8 +160,8 @@ Deno.test('list_daily_dates returns all dates', async () => {
   ];
 
   const repo = createFakeDailyWorkRepository(docs);
-  const tool = createListDailyDatesTool(repo);
-  const result = await tool.execute('call_1', {});
+  const tool = createDailyWorkTool(repo);
+  const result = await tool.execute('call_1', { action: 'list_dates' });
 
   const data = (result.details as { data: string[] }).data;
   assertEquals(data.length, 2);
@@ -132,9 +169,9 @@ Deno.test('list_daily_dates returns all dates', async () => {
   assertEquals(data.includes('2025-01-16'), true);
 });
 
-Deno.test('list_daily_dates shows empty state', async () => {
+Deno.test('daily_work list_dates shows empty state', async () => {
   const repo = createFakeDailyWorkRepository([]);
-  const tool = createListDailyDatesTool(repo);
-  const result = await tool.execute('call_1', {});
+  const tool = createDailyWorkTool(repo);
+  const result = await tool.execute('call_1', { action: 'list_dates' });
   assertEquals(textOf(result), '📭 Chưa có báo cáo công việc nào.');
 });

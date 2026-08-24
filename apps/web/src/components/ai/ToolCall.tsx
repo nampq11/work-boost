@@ -16,11 +16,10 @@ interface ToolCallProps {
 }
 
 const toolLabels: Record<string, { label: string; activeLabel: string }> = {
-  create_daily_work: { label: 'Added daily work', activeLabel: 'Adding daily work' },
-  get_daily_work: { label: 'Read daily work', activeLabel: 'Reading daily work' },
-  list_daily_work: { label: 'Listed daily work', activeLabel: 'Listing daily work' },
-  create_debt: { label: 'Recorded a debt', activeLabel: 'Recording a debt' },
-  list_debts: { label: 'Read debts', activeLabel: 'Reading debts' },
+  daily_work: { label: 'Updated daily work', activeLabel: 'Updating daily work' },
+  debt: { label: 'Updated debts', activeLabel: 'Updating debts' },
+  workspace: { label: 'Read workspace', activeLabel: 'Reading workspace' },
+  create_note: { label: 'Saved a note', activeLabel: 'Saving a note' },
   get_current_time: { label: 'Checked the time', activeLabel: 'Checking the time' },
 };
 
