@@ -97,7 +97,7 @@ function AssistantMessage() {
           </>
         }
         actions={
-          <ActionBarPrimitive.Root className="flex items-center px-1" hideWhenRunning>
+          <ActionBarPrimitive.Root className="absolute left-0 top-full z-10 mt-1 flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-app)] px-1 opacity-0 shadow-sm transition-opacity group-hover/message:opacity-100">
             <ActionBarPrimitive.Copy
               type="button"
               className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
@@ -179,7 +179,7 @@ export function WorkBoostThread() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
-        <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <ThreadPrimitive.Viewport className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4">
           <Welcome />
           <ThreadPrimitive.Messages>
             {({ message }) => (message.role === 'user' ? <UserMessage /> : <AssistantMessage />)}

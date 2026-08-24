@@ -55,7 +55,7 @@ export function MessagePair({
           {userMessage}
         </p>
       )}
-      <div className="group/message flex flex-col items-start">
+      <div className="group/message relative flex flex-col items-start">
         {loading ? (
           <GenerationLoader
             label={t('messagePair.thinking')}
