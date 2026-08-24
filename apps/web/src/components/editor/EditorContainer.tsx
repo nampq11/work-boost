@@ -105,6 +105,9 @@ function TodayPanel() {
   const [daily, setDaily] = useState<TodayDailyDocument | null>(null);
   const [debts, setDebts] = useState<DebtDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Bumping this counter reruns the Today load effect (retry button).
+  const [retryCount, setRetryCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // The capture box talks to the same thread as the Copilot workspace so both
   // surfaces share one conversation and one AI context.
@@ -118,25 +121,35 @@ function TodayPanel() {
     ]);
     setDaily(todayDoc);
     setDebts(pendingDebts);
-    await useWorkspaceStore.getState().loadFiles();
+    // The panel data is already committed, so a sidebar refresh failure must
+    // not surface as a Today load error; keep it best-effort.
+    await useWorkspaceStore
+      .getState()
+      .loadFiles()
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    void refreshToday().finally(() => {
-      if (active) setLoading(false);
-    });
+    setLoadFailed(false);
+    refreshToday()
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
-  }, [refreshToday]);
+  }, [refreshToday, retryCount]);
 
   // Refresh summary and debts once a run on the shared thread finishes.
   useEffect(() => {
     const finished = wasRunningRef.current && !isRunning;
     wasRunningRef.current = isRunning;
-    if (finished) void refreshToday().catch(() => undefined);
+    if (finished) void refreshToday().catch(() => setLoadFailed(true));
   }, [isRunning, refreshToday]);
 
   // Auto-grow the capture textarea as the user types.
@@ -158,6 +171,10 @@ function TodayPanel() {
       content: [{ type: 'text', text }],
       startRun: true,
     });
+  }
+
+  function retryLoad(): void {
+    setRetryCount((count) => count + 1);
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
@@ -187,7 +204,9 @@ function TodayPanel() {
   ];
   // Empty sections add noise; only render the ones that have tasks.
   const visibleSections = sections.filter((section) => section.tasks.length > 0);
-  const hasReport = visibleSections.length > 0 || Boolean(daily?.customSections);
+  // Whitespace-only custom sections must not count as content.
+  const customSections = daily?.customSections.trim() ? daily.customSections : null;
+  const hasReport = visibleSections.length > 0 || customSections !== null;
   const todayLabel = getTodayLabel();
 
   return (
@@ -228,6 +247,16 @@ function TodayPanel() {
         </div>
       </section>
 
+      {/* Today data failed to load: keep whatever data we have and offer a retry */}
+      {!loading && loadFailed && (
+        <div className="p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
+          <span>{t('editor.todayLoadFailed')}</span>
+          <button onClick={retryLoad} className="underline font-medium hover:opacity-80">
+            {t('editor.todayRetry')}
+          </button>
+        </div>
+      )}
+
       {/* Today's summary */}
       <section className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-tight text-[var(--text-primary)] m-0">
@@ -265,9 +294,9 @@ function TodayPanel() {
                 </ul>
               </div>
             ))}
-            {daily?.customSections && (
+            {customSections && (
               <div className="whitespace-pre-wrap text-sm text-[var(--text-secondary)]">
-                {daily.customSections}
+                {customSections}
               </div>
             )}
           </div>

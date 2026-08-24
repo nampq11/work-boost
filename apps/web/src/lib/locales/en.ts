@@ -44,6 +44,8 @@ export const en = {
   'editor.todayPlannedTitle': 'Planned',
   'editor.todayDebtsTitle': 'Today\u2019s debts',
   'editor.todayDebtsEmpty': 'No active debts.',
+  'editor.todayLoadFailed': 'Could not load today\u2019s data.',
+  'editor.todayRetry': 'Retry',
 
   // Debt frontmatter inspector
   'frontmatter.debtProperties': 'Debt Properties',
