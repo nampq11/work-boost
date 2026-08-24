@@ -5,12 +5,13 @@ the browser workspace, the AI copilot, or optional Slack and Telegram integratio
 Markdown workspace is the durable source of truth.
 
 ```text
-Browser workspace ─┐
-Slack / Telegram ──┼── API composition ── Data layer ── Markdown workspace
-                  │          │
-                  │          ├── Brain ── Workspace tools
-                  │          └── Extensions ── webhooks and scheduled jobs
-                  └── HTTP and SSE
+Browser workspace ───────┐
+Desktop shell (Tauri 2) ─┤
+Slack / Telegram ────────┼── API composition ── Data layer ── Markdown workspace
+                         │          │
+                         │          ├── Brain ── Workspace tools
+                         │          └── Extensions ── webhooks and scheduled jobs
+                         └── HTTP and SSE
 ```
 
 The API process creates the data layer, compatibility database facade, Brain, and enabled
@@ -30,6 +31,8 @@ The Deno HTTP application and composition root.
 - `routes/workspace.ts` exposes the loopback-only workspace API, SSE change feed, and HTML-app
   server.
 - `routes/auth.ts` exposes API-owned OAuth status, device-code progress, cancellation, and logout.
+- `routes/assistant.ts` exposes the assistant thread API under `/api/v1`: thread and message CRUD
+  plus response submission with streamed response events.
 
 HTTP request and response details end here. Use package APIs and ports below this layer.
 
@@ -38,9 +41,10 @@ HTTP request and response details end here. Use package APIs and ports below thi
 The Vite and React workspace editor. `App` assembles the editor, file tree, HTML-app viewer, and
 copilot. The Zustand workspace store owns browser state, drafts, optimistic-concurrency revisions,
 and SSE synchronization. `api-client.ts` is its HTTP boundary. The Copilot uses an assistant-ui
-local runtime for the current page only; each page creates a UUID session ID and sends one new turn
-to `/api/message/sync`. The Brain remains the server-side transcript owner, and closing the drawer
-does not destroy the runtime.
+local runtime for the current page only: on mount it creates a server-side assistant thread
+(`POST /api/v1/threads`), sends turns through `/api/v1/threads/:id/responses`, and streams response
+events over SSE, falling back to `/api/message/sync` when the thread API is unavailable. The Brain
+remains the server-side transcript owner, and closing the drawer does not destroy the runtime.
 
 ### `packages/data-schemas`
 
@@ -80,9 +84,18 @@ cron jobs. `loader.ts` discovers user plugins in `~/.workboost/plugins`.
 - `slack/` handles Slack webhooks and delivery.
 - `scheduler/` registers daily summaries and debt reminders.
 - `formatters/` contains platform presentation logic.
+- `bot/` defines the platform-neutral bot service contract shared by Telegram and Slack.
 
 Extensions receive the shared `ExtensionContext`; they do not create another server, agent, or
 persistence stack.
+
+### `apps/desktop`
+
+The Tauri 2 native shell. It embeds the built `apps/web` frontend and talks to the same loopback API
+as the browser. In bundled builds it spawns a compiled Deno API sidecar bound to `127.0.0.1:0`,
+reads the assigned port from the sidecar's `PORT:<n>` stdout line, exposes it to the frontend
+through a `get_api_base` command, and kills the child on exit. In dev it points at a separately
+started API (`deno task dev`, port 3001) so a stale sidecar binary cannot break startup.
 
 ### `packages/runtime` and `packages/shared`
 
@@ -110,20 +123,23 @@ holds environment access, logging, and security helpers.
    device-code progress; tokens remain in the server-side pi credential store.
 9. **The browser Copilot does not own transcript persistence.** Its assistant-ui runtime is an
    in-memory presentation state for one page-scoped session. The API and Brain own the transcript,
-   and a refresh deliberately starts a new session ID rather than reusing an old Brain session.
+   which `AssistantService` persists under `.workboost/assistant/threads`; a refresh deliberately
+   creates a new thread rather than reusing an old Brain session.
 
 ## System boundaries
 
 ```text
-Configured model provider ── packages/brain ──┐
-Slack / Telegram ── extensions ─────────┼── apps/api ── packages/data-provider
-Browser and HTML apps ── HTTP / SSE ─         ┘           │
-                                                          ▼
-                                           ~/.workboost/workspace
+Configured model provider ── packages/brain ┐
+Slack / Telegram ── extensions ─────────────┼── apps/api ── packages/data-provider
+Browser and HTML apps ── HTTP / SSE ────────┤                           │
+Desktop shell (Tauri 2) ────────────────────┘                           ▼
+                                                             ~/.workboost/workspace
 ```
 
 - **HTTP:** `apps/api` converts external requests into application calls and failures into HTTP
   responses.
+- **Desktop:** `apps/desktop` is a thin shell over the web frontend; it owns only sidecar lifecycle
+  and never bypasses the HTTP API.
 - **AI:** `AgentPort` hides the model provider, tool loop, prompt, and transcript retention.
 - **Persistence:** `DataLayer` hides the workspace layout and Markdown serialization.
 - **Integrations:** extensions contain external protocol handling, delivery, and scheduling.

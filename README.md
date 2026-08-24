@@ -38,12 +38,13 @@ People use it for a variety of use cases:
 ## How it works
 
 ```text
-Browser workspace ─┐
-Slack / Telegram ──┼── API composition ── Data layer ── Markdown workspace
-                   │          │
-                   │          ├── Brain ── Workspace tools
-                   │          └── Extensions ── webhooks and scheduled jobs
-                   └── HTTP and SSE
+Browser workspace ──────┐
+Desktop shell (Tauri 2) ┤
+Slack / Telegram ───────┼── API composition ── Data layer ── Markdown workspace
+                        │          │
+                        │          ├── Brain ── Workspace tools
+                        │          └── Extensions ── webhooks and scheduled jobs
+                        └── HTTP and SSE
 ```
 
 ![Work Boost architecture](./assets/work-boost.png)

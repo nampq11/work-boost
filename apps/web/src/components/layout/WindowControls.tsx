@@ -1,6 +1,6 @@
-import { isTauri } from '../../lib/tauri.ts';
 import { Copy, Minus, Rectangle, X } from '@phosphor-icons/react';
 import React, { useEffect, useState } from 'react';
+import { isTauri } from '../../lib/tauri.ts';
 
 /**
  * Custom window controls for the frameless Tauri window.
