@@ -34,6 +34,7 @@ export const en = {
   'editor.todayPrompt': 'What did you do today? Work, money, anything.',
   'editor.todayPromptHint': 'Enter to capture, Shift+Enter for a new line.',
   'editor.todayCaptureSending': 'Capturing your day...',
+  'editor.todayCaptureAction': 'Capture',
   'editor.todayCaptureFailed': 'Unable to capture. Check the connection and try again.',
   'editor.todaySummaryTitle': 'Today\u2019s summary',
   'editor.todaySummaryEmpty':
@@ -127,7 +128,7 @@ export const en = {
   'copilot.auth.unableCancelLogin': 'Unable to cancel login.',
   'copilot.auth.providerUnavailable': 'The AI provider is unavailable.',
   'thread.copyResponse': 'Copy response',
-  'thread.messagePlaceholder': 'Message Work Boost, @ to include context, / for commands',
+  'thread.messagePlaceholder': 'Message Work Boost...',
   'thread.cancelRequest': 'Cancel request',
   'thread.sendMessage': 'Send message',
   'thread.assistantFailed': 'The assistant failed.',

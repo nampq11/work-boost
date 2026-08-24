@@ -1,5 +1,5 @@
 import { useAui, useAuiState } from '@assistant-ui/react';
-import { Code, Coins, Eye, FileText, FloppyDisk } from '@phosphor-icons/react';
+import { Code, Coins, Eye, FileText, FloppyDisk, PaperPlaneRight } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
@@ -90,6 +90,14 @@ function formatMoney(amount: number, currency: string): string {
   return `${amount.toLocaleString()} ${currency}`;
 }
 
+function getTodayLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 function TodayPanel() {
   const { t } = useI18n();
   const aui = useAui();
@@ -160,9 +168,6 @@ function TodayPanel() {
   }
 
   const report = daily?.report ?? null;
-  const hasReport =
-    report !== null &&
-    (report.completed.length > 0 || report.incomplete.length > 0 || report.planned.length > 0);
   const sections = [
     {
       key: 'completed',
@@ -180,14 +185,21 @@ function TodayPanel() {
       tasks: report?.planned ?? [],
     },
   ];
+  // Empty sections add noise; only render the ones that have tasks.
+  const visibleSections = sections.filter((section) => section.tasks.length > 0);
+  const hasReport = visibleSections.length > 0 || Boolean(daily?.customSections);
+  const todayLabel = getTodayLabel();
 
   return (
     <div className="max-w-4xl mx-auto px-10 py-10 flex flex-col gap-6">
       {/* Capture box */}
       <section className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] m-0">
-          {t('editor.todayTitle')}
-        </h1>
+        <div className="flex items-baseline justify-between gap-4">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] m-0">
+            {t('editor.todayTitle')}
+          </h1>
+          <span className="text-sm text-[var(--text-muted)]">{todayLabel}</span>
+        </div>
         <textarea
           ref={textareaRef}
           autoFocus
@@ -200,12 +212,19 @@ function TodayPanel() {
           className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-[15px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent-blue)] disabled:opacity-60"
         />
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] text-[var(--text-muted)] m-0">{t('editor.todayPromptHint')}</p>
-          {isRunning && (
-            <span className="text-[11px] text-[var(--accent-blue)]">
-              {t('editor.todayCaptureSending')}
-            </span>
-          )}
+          <p className="text-[11px] text-[var(--text-muted)] m-0">
+            {isRunning ? t('editor.todayCaptureSending') : t('editor.todayPromptHint')}
+          </p>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={submitCapture}
+            disabled={!captureText.trim() || isRunning}
+            className="gap-1.5 bg-[var(--text-primary)] text-[var(--text-inverse)] hover:opacity-90"
+          >
+            <PaperPlaneRight size={14} />
+            <span>{t('editor.todayCaptureAction')}</span>
+          </Button>
         </div>
       </section>
 
@@ -223,31 +242,27 @@ function TodayPanel() {
           </p>
         ) : (
           <div className="flex flex-col gap-4">
-            {sections.map((section) => (
+            {visibleSections.map((section) => (
               <div key={section.key} className="flex flex-col gap-1.5">
                 <h3 className="text-xs font-semibold uppercase tracking-tight text-[var(--text-secondary)] m-0">
                   {section.title}
                 </h3>
-                {section.tasks.length === 0 ? (
-                  <p className="text-xs text-[var(--text-muted)] m-0">- N/A</p>
-                ) : (
-                  <ul className="flex flex-col gap-1 m-0 list-none p-0">
-                    {section.tasks.map((task, index) => (
-                      <li
-                        key={`${section.key}-${index}`}
-                        className="flex gap-2 text-sm text-[var(--text-primary)]"
-                      >
-                        <span className="text-[var(--text-muted)]">•</span>
-                        <span>
-                          <span className="font-medium text-[var(--accent-blue)]">
-                            {task.project || 'INBOX'}
-                          </span>
-                          {task.task ? `: ${task.task}` : ''}
+                <ul className="flex flex-col gap-1 m-0 list-none p-0">
+                  {section.tasks.map((task, index) => (
+                    <li
+                      key={`${section.key}-${index}`}
+                      className="flex gap-2 text-sm text-[var(--text-primary)]"
+                    >
+                      <span className="text-[var(--text-muted)]">•</span>
+                      <span>
+                        <span className="font-medium text-[var(--accent-blue)]">
+                          {task.project || 'INBOX'}
                         </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                        {task.task ? `: ${task.task}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
             {daily?.customSections && (
