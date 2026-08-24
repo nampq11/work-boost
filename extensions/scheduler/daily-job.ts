@@ -17,11 +17,9 @@ interface ProcessResult {
 
 function getSchedule(): string {
   const configuredSchedule = Deno.env.get('DAILY_SUMMARY_SCHEDULE');
-  if (configuredSchedule) return configuredSchedule;
-
-  const hour = Deno.env.get('DAILY_SUMMARY_HOUR') || '9';
-  const minute = Deno.env.get('DAILY_SUMMARY_MINUTE') || '0';
-  return `${minute} ${hour} * * *`;
+  // Default to end of day: the report should close the working day,
+  // not open the next one (a morning run finds nothing to summarize).
+  return configuredSchedule || '0 18 * * *';
 }
 
 export function createDailySummaryJob(ctx: ExtensionContext): ExtensionCronJob {
@@ -47,19 +45,15 @@ export async function processDailySummary(
   dependencies: SchedulerDependencies,
 ): Promise<ProcessResult> {
   try {
-    const messages = await dependencies.db.getMessagesByUserId(SINGLE_USER_ID);
-    if (messages.length === 0) return { success: false, reason: 'no_messages' };
-
-    const today = new Date().toISOString().slice(0, 10);
-    const todaysMessages = messages.filter(
-      (message) => message.date.toISOString().slice(0, 10) === today,
-    );
-    if (todaysMessages.length === 0) {
+    // Trailing 24h window (local time) instead of an exact UTC-day match:
+    // it works for both evening reports and morning-after schedules.
+    const recentMessages = await dependencies.db.getRecentMessagesByUserId(SINGLE_USER_ID, 1);
+    if (recentMessages.length === 0) {
       return { success: false, reason: 'no_messages_today' };
     }
 
     const response = await dependencies.agent.stream(
-      `Hãy tổng hợp công việc hôm nay dựa trên các tin nhắn sau: ${todaysMessages
+      `Hãy tổng hợp công việc hôm nay dựa trên các tin nhắn sau: ${recentMessages
         .map((message) => message.content)
         .join('\n')}`,
       {

@@ -115,7 +115,7 @@ export class TelegramService implements BotService {
   private setupHandlers(): void {
     const deps = { db: this.db, agent: this.agent };
 
-    this.bot.command('start', (ctx) => handlers.handleStart(ctx));
+    this.bot.command('start', (ctx) => handlers.handleStart(ctx, deps));
     this.bot.command('subscribe', (ctx) => handlers.handleSubscribe(ctx, deps));
     this.bot.command('unsubscribe', (ctx) => handlers.handleUnsubscribe(ctx, deps));
     this.bot.command('status', (ctx) => handlers.handleStatus(ctx, deps));

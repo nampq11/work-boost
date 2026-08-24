@@ -120,8 +120,8 @@ SLACK_SIGNING_SECRET=your-signing-secret
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234567890
 TELEGRAM_WEBHOOK_SECRET=your-webhook-secret
 
-# Daily Summary Schedule (optional)
-DAILY_SUMMARY_SCHEDULE="0 9 * * *"  # 9:00 AM daily
+# Daily Summary Schedule (optional - default: 6:00 PM daily)
+DAILY_SUMMARY_SCHEDULE="0 18 * * *"
 ```
 
 The same AI settings can be stored in `.workboost/config.json`:
@@ -200,15 +200,12 @@ The server will start on http://localhost:3001/api
 
 ### Daily Summary Schedule
 
-Configure when to receive daily summaries via environment variables:
+Daily summaries are enabled by default when you message the bot with `/start`,
+and arrive around 6pm covering the last 24 hours. To change the time:
 
 ```bash
-# Full cron format
-DAILY_SUMMARY_SCHEDULE="0 9 * * *"  # 9:00 AM daily
-
-# Or use hour/minute
-DAILY_SUMMARY_HOUR=9
-DAILY_SUMMARY_MINUTE=0
+# Full cron format (default: 6:00 PM daily)
+DAILY_SUMMARY_SCHEDULE="0 18 * * *"
 ```
 
 ## Development
