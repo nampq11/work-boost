@@ -1,10 +1,12 @@
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { Code, Coins, Eye, FileText, FloppyDisk } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
-import { ApiError, api } from '../../lib/api-client.ts';
+import { api } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
+import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
 import { SourceEditor } from './SourceEditor.tsx';
@@ -90,15 +92,16 @@ function formatMoney(amount: number, currency: string): string {
 
 function TodayPanel() {
   const { t } = useI18n();
+  const aui = useAui();
   const [captureText, setCaptureText] = useState('');
-  const [capturing, setCapturing] = useState(false);
-  const [captureError, setCaptureError] = useState('');
-  const [lastResponse, setLastResponse] = useState('');
   const [daily, setDaily] = useState<TodayDailyDocument | null>(null);
   const [debts, setDebts] = useState<DebtDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const threadRef = useRef<Promise<string> | null>(null);
+  // The capture box talks to the same thread as the Copilot workspace so both
+  // surfaces share one conversation and one AI context.
+  const isRunning = useAuiState((state) => state.thread.isRunning);
+  const wasRunningRef = useRef(false);
 
   const refreshToday = useCallback(async () => {
     const [todayDoc, pendingDebts] = await Promise.all([
@@ -121,6 +124,13 @@ function TodayPanel() {
     };
   }, [refreshToday]);
 
+  // Refresh summary and debts once a run on the shared thread finishes.
+  useEffect(() => {
+    const finished = wasRunningRef.current && !isRunning;
+    wasRunningRef.current = isRunning;
+    if (finished) void refreshToday().catch(() => undefined);
+  }, [isRunning, refreshToday]);
+
   // Auto-grow the capture textarea as the user types.
   useEffect(() => {
     const el = textareaRef.current;
@@ -129,43 +139,17 @@ function TodayPanel() {
     el.style.height = `${el.scrollHeight}px`;
   }, [captureText]);
 
-  function getThreadId(): Promise<string> {
-    if (!threadRef.current) {
-      threadRef.current = api.createThread().then((thread) => thread.id);
-    }
-    return threadRef.current;
-  }
-
-  async function submitCapture(): Promise<void> {
+  function submitCapture(): void {
     const text = captureText.trim();
-    if (!text || capturing) return;
-    setCapturing(true);
-    setCaptureError('');
-    try {
-      const threadId = await getThreadId();
-      const response = await api.createResponse(threadId, text);
-      let output = '';
-      for await (const event of api.streamResponse(response.id)) {
-        if (event.type === 'response.failed') {
-          throw new ApiError(
-            event.response?.error?.code ?? 'AI_UNAVAILABLE',
-            event.response?.error?.message ?? t('editor.todayCaptureFailed'),
-          );
-        }
-        if (event.delta) {
-          output += event.delta;
-        } else if (event.type === 'response.completed' && event.response?.outputText && !output) {
-          output = event.response.outputText;
-        }
-      }
-      setLastResponse(output.trim());
-      setCaptureText('');
-      await refreshToday();
-    } catch (error) {
-      setCaptureError(error instanceof Error ? error.message : t('editor.todayCaptureFailed'));
-    } finally {
-      setCapturing(false);
-    }
+    if (!text || isRunning) return;
+    setCaptureText('');
+    // The conversation lives in the Copilot drawer thread, so surface it there.
+    useUiStore.getState().openCopilot();
+    aui.thread.append({
+      role: 'user',
+      content: [{ type: 'text', text }],
+      startRun: true,
+    });
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
@@ -212,28 +196,18 @@ function TodayPanel() {
           onKeyDown={onKeyDown}
           rows={3}
           placeholder={t('editor.todayPrompt')}
-          disabled={capturing}
+          disabled={isRunning}
           className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-[15px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent-blue)] disabled:opacity-60"
         />
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] text-[var(--text-muted)] m-0">{t('editor.todayPromptHint')}</p>
-          {capturing && (
+          {isRunning && (
             <span className="text-[11px] text-[var(--accent-blue)]">
               {t('editor.todayCaptureSending')}
             </span>
           )}
         </div>
       </section>
-
-      {/* Capture error */}
-      {captureError && <p className="text-[13px] text-[var(--accent-red)] m-0">{captureError}</p>}
-
-      {/* AI summary line shown after a successful capture */}
-      {lastResponse && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-sm leading-relaxed text-[var(--text-primary)]">
-          {lastResponse}
-        </div>
-      )}
 
       {/* Today's summary */}
       <section className="flex flex-col gap-3">

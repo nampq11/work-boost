@@ -8,7 +8,7 @@ import type { AssistantResponseEvent } from '../../lib/api-client.ts';
 import { ApiError, api } from '../../lib/api-client.ts';
 
 export interface CopilotApiClient {
-  sendMessage: (
+  sendMessage?: (
     message: string,
     sessionId: string,
     signal?: AbortSignal,
@@ -138,7 +138,11 @@ export function createCopilotAdapter(
 
     return (async () => {
       try {
-        const result = await client.sendMessage(text, await threadId, abortSignal);
+        const { sendMessage } = client;
+        if (!sendMessage) {
+          throw new Error('No AI transport is configured for this session.');
+        }
+        const result = await sendMessage(text, await threadId, abortSignal);
         return { content: [{ type: 'text' as const, text: result.response }] };
       } catch (error) {
         // assistant-ui treats an AbortError as cancellation. Keep ApiError intact so its
