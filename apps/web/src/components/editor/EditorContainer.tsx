@@ -1,10 +1,12 @@
-import { Code, Coins, Eye, FileText, FloppyDisk } from '@phosphor-icons/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
+import { Code, Coins, Eye, FileText, FloppyDisk, PaperPlaneRight } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
-import { ApiError, api } from '../../lib/api-client.ts';
+import { api } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
+import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
 import { SourceEditor } from './SourceEditor.tsx';
@@ -88,17 +90,29 @@ function formatMoney(amount: number, currency: string): string {
   return `${amount.toLocaleString()} ${currency}`;
 }
 
+function getTodayLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 function TodayPanel() {
   const { t } = useI18n();
+  const aui = useAui();
   const [captureText, setCaptureText] = useState('');
-  const [capturing, setCapturing] = useState(false);
-  const [captureError, setCaptureError] = useState('');
-  const [lastResponse, setLastResponse] = useState('');
   const [daily, setDaily] = useState<TodayDailyDocument | null>(null);
   const [debts, setDebts] = useState<DebtDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Bumping this counter reruns the Today load effect (retry button).
+  const [retryCount, setRetryCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const threadRef = useRef<Promise<string> | null>(null);
+  // The capture box talks to the same thread as the Copilot workspace so both
+  // surfaces share one conversation and one AI context.
+  const isRunning = useAuiState((state) => state.thread.isRunning);
+  const wasRunningRef = useRef(false);
 
   const refreshToday = useCallback(async () => {
     const [todayDoc, pendingDebts] = await Promise.all([
@@ -107,19 +121,36 @@ function TodayPanel() {
     ]);
     setDaily(todayDoc);
     setDebts(pendingDebts);
-    await useWorkspaceStore.getState().loadFiles();
+    // The panel data is already committed, so a sidebar refresh failure must
+    // not surface as a Today load error; keep it best-effort.
+    await useWorkspaceStore
+      .getState()
+      .loadFiles()
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    void refreshToday().finally(() => {
-      if (active) setLoading(false);
-    });
+    setLoadFailed(false);
+    refreshToday()
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
-  }, [refreshToday]);
+  }, [refreshToday, retryCount]);
+
+  // Refresh summary and debts once a run on the shared thread finishes.
+  useEffect(() => {
+    const finished = wasRunningRef.current && !isRunning;
+    wasRunningRef.current = isRunning;
+    if (finished) void refreshToday().catch(() => setLoadFailed(true));
+  }, [isRunning, refreshToday]);
 
   // Auto-grow the capture textarea as the user types.
   useEffect(() => {
@@ -129,43 +160,21 @@ function TodayPanel() {
     el.style.height = `${el.scrollHeight}px`;
   }, [captureText]);
 
-  function getThreadId(): Promise<string> {
-    if (!threadRef.current) {
-      threadRef.current = api.createThread().then((thread) => thread.id);
-    }
-    return threadRef.current;
+  function submitCapture(): void {
+    const text = captureText.trim();
+    if (!text || isRunning) return;
+    setCaptureText('');
+    // The conversation lives in the Copilot drawer thread, so surface it there.
+    useUiStore.getState().openCopilot();
+    aui.thread.append({
+      role: 'user',
+      content: [{ type: 'text', text }],
+      startRun: true,
+    });
   }
 
-  async function submitCapture(): Promise<void> {
-    const text = captureText.trim();
-    if (!text || capturing) return;
-    setCapturing(true);
-    setCaptureError('');
-    try {
-      const threadId = await getThreadId();
-      const response = await api.createResponse(threadId, text);
-      let output = '';
-      for await (const event of api.streamResponse(response.id)) {
-        if (event.type === 'response.failed') {
-          throw new ApiError(
-            event.response?.error?.code ?? 'AI_UNAVAILABLE',
-            event.response?.error?.message ?? t('editor.todayCaptureFailed'),
-          );
-        }
-        if (event.delta) {
-          output += event.delta;
-        } else if (event.type === 'response.completed' && event.response?.outputText && !output) {
-          output = event.response.outputText;
-        }
-      }
-      setLastResponse(output.trim());
-      setCaptureText('');
-      await refreshToday();
-    } catch (error) {
-      setCaptureError(error instanceof Error ? error.message : t('editor.todayCaptureFailed'));
-    } finally {
-      setCapturing(false);
-    }
+  function retryLoad(): void {
+    setRetryCount((count) => count + 1);
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
@@ -176,9 +185,6 @@ function TodayPanel() {
   }
 
   const report = daily?.report ?? null;
-  const hasReport =
-    report !== null &&
-    (report.completed.length > 0 || report.incomplete.length > 0 || report.planned.length > 0);
   const sections = [
     {
       key: 'completed',
@@ -196,14 +202,23 @@ function TodayPanel() {
       tasks: report?.planned ?? [],
     },
   ];
+  // Empty sections add noise; only render the ones that have tasks.
+  const visibleSections = sections.filter((section) => section.tasks.length > 0);
+  // Whitespace-only custom sections must not count as content.
+  const customSections = daily?.customSections.trim() ? daily.customSections : null;
+  const hasReport = visibleSections.length > 0 || customSections !== null;
+  const todayLabel = getTodayLabel();
 
   return (
     <div className="max-w-4xl mx-auto px-10 py-10 flex flex-col gap-6">
       {/* Capture box */}
       <section className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] m-0">
-          {t('editor.todayTitle')}
-        </h1>
+        <div className="flex items-baseline justify-between gap-4">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] m-0">
+            {t('editor.todayTitle')}
+          </h1>
+          <span className="text-sm text-[var(--text-muted)]">{todayLabel}</span>
+        </div>
         <textarea
           ref={textareaRef}
           autoFocus
@@ -212,26 +227,33 @@ function TodayPanel() {
           onKeyDown={onKeyDown}
           rows={3}
           placeholder={t('editor.todayPrompt')}
-          disabled={capturing}
+          disabled={isRunning}
           className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-[15px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent-blue)] disabled:opacity-60"
         />
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] text-[var(--text-muted)] m-0">{t('editor.todayPromptHint')}</p>
-          {capturing && (
-            <span className="text-[11px] text-[var(--accent-blue)]">
-              {t('editor.todayCaptureSending')}
-            </span>
-          )}
+          <p className="text-[11px] text-[var(--text-muted)] m-0">
+            {isRunning ? t('editor.todayCaptureSending') : t('editor.todayPromptHint')}
+          </p>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={submitCapture}
+            disabled={!captureText.trim() || isRunning}
+            className="gap-1.5 bg-[var(--text-primary)] text-[var(--text-inverse)] hover:opacity-90"
+          >
+            <PaperPlaneRight size={14} />
+            <span>{t('editor.todayCaptureAction')}</span>
+          </Button>
         </div>
       </section>
 
-      {/* Capture error */}
-      {captureError && <p className="text-[13px] text-[var(--accent-red)] m-0">{captureError}</p>}
-
-      {/* AI summary line shown after a successful capture */}
-      {lastResponse && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-sm leading-relaxed text-[var(--text-primary)]">
-          {lastResponse}
+      {/* Today data failed to load: keep whatever data we have and offer a retry */}
+      {!loading && loadFailed && (
+        <div className="p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
+          <span>{t('editor.todayLoadFailed')}</span>
+          <button onClick={retryLoad} className="underline font-medium hover:opacity-80">
+            {t('editor.todayRetry')}
+          </button>
         </div>
       )}
 
@@ -249,36 +271,32 @@ function TodayPanel() {
           </p>
         ) : (
           <div className="flex flex-col gap-4">
-            {sections.map((section) => (
+            {visibleSections.map((section) => (
               <div key={section.key} className="flex flex-col gap-1.5">
                 <h3 className="text-xs font-semibold uppercase tracking-tight text-[var(--text-secondary)] m-0">
                   {section.title}
                 </h3>
-                {section.tasks.length === 0 ? (
-                  <p className="text-xs text-[var(--text-muted)] m-0">- N/A</p>
-                ) : (
-                  <ul className="flex flex-col gap-1 m-0 list-none p-0">
-                    {section.tasks.map((task, index) => (
-                      <li
-                        key={`${section.key}-${index}`}
-                        className="flex gap-2 text-sm text-[var(--text-primary)]"
-                      >
-                        <span className="text-[var(--text-muted)]">•</span>
-                        <span>
-                          <span className="font-medium text-[var(--accent-blue)]">
-                            {task.project || 'INBOX'}
-                          </span>
-                          {task.task ? `: ${task.task}` : ''}
+                <ul className="flex flex-col gap-1 m-0 list-none p-0">
+                  {section.tasks.map((task, index) => (
+                    <li
+                      key={`${section.key}-${index}`}
+                      className="flex gap-2 text-sm text-[var(--text-primary)]"
+                    >
+                      <span className="text-[var(--text-muted)]">•</span>
+                      <span>
+                        <span className="font-medium text-[var(--accent-blue)]">
+                          {task.project || 'INBOX'}
                         </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                        {task.task ? `: ${task.task}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
-            {daily?.customSections && (
+            {customSections && (
               <div className="whitespace-pre-wrap text-sm text-[var(--text-secondary)]">
-                {daily.customSections}
+                {customSections}
               </div>
             )}
           </div>

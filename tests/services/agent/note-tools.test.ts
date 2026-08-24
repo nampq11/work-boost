@@ -13,17 +13,32 @@ interface Capture {
   content: string;
 }
 
-function createRecordingFS(): { fs: WorkspaceFS; writes: Capture[] } {
+function createRecordingFS(isExisting?: (path: string, attemptCount: number) => boolean): {
+  fs: WorkspaceFS;
+  attempts: Capture[];
+  writes: Capture[];
+  overwrites: Capture[];
+} {
+  const attempts: Capture[] = [];
   const writes: Capture[] = [];
+  const overwrites: Capture[] = [];
+  const attemptsByPath = new Map<string, number>();
   const fs: WorkspaceFS = {
     root: '/tmp/fake',
     init: () => Promise.resolve(),
     readText: () => Promise.resolve(''),
     writeTextAtomic: (path, content) => {
-      writes.push({ path, content });
+      overwrites.push({ path, content });
       return Promise.resolve();
     },
-    writeTextIfAbsent: () => Promise.resolve(true),
+    writeTextIfAbsent: (path, content) => {
+      attempts.push({ path, content });
+      const attemptCount = (attemptsByPath.get(path) ?? 0) + 1;
+      attemptsByPath.set(path, attemptCount);
+      if (isExisting?.(path, attemptCount)) return Promise.resolve(false);
+      writes.push({ path, content });
+      return Promise.resolve(true);
+    },
     move: () => Promise.resolve(),
     remove: () => Promise.resolve(),
     listByGlob: () => Promise.resolve([]),
@@ -34,7 +49,7 @@ function createRecordingFS(): { fs: WorkspaceFS; writes: Capture[] } {
     mkdir: () => Promise.resolve(),
     conditionalUpdate: () => Promise.resolve({ status: 'not-found' as const }),
   };
-  return { fs, writes };
+  return { fs, attempts, writes, overwrites };
 }
 
 Deno.test('create_note writes to a notes/*.md path', async () => {
@@ -94,4 +109,44 @@ Deno.test('create_note falls back to "note" for a title that slugs to empty', as
 
   const match = writes[0].path.match(/^notes\/([a-z0-9-]+)-\d{8}-\d{6}\.md$/);
   assertEquals(match![1], 'note');
+});
+
+Deno.test('create_note never overwrites an existing file', async () => {
+  const { fs, writes, overwrites } = createRecordingFS();
+  const tool = createCreateNoteTool(fs);
+  await tool.execute('call_1', { content: 'Hello' });
+
+  assertEquals(writes.length, 1);
+  assertEquals(overwrites.length, 0);
+});
+
+Deno.test('create_note retries with a counter suffix when the path is taken', async () => {
+  // Treat the first attempted path as already existing to force a collision.
+  let occupiedPath: string | null = null;
+  const { fs, attempts, writes } = createRecordingFS((path) => {
+    occupiedPath ??= path;
+    return path === occupiedPath;
+  });
+  const tool = createCreateNoteTool(fs);
+  const result = await tool.execute('call_1', { content: 'Hello', title: 'Idea' });
+
+  assertEquals(attempts.length, 2);
+  const [baseAttempt, retryAttempt] = attempts;
+  assertEquals(retryAttempt.path, baseAttempt.path.replace(/\.md$/, '-1.md'));
+  assertEquals(
+    attempts.every((attempt) => attempt.content === '# Idea\n\nHello'),
+    true,
+  );
+  assertEquals(writes.length, 1);
+  assertEquals(writes[0].path, retryAttempt.path);
+  assertEquals(textOf(result).includes(retryAttempt.path), true);
+});
+
+Deno.test('create_note gives up after repeated collisions without writing', async () => {
+  const { fs, attempts, writes } = createRecordingFS(() => true);
+  const tool = createCreateNoteTool(fs);
+
+  await assertRejects(() => tool.execute('call_1', { content: 'Hello' }), Error);
+  assertEquals(attempts.length > 1, true);
+  assertEquals(writes.length, 0);
 });
