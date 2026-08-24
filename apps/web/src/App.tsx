@@ -15,8 +15,8 @@ import { Toast } from './components/ui/Toast.tsx';
 import { HtmlAppViewer } from './components/viewer/HtmlAppViewer.tsx';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.ts';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync.ts';
-import { useUiStore } from './store/ui-store.ts';
 import { useI18n } from './lib/i18n.tsx';
+import { useUiStore } from './store/ui-store.ts';
 import { useWorkspaceStore } from './store/workspace-store.ts';
 
 export function App() {
