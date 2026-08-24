@@ -1,8 +1,24 @@
 # Work Boost
 
-Work Boost is a personal AI assistant for boosting your work and life. It answers directly in your Slack and Telegram channels, helping you stay productive with intelligent conversations and task management.
+Work Boost is a local-first personal AI workspace for your daily work. It answers directly in your Slack and Telegram channels, keeps your notes and debts in a plain Markdown workspace, and sends you AI-powered daily reports.
 
-![Work Boost](./assets/work-boost.png)
+People use it for a variety of use cases:
+
+* Capture daily work notes and get AI-generated daily summaries
+* Track personal debts and loans between friends or colleagues
+* Chat with an AI assistant that can read and act on your workspace
+* Run it as a native desktop app, in the browser, or purely from Slack/Telegram
+
+![Work Boost Desktop App](./assets/desktop-app.png)
+
+## Principles
+
+- 📑 **Markdown-first** - Your notes, daily logs, and debt records are plain Markdown files on disk. The workspace is the durable source of truth, portable to any editor, with no export step.
+- 🏠 **Local-first** - The API runs on your machine and binds to loopback. Your data stays with you; there is no Work Boost cloud and no account required.
+- 🤖 **AI-first, provider-agnostic** - Chat, daily reports, and the browser Copilot all run through a configurable provider: Z.ai, OpenAI Codex, OpenRouter, or Google Gemini. Credentials live in a local pi credential file, not in the app.
+- 💬 **Meet you where you are** - The same workspace is reachable from the desktop app, the browser, Slack, and Telegram.
+- 🧩 **Extensible** - Extensions add webhooks and scheduled jobs; workspace HTML apps (like the built-in debt tracker) run inside the shell.
+- 🔬 **Open source** - Work Boost is free and open source, built for personal use and shared with others.
 
 ## Features
 
@@ -19,6 +35,23 @@ Work Boost is a personal AI assistant for boosting your work and life. It answer
 - **Subscription Management**: Subscribe/unsubscribe to daily summaries
 - **Flexible Scheduling**: Configure when to receive daily summaries and reminders
 
+## How it works
+
+```text
+Browser workspace ─┐
+Slack / Telegram ──┼── API composition ── Data layer ── Markdown workspace
+                   │          │
+                   │          ├── Brain ── Workspace tools
+                   │          └── Extensions ── webhooks and scheduled jobs
+                   └── HTTP and SSE
+```
+
+![Work Boost architecture](./assets/work-boost.png)
+
+The Deno API is the composition root: the browser workspace, the AI Brain, and the Slack/Telegram
+integrations all reach your Markdown workspace through it. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
+
 ## Installation
 
 1. Clone the repository:
@@ -29,6 +62,29 @@ Work Boost is a personal AI assistant for boosting your work and life. It answer
     ```sh
     cd work-boost
     ```
+
+## Desktop App
+
+Work Boost ships as a native desktop app (Tauri 2) that wraps the web frontend and bundles the
+API as a sidecar.
+
+Run it in development:
+
+```sh
+# Terminal 1: start the API on port 3001
+deno task dev
+
+# Terminal 2: open the desktop shell in a native window
+cd apps/desktop && npm run dev
+```
+
+Build a production installer:
+
+```sh
+cd apps/desktop && npm run build
+```
+
+See [apps/desktop/README.md](./apps/desktop/README.md) for prerequisites and details.
 
 ## Configuration
 
@@ -158,31 +214,6 @@ DAILY_SUMMARY_MINUTE=0
 
 ## Development
 
-### Code Quality
-
-```sh
-# Format code
-deno task format:fix
-
-# Format check
-deno task format
-
-# Lint with auto-fix
-deno task lint:fix
-
-# Lint check
-deno task lint
-
-# Run all checks (CI)
-deno task check
-```
-
-### Testing
-
-```sh
-deno test
-```
-
 ### Running Locally
 
 ```sh
@@ -193,10 +224,41 @@ deno task dev
 deno task start
 ```
 
-## License
+### Code Quality
 
-MIT
+```sh
+# Lint with auto-fix
+deno task lint:fix
+
+# Lint check
+deno task lint
+
+# Format code
+deno task format
+
+# Format check
+deno task format:check
+
+# Run all checks (CI)
+deno task check:ci
+```
+
+### Testing
+
+```sh
+deno test
+```
+
+## Tech Docs
+
+- 📐 [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design, tech stack, data flow
+- 📚 [ADRs](docs/adr) - Architecture Decision Records
+- 🖥️ [Desktop shell](apps/desktop/README.md) - Tauri 2 shell and API sidecar
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT
