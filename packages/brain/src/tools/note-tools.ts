@@ -26,7 +26,8 @@ function slugify(title: string): string {
 }
 
 /**
- * Build a collision-resistant timestamp suffix (YYYYMMDD-HHMMSS).
+ * Build a timestamp suffix (YYYYMMDD-HHMMSS). Second precision only: callers
+ * must handle same-second collisions themselves.
  */
 function fileStamp(): string {
   const now = new Date();
@@ -35,6 +36,10 @@ function fileStamp(): string {
     now.getHours(),
   )}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 }
+
+// Ceiling for collision retries; far beyond any realistic same-second capture
+// rate, but prevents an unbounded loop against a misbehaving filesystem.
+const MAX_PATH_ATTEMPTS = 100;
 
 /**
  * Create a new note as a Markdown file under `notes/`.
@@ -57,10 +62,22 @@ export function createCreateNoteTool(fs: WorkspaceFS): AgentTool<typeof createNo
         throw new Error('Nội dung ghi chú không được để trống.');
       }
 
-      const filePath = `notes/${slugify(title ?? '')}-${fileStamp()}.md`;
+      const slug = slugify(title ?? '');
       const body = title ? `# ${title}\n\n${content}` : content;
 
-      await fs.writeTextAtomic(filePath, body);
+      // Two captures with the same title in the same second produce the same
+      // path; writeTextIfAbsent refuses to overwrite, so retry with a counter
+      // suffix until a write lands.
+      const stamp = fileStamp();
+      let filePath = `notes/${slug}-${stamp}.md`;
+      for (let attempt = 1; !(await fs.writeTextIfAbsent(filePath, body)); attempt++) {
+        if (attempt >= MAX_PATH_ATTEMPTS) {
+          throw new Error(
+            `Không thể tạo ghi chú: đã thử ${MAX_PATH_ATTEMPTS} đường dẫn đều bị trùng.`,
+          );
+        }
+        filePath = `notes/${slug}-${stamp}-${attempt}.md`;
+      }
 
       return successResult({ path: filePath }, `📝 Đã lưu ghi chú: ${filePath}`);
     },
