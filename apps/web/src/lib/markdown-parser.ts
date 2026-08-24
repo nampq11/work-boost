@@ -47,6 +47,19 @@ export function stringifyMarkdown(frontmatter: Record<string, unknown>, body: st
     .join('\n')}\n---\n\n${body}`;
 }
 
+export function isDebtFrontmatter(frontmatter: Record<string, unknown>): boolean {
+  // Detect a debt document from parsed frontmatter. Debt notes carry fields
+  // that no other note type uses (amount, personName, direction, debtDate).
+  // Never key on `status`: daily notes also include a `status` field
+  // ('draft' | 'completed'), so it would misclassify them as debts.
+  return (
+    typeof frontmatter.amount === 'number' ||
+    typeof frontmatter.personName === 'string' ||
+    typeof frontmatter.direction === 'string' ||
+    typeof frontmatter.debtDate === 'string'
+  );
+}
+
 export function markdownToHtml(markdown: string): string {
   return markdown
     .replace(/&/g, '&amp;')

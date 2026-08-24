@@ -8,6 +8,7 @@ import {
 } from '@phosphor-icons/react';
 import React from 'react';
 import { useI18n } from '../../lib/i18n.tsx';
+import { isDebtFrontmatter } from '../../lib/markdown-parser.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 
 export function FrontmatterInspector() {
@@ -18,9 +19,7 @@ export function FrontmatterInspector() {
   if (!document) return null;
   const frontmatter = document.frontmatter;
   const set = (key: string, value: unknown) => update({ ...frontmatter, [key]: value });
-  const isDebt = Boolean(frontmatter.personName || frontmatter.amount || frontmatter.status);
-
-  if (!isDebt) return null;
+  if (!isDebtFrontmatter(frontmatter)) return null;
 
   return (
     <div className="mb-6 p-4 rounded-lg border border-[var(--border)] bg-[var(--surface-sidebar)] text-sm">
