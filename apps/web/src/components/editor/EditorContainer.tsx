@@ -9,7 +9,9 @@ import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
-import { SourceEditor } from './SourceEditor.tsx';
+const SourceEditor = React.lazy(() =>
+  import('./SourceEditor.tsx').then((m) => ({ default: m.SourceEditor })),
+);
 import { TiptapEditor } from './TiptapEditor.tsx';
 
 export function EditorContainer() {
@@ -78,7 +80,13 @@ export function EditorContainer() {
 
       {/* Editor Body */}
       {sourceMode ? (
-        <SourceEditor value={draft} onChange={updateBody} />
+        <React.Suspense
+          fallback={
+            <div className="min-h-[500px] rounded-lg border border-[var(--border)] bg-[var(--surface-sidebar)]" />
+          }
+        >
+          <SourceEditor value={draft} onChange={updateBody} />
+        </React.Suspense>
       ) : (
         <TiptapEditor value={draft} onChange={updateBody} />
       )}

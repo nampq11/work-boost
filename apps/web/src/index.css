@@ -119,11 +119,23 @@ body {
 
 /* TipTap Editor Styling */
 .tiptap-content {
-  outline: none;
+  outline: none !important;
   font-size: 16px;
   line-height: 1.7;
   color: var(--text-primary);
   padding: 24px 0 120px 0;
+}
+
+/* Contenteditable editor surfaces always match :focus-visible (they are text
+   editing elements), so the global *:focus-visible rule paints a solid blue
+   ring around the editor even on a plain mouse click. The caret is the focus
+   cue inside an editor, so suppress that ring on both editor surfaces. */
+.tiptap-content:focus,
+.tiptap-content:focus-visible,
+.cm-content:focus,
+.cm-content:focus-visible,
+.cm-editor.cm-focused {
+  outline: none !important;
 }
 
 .tiptap-content h1 {
