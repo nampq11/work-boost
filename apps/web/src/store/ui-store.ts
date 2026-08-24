@@ -8,6 +8,7 @@ interface UiState {
   toggleTheme: () => void;
   toggleCopilot: () => void;
   openCopilot: () => void;
+  closeCopilot: () => void;
   openPalette: () => void;
   closePalette: () => void;
   showToast: (message: string, action?: { label: string; run: () => void }) => void;
@@ -39,6 +40,7 @@ export const useUiStore = create<UiState>((set) => ({
     }),
   toggleCopilot: () => set((state) => ({ copilotOpen: !state.copilotOpen })),
   openCopilot: () => set({ copilotOpen: true }),
+  closeCopilot: () => set({ copilotOpen: false }),
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),
   showToast: (message, action) => set({ toast: { message, action } }),
