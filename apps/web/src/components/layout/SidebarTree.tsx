@@ -15,6 +15,7 @@ import {
   getSidebarItemType,
 } from '../../lib/sidebar-constants.ts';
 import type { FileNode } from '../../lib/types.ts';
+import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import './tree-view.css';
 
@@ -43,6 +44,7 @@ function TreeNode({
   const [expanded, setExpanded] = useState(true);
   const activePath = useWorkspaceStore((state) => state.activePath);
   const selectFile = useWorkspaceStore((state) => state.selectFile);
+  const closeCopilot = useUiStore((state) => state.closeCopilot);
   const isFolder = node.kind === 'folder';
   const isActive = activePath === node.path;
   const itemType = getSidebarItemType(node);
@@ -60,7 +62,14 @@ function TreeNode({
               : 'text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
           style={{ paddingLeft: `${10 + depth * 16}px` }}
-          onClick={() => (isFolder ? setExpanded(!expanded) : void selectFile(node.path))}
+          onClick={() => {
+            if (isFolder) {
+              setExpanded(!expanded);
+            } else {
+              closeCopilot();
+              void selectFile(node.path);
+            }
+          }}
         >
           <span className="w-4 flex items-center justify-center text-[var(--text-muted)] z-10 bg-inherit">
             {isFolder && (expanded ? <CaretDown size={12} /> : <CaretRight size={12} />)}

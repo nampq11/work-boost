@@ -1,5 +1,5 @@
-import type { Context } from 'grammy';
 import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
+import type { Context } from 'grammy';
 import { mainMenuKeyboard } from '../keyboards.ts';
 
 interface StartHandlerDeps {

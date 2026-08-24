@@ -64,7 +64,7 @@ export function Sidebar() {
 
       {/* Quick Action Buttons */}
       <div className="p-2.5 border-b border-[var(--border)] flex items-center gap-1">
-        <NewItemDropdown onNewNote={openPalette} onNewDebt={openPalette} />
+        <NewItemDropdown onNewNote={openPalette} />
         <Button
           variant="ghost"
           size="icon"

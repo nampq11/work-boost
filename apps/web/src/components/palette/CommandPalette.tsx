@@ -9,6 +9,7 @@ export function CommandPalette() {
   const { t } = useI18n();
   const open = useUiStore((state) => state.paletteOpen);
   const close = useUiStore((state) => state.closePalette);
+  const closeCopilot = useUiStore((state) => state.closeCopilot);
   const showToast = useUiStore((state) => state.showToast);
   const loadFiles = useWorkspaceStore((state) => state.loadFiles);
   const selectFile = useWorkspaceStore((state) => state.selectFile);
@@ -34,6 +35,11 @@ export function CommandPalette() {
     [nodes, query],
   );
   if (!open) return null;
+  function openFile(path: string, force = false): void {
+    closeCopilot();
+    void selectFile(path, force);
+    close();
+  }
   async function createDaily() {
     const now = new Date();
     const date = [
@@ -45,8 +51,7 @@ export function CommandPalette() {
     try {
       await api.createFile(path, '', { date, type: 'daily' });
       await loadFiles();
-      await selectFile(path, true);
-      close();
+      openFile(path, true);
     } catch (error) {
       showToast(error instanceof Error ? error.message : t('commandPalette.unableCreateDaily'));
     }
@@ -61,8 +66,11 @@ export function CommandPalette() {
         filePath?: string;
       };
       await loadFiles();
-      if (result.filePath) await selectFile(result.filePath, true);
-      close();
+      if (result.filePath) {
+        openFile(result.filePath, true);
+      } else {
+        close();
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : t('commandPalette.unableCreateDebt'));
     }
@@ -89,13 +97,7 @@ export function CommandPalette() {
             <span>{t('commandPalette.openForm')}</span>
           </button>
           {files.map((node) => (
-            <button
-              key={node.path}
-              onClick={() => {
-                void selectFile(node.path);
-                close();
-              }}
-            >
+            <button key={node.path} onClick={() => openFile(node.path)}>
               <strong>{node.name}</strong>
               <span>{node.path}</span>
             </button>

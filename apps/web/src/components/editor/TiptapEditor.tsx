@@ -15,8 +15,8 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Button } from '@work-boost/ui';
 import React, { useEffect, useRef } from 'react';
-import { htmlToMarkdown, markdownToHtml } from '../../lib/markdown-parser.ts';
 import { useI18n } from '../../lib/i18n.tsx';
+import { htmlToMarkdown, markdownToHtml } from '../../lib/markdown-parser.ts';
 
 interface TiptapEditorProps {
   value: string;

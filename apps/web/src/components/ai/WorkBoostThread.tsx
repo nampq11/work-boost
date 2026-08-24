@@ -8,8 +8,8 @@ import {
 } from '@assistant-ui/react';
 import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 import { Copy, PaperPlaneRight, Stop } from '@phosphor-icons/react';
-import { useI18n } from '../../lib/i18n.tsx';
 import React from 'react';
+import { useI18n } from '../../lib/i18n.tsx';
 import { AssistantMarkdown } from './AssistantMarkdown.tsx';
 import { MessagePair } from './MessagePair.tsx';
 import { ToolTimeline } from './ToolCall.tsx';

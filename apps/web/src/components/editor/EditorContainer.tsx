@@ -1,9 +1,11 @@
-import { Code, Coins, Eye, FileText, FloppyDisk } from '@phosphor-icons/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
+import { Code, Coins, Eye, FileText, FloppyDisk, PaperPlaneRight } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
-import { type Translate, useI18n } from '../../lib/i18n.tsx';
-import type { FileNode } from '../../lib/types.ts';
+import { api } from '../../lib/api-client.ts';
+import { useI18n } from '../../lib/i18n.tsx';
+import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
@@ -16,10 +18,7 @@ export function EditorContainer() {
   const draft = useWorkspaceStore((state) => state.draft);
   const updateBody = useWorkspaceStore((state) => state.updateBody);
   const save = useWorkspaceStore((state) => state.save);
-  const recentFiles = useWorkspaceStore((state) => state.recentFiles);
-  const nodes = useWorkspaceStore((state) => state.nodes);
   const [sourceMode, setSourceMode] = useState(false);
-  const openPalette = useUiStore((state) => state.openPalette);
 
   useAutosave();
 
@@ -34,167 +33,9 @@ export function EditorContainer() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Get recent notes with metadata
-  const recentNotes = React.useMemo(() => {
-    const nodeMap = new Map<string, FileNode>();
-
-    function traverse(items: FileNode[]) {
-      for (const item of items) {
-        if (item.kind !== 'folder') {
-          nodeMap.set(item.path, item);
-        }
-        if (item.children) {
-          traverse(item.children);
-        }
-      }
-    }
-    traverse(nodes);
-
-    return Array.from(recentFiles.entries())
-      .map(([path, accessedAt]) => {
-        const node = nodeMap.get(path);
-        if (!node) return null;
-        return {
-          path,
-          name: node.name,
-          kind: node.kind,
-          accessedAt,
-        };
-      })
-      .filter((n): n is NonNullable<typeof n> => n !== null)
-      .sort((a, b) => b.accessedAt.getTime() - a.accessedAt.getTime());
-  }, [recentFiles, nodes]);
-
-  // Empty state - Welcome Dashboard
+  // Today view (front door): shown whenever no file is selected
   if (!document) {
-    // If we have recent notes, show recent notes grid
-    if (recentNotes.length > 0) {
-      return (
-        <div className="h-full flex flex-col items-center justify-center select-none">
-          <div className="w-full max-w-2xl px-8 flex flex-col gap-6 items-center">
-            {/* Brand Mark */}
-            <div className="flex justify-center">
-              <img src="/logo.png" alt="" className="w-12 h-12 rounded-full shadow-sm" />
-            </div>
-
-            {/* Heading */}
-            <div className="space-y-1 text-center">
-              <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] m-0">
-                {t('editor.recentNotes')}
-              </h2>
-              <p className="text-xs text-[var(--text-secondary)] m-0">
-                {t('editor.pickUpWhereYouLeftOff')}
-              </p>
-            </div>
-
-            {/* Recent Notes Grid - centered when odd number of items */}
-            <div
-              className={`grid gap-2 w-full ${recentNotes.length === 1 ? 'grid-cols-1 max-w-xs' : 'grid-cols-2'}`}
-            >
-              {recentNotes.slice(0, 6).map((note) => {
-                const displayName = note.name.replace(/\.(md|html)$/, '');
-                const timeAgo = formatTimeAgo(note.accessedAt, t);
-                const Icon =
-                  note.kind === 'debt' || note.kind === 'debt-archive' ? Coins : FileText;
-                const iconColor =
-                  note.kind === 'debt' || note.kind === 'debt-archive'
-                    ? 'text-[var(--accent-green)]'
-                    : 'text-[var(--text-muted)]';
-
-                return (
-                  <button
-                    key={note.path}
-                    type="button"
-                    onClick={() => void useWorkspaceStore.getState().selectFile(note.path)}
-                    className="flex flex-col items-start p-3 rounded-lg border border-[var(--border)] bg-[var(--surface-card)] hover:bg-[var(--surface-sidebar)] hover:border-[var(--text-muted)] transition-colors cursor-pointer text-left group"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon size={14} className={iconColor} />
-                      <span className="text-sm font-medium text-[var(--text-primary)] truncate flex-1">
-                        {displayName}
-                      </span>
-                    </div>
-                    <span className="text-xs text-[var(--text-secondary)]">{timeAgo}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Quick Actions */}
-            <div className="flex justify-center gap-3 pt-2">
-              <Button variant="outline" size="sm" onClick={openPalette} className="gap-1.5">
-                <span>{t('editor.newNote')}</span>
-              </Button>
-              <Button variant="outline" size="sm" onClick={openPalette} className="gap-1.5">
-                <span>{t('editor.newDebt')}</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Empty workspace state - Welcome Dashboard
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center select-none">
-        <div className="max-w-md px-8 flex flex-col gap-6">
-          {/* Brand Mark Icon */}
-          <div className="flex justify-center">
-            <img src="/logo.png" alt="" className="w-12 h-12 rounded-full shadow-sm" />
-          </div>
-
-          {/* Heading */}
-          <div className="space-y-1">
-            <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] m-0">
-              {t('editor.welcomeTitle')}
-            </h2>
-            <p className="text-xs text-[var(--text-secondary)] m-0">
-              {t('editor.welcomeSubtitle')}
-            </p>
-          </div>
-
-          {/* Action Cards */}
-          <div className="grid grid-cols-2 gap-3 w-full">
-            <button
-              type="button"
-              onClick={openPalette}
-              className="flex flex-col items-start gap-1 p-3.5 rounded-lg border border-[var(--border)] bg-[var(--surface-card)] hover:bg-[var(--surface-sidebar)] hover:border-[var(--text-muted)] transition-all text-left group cursor-pointer shadow-sm"
-            >
-              <div className="flex items-center gap-2 font-semibold text-xs text-[var(--text-primary)]">
-                <FileText size={16} className="text-[var(--accent-blue)]" />
-                <span>{t('editor.newNote')}</span>
-              </div>
-              <span className="text-[11px] text-[var(--text-secondary)]">
-                {t('editor.newNoteDescription')}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={openPalette}
-              className="flex flex-col items-start gap-1 p-3.5 rounded-lg border border-[var(--border)] bg-[var(--surface-card)] hover:bg-[var(--surface-sidebar)] hover:border-[var(--text-muted)] transition-all text-left group cursor-pointer shadow-sm"
-            >
-              <div className="flex items-center gap-2 font-semibold text-xs text-[var(--text-primary)]">
-                <Coins size={16} className="text-[var(--accent-green)]" />
-                <span>{t('editor.newDebt')}</span>
-              </div>
-              <span className="text-[11px] text-[var(--text-secondary)]">
-                {t('editor.newDebtDescription')}
-              </span>
-            </button>
-          </div>
-
-          {/* Shortcut Hint */}
-          <div className="text-[11px] text-[var(--text-muted)] flex items-center justify-center gap-1.5 pt-2">
-            <span>{t('editor.press')}</span>
-            <kbd className="bg-[var(--surface-sidebar)] px-1.5 py-0.5 rounded border border-[var(--border)] font-mono text-[10px] text-[var(--text-secondary)]">
-              Ctrl + K
-            </kbd>
-            <span>{t('editor.toSearchAnything')}</span>
-          </div>
-        </div>
-      </div>
-    );
+    return <TodayPanel />;
   }
 
   const title =
@@ -245,16 +86,261 @@ export function EditorContainer() {
   );
 }
 
-function formatTimeAgo(date: Date, translate: Translate): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+function formatMoney(amount: number, currency: string): string {
+  return `${amount.toLocaleString()} ${currency}`;
+}
 
-  if (diffMins < 1) return translate('editor.justNow');
-  if (diffMins < 60) return translate('editor.minutesAgo', { count: diffMins });
-  if (diffHours < 24) return translate('editor.hoursAgo', { count: diffHours });
-  if (diffDays < 7) return translate('editor.daysAgo', { count: diffDays });
-  return date.toLocaleDateString();
+function getTodayLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function TodayPanel() {
+  const { t } = useI18n();
+  const aui = useAui();
+  const [captureText, setCaptureText] = useState('');
+  const [daily, setDaily] = useState<TodayDailyDocument | null>(null);
+  const [debts, setDebts] = useState<DebtDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Bumping this counter reruns the Today load effect (retry button).
+  const [retryCount, setRetryCount] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // The capture box talks to the same thread as the Copilot workspace so both
+  // surfaces share one conversation and one AI context.
+  const isRunning = useAuiState((state) => state.thread.isRunning);
+  const wasRunningRef = useRef(false);
+
+  const refreshToday = useCallback(async () => {
+    const [todayDoc, pendingDebts] = await Promise.all([
+      api.getDailyToday(),
+      api.listDebts({ status: 'pending' }),
+    ]);
+    setDaily(todayDoc);
+    setDebts(pendingDebts);
+    // The panel data is already committed, so a sidebar refresh failure must
+    // not surface as a Today load error; keep it best-effort.
+    await useWorkspaceStore
+      .getState()
+      .loadFiles()
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setLoadFailed(false);
+    refreshToday()
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshToday, retryCount]);
+
+  // Refresh summary and debts once a run on the shared thread finishes.
+  useEffect(() => {
+    const finished = wasRunningRef.current && !isRunning;
+    wasRunningRef.current = isRunning;
+    if (finished) void refreshToday().catch(() => setLoadFailed(true));
+  }, [isRunning, refreshToday]);
+
+  // Auto-grow the capture textarea as the user types.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [captureText]);
+
+  function submitCapture(): void {
+    const text = captureText.trim();
+    if (!text || isRunning) return;
+    setCaptureText('');
+    // The conversation lives in the Copilot drawer thread, so surface it there.
+    useUiStore.getState().openCopilot();
+    aui.thread.append({
+      role: 'user',
+      content: [{ type: 'text', text }],
+      startRun: true,
+    });
+  }
+
+  function retryLoad(): void {
+    setRetryCount((count) => count + 1);
+  }
+
+  function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void submitCapture();
+    }
+  }
+
+  const report = daily?.report ?? null;
+  const sections = [
+    {
+      key: 'completed',
+      title: t('editor.todayCompletedTitle'),
+      tasks: report?.completed ?? [],
+    },
+    {
+      key: 'incomplete',
+      title: t('editor.todayIncompleteTitle'),
+      tasks: report?.incomplete ?? [],
+    },
+    {
+      key: 'planned',
+      title: t('editor.todayPlannedTitle'),
+      tasks: report?.planned ?? [],
+    },
+  ];
+  // Empty sections add noise; only render the ones that have tasks.
+  const visibleSections = sections.filter((section) => section.tasks.length > 0);
+  // Whitespace-only custom sections must not count as content.
+  const customSections = daily?.customSections.trim() ? daily.customSections : null;
+  const hasReport = visibleSections.length > 0 || customSections !== null;
+  const todayLabel = getTodayLabel();
+
+  return (
+    <div className="max-w-4xl mx-auto px-10 py-10 flex flex-col gap-6">
+      {/* Capture box */}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-4">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] m-0">
+            {t('editor.todayTitle')}
+          </h1>
+          <span className="text-sm text-[var(--text-muted)]">{todayLabel}</span>
+        </div>
+        <textarea
+          ref={textareaRef}
+          autoFocus
+          value={captureText}
+          onChange={(event) => setCaptureText(event.target.value)}
+          onKeyDown={onKeyDown}
+          rows={3}
+          placeholder={t('editor.todayPrompt')}
+          disabled={isRunning}
+          className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-[15px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent-blue)] disabled:opacity-60"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] text-[var(--text-muted)] m-0">
+            {isRunning ? t('editor.todayCaptureSending') : t('editor.todayPromptHint')}
+          </p>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={submitCapture}
+            disabled={!captureText.trim() || isRunning}
+            className="gap-1.5 bg-[var(--text-primary)] text-[var(--text-inverse)] hover:opacity-90"
+          >
+            <PaperPlaneRight size={14} />
+            <span>{t('editor.todayCaptureAction')}</span>
+          </Button>
+        </div>
+      </section>
+
+      {/* Today data failed to load: keep whatever data we have and offer a retry */}
+      {!loading && loadFailed && (
+        <div className="p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
+          <span>{t('editor.todayLoadFailed')}</span>
+          <button onClick={retryLoad} className="underline font-medium hover:opacity-80">
+            {t('editor.todayRetry')}
+          </button>
+        </div>
+      )}
+
+      {/* Today's summary */}
+      <section className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-tight text-[var(--text-primary)] m-0">
+          <FileText size={15} className="text-[var(--accent-blue)]" />
+          {t('editor.todaySummaryTitle')}
+        </h2>
+        {loading ? (
+          <p className="text-xs text-[var(--text-muted)] m-0">…</p>
+        ) : !hasReport ? (
+          <p className="text-sm text-[var(--text-secondary)] m-0">
+            {t('editor.todaySummaryEmpty')}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {visibleSections.map((section) => (
+              <div key={section.key} className="flex flex-col gap-1.5">
+                <h3 className="text-xs font-semibold uppercase tracking-tight text-[var(--text-secondary)] m-0">
+                  {section.title}
+                </h3>
+                <ul className="flex flex-col gap-1 m-0 list-none p-0">
+                  {section.tasks.map((task, index) => (
+                    <li
+                      key={`${section.key}-${index}`}
+                      className="flex gap-2 text-sm text-[var(--text-primary)]"
+                    >
+                      <span className="text-[var(--text-muted)]">•</span>
+                      <span>
+                        <span className="font-medium text-[var(--accent-blue)]">
+                          {task.project || 'INBOX'}
+                        </span>
+                        {task.task ? `: ${task.task}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            {customSections && (
+              <div className="whitespace-pre-wrap text-sm text-[var(--text-secondary)]">
+                {customSections}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Today's debts (browse-only) */}
+      <section className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-tight text-[var(--text-primary)] m-0">
+          <Coins size={15} className="text-[var(--accent-green)]" />
+          {t('editor.todayDebtsTitle')}
+        </h2>
+        {loading ? (
+          <p className="text-xs text-[var(--text-muted)] m-0">…</p>
+        ) : debts.length === 0 ? (
+          <p className="text-sm text-[var(--text-secondary)] m-0">{t('editor.todayDebtsEmpty')}</p>
+        ) : (
+          <ul className="flex flex-col gap-2 m-0 list-none p-0">
+            {debts.map((debt) => (
+              <li
+                key={debt.frontmatter.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-2.5"
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <Coins size={14} className="shrink-0 text-[var(--text-muted)]" />
+                  <div className="min-w-0">
+                    <p className="truncate m-0 text-sm font-medium text-[var(--text-primary)]">
+                      {debt.frontmatter.personName}
+                    </p>
+                    <p className="m-0 text-xs text-[var(--text-secondary)]">
+                      {debt.frontmatter.direction === 'lent'
+                        ? t('frontmatter.directionLent')
+                        : t('frontmatter.directionBorrowed')}
+                    </p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-sm font-semibold text-[var(--text-primary)]">
+                  {formatMoney(debt.frontmatter.amount, debt.frontmatter.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
 }

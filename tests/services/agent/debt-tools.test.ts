@@ -271,7 +271,7 @@ Deno.test('delete_debt throws when debt not found', async () => {
   await assertRejects(() => tool.execute('call_1', { debtId: 'nonexistent' }), Error, 'not found');
 });
 
-Deno.test('getWorkspaceTools returns all 10 tools', () => {
+Deno.test('getWorkspaceTools returns all 12 tools', () => {
   const fs = {
     init: () => Promise.resolve(),
     readText: () => Promise.resolve(''),
@@ -293,7 +293,7 @@ Deno.test('getWorkspaceTools returns all 10 tools', () => {
     debts: createFakeDebtRepository([]) as never,
   });
   const names = tools.map((t) => t.name);
-  assertEquals(names.length, 11);
+  assertEquals(names.length, 12);
   assertEquals(names.includes('get_current_time'), true);
   assertEquals(names.includes('create_debt'), true);
   assertEquals(names.includes('list_debts'), true);
@@ -305,4 +305,5 @@ Deno.test('getWorkspaceTools returns all 10 tools', () => {
   assertEquals(names.includes('list_daily_dates'), true);
   assertEquals(names.includes('read_workspace_file'), true);
   assertEquals(names.includes('list_workspace_files'), true);
+  assertEquals(names.includes('create_note'), true);
 });

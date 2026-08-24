@@ -27,6 +27,7 @@ export {
   createSaveDailyWorkTool,
 } from './tools/daily-work-tools.ts';
 export { createGetCurrentTimeTool } from './tools/time-tools.ts';
+export { createCreateNoteTool } from './tools/note-tools.ts';
 export {
   createReadWorkspaceFileTool,
   createListWorkspaceFilesTool,
