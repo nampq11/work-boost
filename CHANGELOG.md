@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Desktop application** (#28) - Added a Tauri 2 desktop shell wrapping the web app with a bundled Deno API sidecar.
+- **Configurable AI provider credentials** (#25) - AI provider and model can now be configured instead of being hardcoded.
+- **Copilot chat workspace** (#26) - Replaced the ad-hoc copilot panel with an `assistant-ui`-based thread featuring streamed tool timelines and clickable file paths in assistant responses. #26
+- **Today capture** (#30) - Added a daily capture box on the Today view that routes free-form notes through the shared copilot thread, auto-opening it on capture, with automatic note creation via the new `create_note` tool. #30
+- **Internationalization** - Replaced hardcoded UI strings with an i18n catalog to prepare for translations.
+
+### Changed
+
+- Extracted a shared UI package with design tokens and Base UI dropdown components. #29
+- Consolidated Telegram debt commands into a conversational flow instead of separate commands.
+
+### Fixed
+
+- Fixed the scheduler so the daily report runs by default without extra configuration.
+- Stabilized HTML app loading and startup in the web app.
+
 ## [0.2.0] - 2026-08-20
 
 ### Added
