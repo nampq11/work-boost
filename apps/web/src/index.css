@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "../../../packages/ui/src/styles/tokens.css";
+@import "@work-boost/ui/styles/tokens.css";
 
 :root {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;

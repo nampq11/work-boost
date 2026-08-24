@@ -18,6 +18,11 @@ export default defineConfig({
   resolve: {
     // vite does not read deno.json import maps, so workspace packages need explicit aliases
     alias: {
+      // must precede the '@work-boost/ui' entry: string aliases also match subpaths
+      '@work-boost/ui/styles/tokens.css': path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        '../../packages/ui/src/styles/tokens.css',
+      ),
       '@work-boost/ui': path.resolve(
         path.dirname(fileURLToPath(import.meta.url)),
         '../../packages/ui/mod.ts',
