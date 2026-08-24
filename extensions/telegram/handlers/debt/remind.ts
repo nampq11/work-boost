@@ -1,7 +1,7 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import type { Context } from 'grammy';
-import { debtMenuKeyboard, debtReminderKeyboard } from '../../keyboards.ts';
+import { debtReminderKeyboard } from '../../keyboards.ts';
 
 interface RemindHandlerDeps {
   db: Database;
@@ -110,7 +110,7 @@ export async function handleSetReminderFrequency(
   await ctx.editMessageText(
     `✅ Reminder settings updated!\n\n` +
       `You will ${getReminderVerb(frequency)} debt reminders${frequencySuffix}.`,
-    { reply_markup: debtMenuKeyboard(), parse_mode: 'HTML' },
+    { parse_mode: 'HTML' },
   );
 }
 

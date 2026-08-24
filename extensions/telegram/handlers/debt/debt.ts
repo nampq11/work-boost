@@ -1,11 +1,6 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
-import type { DebtDirection } from '@work-boost/data-schemas/debt.ts';
 import type { Context } from 'grammy';
-import { debtDirectionKeyboard, debtMenuKeyboard } from '../../keyboards.ts';
-import { createExpiringStore } from '../../state.ts';
-
-type ReplyMarkup = NonNullable<Parameters<Context['reply']>[1]>['reply_markup'];
 
 interface DebtHandlerDeps {
   db: Database;
@@ -16,37 +11,30 @@ interface DebtHandlerDeps {
  * Reply with HTML parse mode, falling back to plain text if Telegram rejects
  * the agent's free-form output as malformed HTML.
  */
-async function safeReplyHtml(
-  ctx: Context,
-  text: string,
-  extra: { reply_markup?: ReplyMarkup } = {},
-): Promise<void> {
+async function safeReplyHtml(ctx: Context, text: string): Promise<void> {
   try {
-    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: extra.reply_markup });
+    await ctx.reply(text, { parse_mode: 'HTML' });
   } catch {
-    await ctx.reply(text, { reply_markup: extra.reply_markup });
+    await ctx.reply(text);
   }
 }
 
-interface PendingDebt {
-  direction?: DebtDirection;
-  amount?: number;
-  person?: string;
-  reason?: string;
-}
-
-const pendingDebts = createExpiringStore<PendingDebt>(15 * 60 * 1000);
+export const DEBT_CONVERSATION_HINT =
+  '💬 <b>Track debts by chatting</b>\n\n' +
+  'Just tell me in plain language, for example:\n' +
+  '• <i>lent Hoa 200k for lunch</i>\n' +
+  '• <i>what does Hoa owe me?</i>\n' +
+  '• <i>mark the lunch debt as paid</i>';
 
 /**
  * Handle /debt command.
  * With natural-language input, delegates parsing to the Brain agent via stream().
- * Without input, shows the guided direction-selection form.
+ * Without input, nudges the user toward conversation instead of a guided form.
  */
 export async function handleDebt(ctx: Context, deps: DebtHandlerDeps): Promise<void> {
-  const chatId = ctx.chat?.id?.toString();
   const userId = ctx.from?.id.toString();
 
-  if (!chatId || !userId) {
+  if (!userId) {
     await ctx.reply('Unable to identify user. Please try again.');
     return;
   }
@@ -60,93 +48,8 @@ export async function handleDebt(ctx: Context, deps: DebtHandlerDeps): Promise<v
     const sessionId = `telegram_${userId}`;
     const response = await deps.agent.stream(inputText, { sessionId });
 
-    await safeReplyHtml(ctx, response || 'Done.', {
-      reply_markup: debtMenuKeyboard(),
-    });
+    await safeReplyHtml(ctx, response || 'Done.');
   } else {
-    await ctx.reply('📝 <b>Record a Debt</b>\n\nChoose how you want to record this debt:', {
-      reply_markup: debtDirectionKeyboard(),
-      parse_mode: 'HTML',
-    });
+    await ctx.reply(DEBT_CONVERSATION_HINT, { parse_mode: 'HTML' });
   }
-}
-
-export async function handleRecordDebt(ctx: Context, _deps: DebtHandlerDeps): Promise<void> {
-  await ctx.answerCallbackQuery();
-  await ctx.editMessageText('📝 <b>Record a Debt</b>\n\nChoose how you want to record this debt:', {
-    reply_markup: debtDirectionKeyboard(),
-    parse_mode: 'HTML',
-  });
-}
-
-export async function handleDirectionSelect(
-  ctx: Context,
-  _deps: DebtHandlerDeps,
-  direction: 'lent' | 'borrowed',
-): Promise<void> {
-  await ctx.answerCallbackQuery();
-
-  const userId = ctx.from?.id.toString();
-  if (!userId) {
-    await ctx.reply('Unable to identify user.');
-    return;
-  }
-
-  pendingDebts.set(userId, { direction: direction as DebtDirection });
-
-  const directionText = direction === 'lent' ? 'lent to' : 'borrowed from';
-  await ctx.editMessageText(
-    `💰 <b>Record Debt - ${direction === 'lent' ? 'Lent' : 'Borrowed'} Money</b>\n\n` +
-      `You're recording money you ${directionText} someone.\n\n` +
-      `Please enter the amount and person name.\n\n` +
-      `<b>Format:</b> &lt;amount&gt; &lt;person name&gt; [reason]\n` +
-      `<b>Example:</b> 50 John for lunch\n\n` +
-      `Or send /cancel to abort.`,
-    { parse_mode: 'HTML' },
-  );
-}
-
-/**
- * Handle text input for debt entry with a pre-selected direction.
- * Delegates to the Brain agent, prepending the direction context so the
- * agent normalizes the input correctly.
- */
-export async function handleDebtInput(
-  ctx: Context,
-  deps: DebtHandlerDeps,
-  inputText: string,
-): Promise<boolean> {
-  const userId = ctx.from?.id.toString();
-  if (!userId) return false;
-
-  const pending = pendingDebts.get(userId);
-  if (!pending || !pending.direction) return false;
-
-  await ctx.reply('🤖 Processing...');
-
-  const directionText = pending.direction === 'lent' ? 'cho vay' : 'vay';
-  const contextMessage = `Hướng nợ: ${directionText}. Nhập: ${inputText}`;
-  const sessionId = `telegram_${userId}`;
-  pendingDebts.delete(userId);
-
-  let response: string;
-  try {
-    response = await deps.agent.stream(contextMessage, { sessionId });
-  } catch {
-    await ctx.reply('Sorry, I could not record that debt. Please try again.');
-    return true;
-  }
-
-  await safeReplyHtml(ctx, response || 'Done.', {
-    reply_markup: debtMenuKeyboard(),
-  });
-  return true;
-}
-
-export function hasPendingDebt(userId: string): boolean {
-  return pendingDebts.has(userId);
-}
-
-export function clearPendingDebt(userId: string): void {
-  pendingDebts.delete(userId);
 }

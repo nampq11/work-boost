@@ -24,12 +24,10 @@ People use it for a variety of use cases:
 
 - **Multi-Platform Support**: Works with both Slack and Telegram
 - **AI-Powered Conversations**: Chat with an AI assistant that helps with work and life tasks
-- **Debt Tracking**: Track personal debts and loans with `/debt` commands
-  - `/debt` - Add a new debt record
-  - `/debt_list` - List all your debts
-  - `/debt_settle` - Mark a debt as settled
-  - `/debt_delete` - Delete a debt record
-  - `/debt_summary` - Get a summary of your debts
+- **Debt Tracking**: Manage debts conversationally in chat or through the Copilot
+  - Say things like "lent Hoa 200k for lunch", "what does Hoa owe me?", or
+    "mark the lunch debt as paid"
+  - `/debt <description>` is a shortcut that forwards your text to the assistant
 - **Task Management**: Easily add, update, and delete tasks
 - **Daily AI Reports**: Get AI-powered summaries of your daily work
 - **Subscription Management**: Subscribe/unsubscribe to daily summaries

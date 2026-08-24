@@ -1,4 +1,3 @@
-import { DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import { InlineKeyboard } from 'grammy';
 
 /**
@@ -34,79 +33,6 @@ export function languageKeyboard(): InlineKeyboard {
     .text('English', 'action:lang_en');
 }
 
-// ============================================================================
-// Debt Tracking Keyboards
-// ============================================================================
-
-/**
- * Debt menu keyboard - main entry point for debt features
- */
-export function debtMenuKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('📝 Record Debt', 'action:debt:record')
-    .text('📋 My Debts', 'action:debt:list')
-    .row()
-    .text('📊 Summary', 'action:debt:summary')
-    .text('⏰ Reminders', 'action:debt:remind')
-    .row()
-    .text('« Back', 'action:cancel');
-}
-
-/**
- * Debt direction selection keyboard
- */
-export function debtDirectionKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('💰 Lent Money', 'action:debt:direction:lent')
-    .row()
-    .text('📥 Borrowed Money', 'action:debt:direction:borrowed')
-    .row()
-    .text('« Back', 'action:debt:menu');
-}
-
-/**
- * Debt list filter keyboard
- */
-export function debtListKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('All', 'action:debt:filter:all')
-    .text('Pending', 'action:debt:filter:pending')
-    .text('Paid', 'action:debt:filter:paid')
-    .row()
-    .text('Lent', 'action:debt:filter:lent')
-    .text('Borrowed', 'action:debt:filter:borrowed')
-    .row()
-    .text('« Back', 'action:debt:menu');
-}
-
-/**
- * Keyboard for a single debt item action buttons
- */
-export function debtItemKeyboard(debtId: string, status: DebtStatus): InlineKeyboard {
-  const keyboard = new InlineKeyboard();
-
-  if (status === DebtStatus.PENDING) {
-    keyboard.text('✅ Mark Paid', `action:debt:settle:${debtId}`).row();
-  }
-
-  keyboard
-    .text('🗑 Delete', `action:debt:delete:${debtId}`)
-    .row()
-    .text('« Back', 'action:debt:list');
-
-  return keyboard;
-}
-
-/**
- * Confirmation keyboard for debt actions
- */
-export function debtConfirmKeyboard(action: string, debtId: string): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('Yes, confirm', `action:debt:confirm:${action}:${debtId}`)
-    .row()
-    .text('Cancel', 'action:debt:list');
-}
-
 /**
  * Reminder settings keyboard
  */
@@ -117,5 +43,5 @@ export function debtReminderKeyboard(currentFrequency: string): InlineKeyboard {
     .row()
     .text(currentFrequency === 'never' ? '✓ Never' : 'Never', 'action:debt:remind:never')
     .row()
-    .text('« Back', 'action:debt:menu');
+    .text('« Back', 'action:cancel');
 }

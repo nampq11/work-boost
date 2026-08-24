@@ -9,7 +9,6 @@ import { redactRecursively } from '@work-boost/shared/logger/logger.ts';
 import { Bot, type Context, GrammyError } from 'grammy';
 import { webhookCallback } from 'grammy';
 import type { BotService, Platform, SendOptions } from '../bot/bot-service.ts';
-import { handleDebtInput, hasPendingDebt } from './handlers/debt/debt.ts';
 import * as debtHandlers from './handlers/debt/index.ts';
 import * as handlers from './handlers/index.ts';
 import { mainMenuKeyboard } from './keyboards.ts';
@@ -123,31 +122,9 @@ export class TelegramService implements BotService {
     this.bot.command('help', (ctx) => handlers.handleHelp(ctx));
 
     this.bot.command('debt', (ctx) => debtHandlers.handleDebt(ctx, deps));
-    this.bot.command('d', (ctx) => debtHandlers.handleDebt(ctx, deps));
-    this.bot.command('debts', (ctx) => debtHandlers.handleListDebts(ctx, deps));
-    this.bot.command('dlist', (ctx) => debtHandlers.handleListDebts(ctx, deps));
-    this.bot.command('settle', (ctx) => debtHandlers.handleSettleCommand(ctx, deps));
-    this.bot.command('delete', async (ctx) => {
-      const userId = ctx.from?.id.toString();
-      if (userId && hasPendingDebt(userId)) {
-        await debtHandlers.handleDeleteCommand(ctx, deps);
-      }
-    });
-    this.bot.command('debtsummary', (ctx) => debtHandlers.handleDebtSummary(ctx, deps));
-    this.bot.command('dsummary', (ctx) => debtHandlers.handleDebtSummary(ctx, deps));
     this.bot.command('remind', (ctx) => debtHandlers.handleRemind(ctx, deps));
 
-    this.bot.on('message:text', async (ctx) => {
-      const userId = ctx.from?.id.toString();
-      const messageText = ctx.message?.text || '';
-
-      if (userId && hasPendingDebt(userId)) {
-        const handled = await handleDebtInput(ctx, deps, messageText);
-        if (handled) return;
-      }
-
-      await handlers.handleMessage(ctx, deps);
-    });
+    this.bot.on('message:text', (ctx) => handlers.handleMessage(ctx, deps));
 
     this.bot.callbackQuery('action:subscribe', (ctx) =>
       handlers.handleSubscribeCallback(ctx, deps),
@@ -162,11 +139,6 @@ export class TelegramService implements BotService {
     this.bot.callbackQuery('action:help', (ctx) => handlers.handleHelpCallback(ctx));
     this.bot.callbackQuery('action:cancel', async (ctx) => {
       await ctx.answerCallbackQuery();
-      const userId = ctx.from?.id.toString();
-      if (userId) {
-        const { clearPendingDebt } = await import('./handlers/debt/debt.ts');
-        clearPendingDebt(userId);
-      }
       await ctx.editMessageText('Cancelled.', {
         reply_markup: mainMenuKeyboard(),
       });
