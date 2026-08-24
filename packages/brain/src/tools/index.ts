@@ -13,6 +13,7 @@ import {
   createListDebtsTool,
   createSettleDebtTool,
 } from './debt-tools.ts';
+import { createCreateNoteTool } from './note-tools.ts';
 import { createGetCurrentTimeTool } from './time-tools.ts';
 import {
   createListWorkspaceFilesTool,
@@ -44,5 +45,6 @@ export function getWorkspaceTools(dataLayer: DataLayer): AgentTool<any>[] {
     // Workspace files
     createReadWorkspaceFileTool(dataLayer.fs),
     createListWorkspaceFilesTool(dataLayer.fs),
+    createCreateNoteTool(dataLayer.fs),
   ];
 }

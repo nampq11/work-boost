@@ -1,5 +1,5 @@
 import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
-import type { ActiveDocument, WorkspaceEvent } from './types.ts';
+import type { ActiveDocument, DebtDocument, TodayDailyDocument, WorkspaceEvent } from './types.ts';
 export type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
 const buildEnvironment =
   (
@@ -194,6 +194,19 @@ export const api = {
     request(`${workspaceBase}/debts/create`, { method: 'POST', body: JSON.stringify(data) }),
   settleDebt: (id: string) =>
     request(`${workspaceBase}/debts/${encodeURIComponent(id)}/settle`, { method: 'POST' }),
+  listDebts: (params?: {
+    status?: string;
+    direction?: string;
+    personName?: string;
+  }) => {
+    const search = new URLSearchParams();
+    if (params?.status) search.set('status', params.status);
+    if (params?.direction) search.set('direction', params.direction);
+    if (params?.personName) search.set('personName', params.personName);
+    const query = search.size > 0 ? `?${search.toString()}` : '';
+    return request<DebtDocument[]>(`${workspaceBase}/debts${query}`);
+  },
+  getDailyToday: () => request<TodayDailyDocument | null>(`${workspaceBase}/daily/today`),
   createThread: () =>
     request<{ id: string }>(`${apiBase}/v1/threads`, {
       method: 'POST',

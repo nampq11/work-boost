@@ -19,6 +19,49 @@ export interface ActiveDocument {
   lastSavedAt?: Date;
 }
 
+export interface TaskItem {
+  project: string;
+  task: string;
+}
+
+export interface TodayDailyReport {
+  completed: TaskItem[];
+  incomplete: TaskItem[];
+  planned: TaskItem[];
+}
+
+export interface TodayDailyDocument {
+  frontmatter: {
+    id: string;
+    date: string;
+    status: string;
+    updatedAt: string;
+    updatedBy: string;
+  };
+  report: TodayDailyReport;
+  customSections: string;
+  rawMarkdown: string;
+  filePath: string;
+}
+
+export interface DebtDocument {
+  frontmatter: {
+    id: string;
+    direction: 'lent' | 'borrowed';
+    amount: number;
+    currency: string;
+    personName: string;
+    status: 'pending' | 'paid' | 'cancelled';
+    debtDate: string;
+    createdAt: string;
+    updatedAt: string;
+    paidAt?: string | null;
+    updatedBy?: string;
+  };
+  reason: string;
+  filePath: string;
+}
+
 export interface DebtInspectorData {
   id: string;
   personName: string;

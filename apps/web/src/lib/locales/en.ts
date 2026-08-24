@@ -29,6 +29,21 @@ export const en = {
   'editor.hoursAgo': '{{count}}h ago',
   'editor.daysAgo': '{{count}}d ago',
 
+  // Today view (daily capture front door)
+  'editor.todayTitle': 'Today',
+  'editor.todayPrompt': 'What did you do today? Work, money, anything.',
+  'editor.todayPromptHint': 'Enter to capture, Shift+Enter for a new line.',
+  'editor.todayCaptureSending': 'Capturing your day...',
+  'editor.todayCaptureFailed': 'Unable to capture. Check the connection and try again.',
+  'editor.todaySummaryTitle': 'Today\u2019s summary',
+  'editor.todaySummaryEmpty':
+    'Nothing captured yet. Dump your day above and the AI organizes it here.',
+  'editor.todayCompletedTitle': 'Done',
+  'editor.todayIncompleteTitle': 'Incomplete',
+  'editor.todayPlannedTitle': 'Planned',
+  'editor.todayDebtsTitle': 'Today\u2019s debts',
+  'editor.todayDebtsEmpty': 'No active debts.',
+
   // Debt frontmatter inspector
   'frontmatter.debtProperties': 'Debt Properties',
   'frontmatter.person': 'Person',
