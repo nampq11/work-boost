@@ -1,7 +1,9 @@
 import React from 'react';
+import { useI18n } from '../../lib/i18n.tsx';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 
 export function StatusBar() {
+  const { t } = useI18n();
   const document = useWorkspaceStore((state) => state.activeDocument);
   const draft = useWorkspaceStore((state) => state.draft);
   const isDirty = useWorkspaceStore((state) => state.isDirty);
@@ -13,17 +15,22 @@ export function StatusBar() {
       <span className="text-[var(--border)]">|</span>
       <span>Markdown</span>
       <span className="text-[var(--border)]">|</span>
-      <span>{words} words</span>
-      <span>({draft.length} chars)</span>
+      <span>{t('statusBar.words', { count: words })}</span>
+      <span>{t('statusBar.chars', { count: draft.length })}</span>
 
       <div className="flex-1" />
 
       <span className={isDirty ? 'text-[var(--accent-orange)] font-medium' : ''}>
         {isDirty
-          ? '● Unsaved changes'
+          ? t('statusBar.unsaved')
           : document?.lastSavedAt
-            ? `Saved at ${document.lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-            : 'Ready'}
+            ? t('statusBar.savedAt', {
+                time: document.lastSavedAt.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+              })
+            : t('statusBar.ready')}
       </span>
     </footer>
   );

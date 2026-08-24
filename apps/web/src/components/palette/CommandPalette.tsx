@@ -1,10 +1,12 @@
 import React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api-client.ts';
+import { useI18n } from '../../lib/i18n.tsx';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 
 export function CommandPalette() {
+  const { t } = useI18n();
   const open = useUiStore((state) => state.paletteOpen);
   const close = useUiStore((state) => state.closePalette);
   const showToast = useUiStore((state) => state.showToast);
@@ -46,13 +48,13 @@ export function CommandPalette() {
       await selectFile(path, true);
       close();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Unable to create daily note');
+      showToast(error instanceof Error ? error.message : t('commandPalette.unableCreateDaily'));
     }
   }
   async function createDebt() {
-    const personName = window.prompt('Person name');
+    const personName = window.prompt(t('commandPalette.personNamePrompt'));
     if (!personName) return;
-    const amount = Number(window.prompt('Amount'));
+    const amount = Number(window.prompt(t('commandPalette.amountPrompt')));
     if (!Number.isFinite(amount) || amount <= 0) return;
     try {
       const result = (await api.createDebt({ personName, amount, direction: 'lent' })) as {
@@ -62,7 +64,7 @@ export function CommandPalette() {
       if (result.filePath) await selectFile(result.filePath, true);
       close();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Unable to create debt');
+      showToast(error instanceof Error ? error.message : t('commandPalette.unableCreateDebt'));
     }
   }
   return (
@@ -75,16 +77,16 @@ export function CommandPalette() {
           autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Type a command or search files..."
+          placeholder={t('commandPalette.placeholder')}
         />
         <div className="palette-list">
           <button onClick={() => void createDaily()}>
-            <strong>Create daily note</strong>
-            <span>Today</span>
+            <strong>{t('commandPalette.createDaily')}</strong>
+            <span>{t('commandPalette.today')}</span>
           </button>
           <button onClick={() => void createDebt()}>
-            <strong>Create debt</strong>
-            <span>Open form</span>
+            <strong>{t('commandPalette.createDebt')}</strong>
+            <span>{t('commandPalette.openForm')}</span>
           </button>
           {files.map((node) => (
             <button

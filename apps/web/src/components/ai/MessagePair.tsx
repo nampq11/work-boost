@@ -1,6 +1,7 @@
 import { cn } from '@work-boost/ui';
 import type { ComponentProps, ReactNode } from 'react';
 import React, { useEffect, useState } from 'react';
+import { useI18n } from '../../lib/i18n.tsx';
 import { GenerationLoader } from './LoadingState.tsx';
 
 export interface MessagePairProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -20,6 +21,7 @@ export function MessagePair({
   className,
   ...props
 }: MessagePairProps) {
+  const { t } = useI18n();
   const [loadingTick, setLoadingTick] = useState(0);
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export function MessagePair({
       <div className="group/message flex flex-col items-start">
         {loading ? (
           <GenerationLoader
-            label="Thinking"
+            label={t('messagePair.thinking')}
             tick={loadingTick}
             className="min-h-[4.25rem] px-2 py-2"
           />

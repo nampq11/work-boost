@@ -8,6 +8,7 @@ import {
 } from '@assistant-ui/react';
 import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 import { Copy, PaperPlaneRight, Stop } from '@phosphor-icons/react';
+import { useI18n } from '../../lib/i18n.tsx';
 import React from 'react';
 import { AssistantMarkdown } from './AssistantMarkdown.tsx';
 import { MessagePair } from './MessagePair.tsx';
@@ -58,6 +59,7 @@ function MessagePart({
 }
 
 function AssistantMessage() {
+  const { t } = useI18n();
   const messageContent = useAuiState((state) => state.message.content);
   const assistantText = getMessageText(messageContent);
   const hasToolCall = messageContent.some((part) => part.type === 'tool-call');
@@ -99,8 +101,8 @@ function AssistantMessage() {
             <ActionBarPrimitive.Copy
               type="button"
               className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
-              aria-label="Copy response"
-              title="Copy response"
+              aria-label={t('thread.copyResponse')}
+              title={t('thread.copyResponse')}
             >
               <Copy size={13} />
             </ActionBarPrimitive.Copy>
@@ -112,6 +114,7 @@ function AssistantMessage() {
 }
 
 function AssistantError() {
+  const { t } = useI18n();
   const error = useAuiState((state) => {
     const status = state.message.status;
     if (status?.type !== 'incomplete' || status.reason !== 'error') {
@@ -120,27 +123,31 @@ function AssistantError() {
     return status.error;
   });
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
-  return <p className="text-sm text-[var(--accent-red)]">{message || 'The assistant failed.'}</p>;
+  return (
+    <p className="text-sm text-[var(--accent-red)]">{message || t('thread.assistantFailed')}</p>
+  );
 }
 
 function Welcome() {
+  const { t } = useI18n();
   return (
     <AuiIf condition={(state) => state.thread.isEmpty}>
       <div className="px-3 py-10 text-center text-sm leading-relaxed text-[var(--text-muted)]">
-        <p className="font-medium text-[var(--text-primary)]">How can I help you today?</p>
-        <p className="mt-2">Summarize notes, query daily tasks, or record debt entries.</p>
+        <p className="font-medium text-[var(--text-primary)]">{t('thread.welcomeTitle')}</p>
+        <p className="mt-2">{t('thread.welcomeSubtitle')}</p>
       </div>
     </AuiIf>
   );
 }
 
 function CopilotComposer() {
+  const { t } = useI18n();
   const isRunning = useAuiState((state) => state.thread.isRunning);
 
   return (
     <ComposerPrimitive.Root className="copilot-composer">
       <ComposerPrimitive.Input
-        placeholder="Message Work Boost, @ to include context, / for commands"
+        placeholder={t('thread.messagePlaceholder')}
         rows={1}
         submitMode="enter"
         className="copilot-composer-input"
@@ -149,16 +156,16 @@ function CopilotComposer() {
         {isRunning ? (
           <ComposerPrimitive.Cancel
             className="copilot-composer-send copilot-composer-stop"
-            aria-label="Cancel request"
-            title="Cancel request"
+            aria-label={t('thread.cancelRequest')}
+            title={t('thread.cancelRequest')}
           >
             <Stop size={13} weight="fill" />
           </ComposerPrimitive.Cancel>
         ) : (
           <ComposerPrimitive.Send
             className="copilot-composer-send"
-            aria-label="Send message"
-            title="Send message"
+            aria-label={t('thread.sendMessage')}
+            title={t('thread.sendMessage')}
           >
             <PaperPlaneRight size={13} weight="fill" />
           </ComposerPrimitive.Send>

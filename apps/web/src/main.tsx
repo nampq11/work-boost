@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { CopilotRuntimeProvider } from './components/ai/CopilotRuntimeProvider.tsx';
 import { resolveApiBase } from './lib/api-base.ts';
+import { I18nProvider, useI18n } from './lib/i18n.tsx';
 import './index.css';
 import 'streamdown/styles.css';
 
@@ -11,6 +12,7 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Work Boost root element is missing');
 
 function Root() {
+  const { t } = useI18n();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +36,7 @@ function Root() {
   if (error) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-        <p>Failed to connect to the workspace API.</p>
+        <p>{t('app.failedToConnect')}</p>
         <p className="text-xs">{error}</p>
       </div>
     );
@@ -43,7 +45,7 @@ function Root() {
   if (!ready) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
-        Connecting to workspace...
+        {t('app.connecting')}
       </div>
     );
   }
@@ -57,6 +59,8 @@ function Root() {
 
 createRoot(root).render(
   <StrictMode>
-    <Root />
+    <I18nProvider defaultLocale="en">
+      <Root />
+    </I18nProvider>
   </StrictMode>,
 );

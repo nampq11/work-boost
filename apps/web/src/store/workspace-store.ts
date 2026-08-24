@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { ApiError, api } from '../lib/api-client.ts';
+import { t } from '../lib/i18n.tsx';
 import { stringifyMarkdown } from '../lib/markdown-parser.ts';
 import type { ActiveDocument, FileNode, SyncStatus, WorkspaceEvent } from '../lib/types.ts';
 
@@ -335,10 +336,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         if (latest.activePath !== savePath || latest.documentRevision !== saveRevision) return;
         const message =
           error instanceof ApiError && error.code === 'CONFLICT'
-            ? 'File changed outside the editor. Reload it or keep your local draft.'
+            ? t('workspace.fileChangedOutside')
             : error instanceof Error
               ? error.message
-              : 'Save failed';
+              : t('workspace.saveFailed');
         set({ syncStatus: 'offline', error: message });
         throw error;
       }

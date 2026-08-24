@@ -9,6 +9,7 @@ import {
   Wrench,
 } from '@phosphor-icons/react';
 import React, { useEffect, useId, useState } from 'react';
+import { type Translate, useI18n } from '../../lib/i18n.tsx';
 
 interface ToolCallProps {
   part: ToolCallMessagePart;
@@ -41,9 +42,9 @@ function getToolCopy(toolName: string): { label: string; activeLabel: string } {
   );
 }
 
-function getQuery(args: ToolCallMessagePart['args']): string {
+function getQuery(args: ToolCallMessagePart['args'], t: Translate): string {
   const entries = Object.entries(args ?? {});
-  if (entries.length === 0) return 'workspace';
+  if (entries.length === 0) return t('tool.queryDefault');
   const [key, value] = entries[0];
   const text = typeof value === 'string' ? value : stringify(value).replaceAll('\n', ' ');
   return `${key}=${text}`.slice(0, 42);
@@ -77,6 +78,7 @@ function ToolIcon({ toolName }: { toolName: string }) {
 }
 
 export function ToolCall({ part }: ToolCallProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const running = !('result' in part) && !part.isError;
@@ -98,21 +100,21 @@ export function ToolCall({ part }: ToolCallProps) {
           {running ? copy.activeLabel : copy.label}
         </span>
         <span className="min-w-0 truncate rounded-md bg-[var(--surface-hover)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-secondary)]">
-          {getQuery(part.args)}
+          {getQuery(part.args, t)}
         </span>
         <span className="ml-auto flex shrink-0 items-center justify-end pl-1">
           {part.isError ? (
             <WarningCircle
               size={14}
               className="text-[var(--accent-red)]"
-              aria-label="Tool failed"
+              aria-label={t('tool.failed')}
             />
           ) : !running ? (
             <Check
               size={14}
               weight="bold"
               className="text-[var(--accent-green)]"
-              aria-label="Tool completed"
+              aria-label={t('tool.completed')}
             />
           ) : null}
         </span>
@@ -124,7 +126,7 @@ export function ToolCall({ part }: ToolCallProps) {
         >
           <div className="px-3 py-2.5">
             <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-              Request
+              {t('tool.request')}
             </p>
             <pre className="m-0 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)]">
               {request}
@@ -133,12 +135,12 @@ export function ToolCall({ part }: ToolCallProps) {
           <div className="mx-3 h-px bg-[var(--border)]" />
           <div className="px-3 py-2.5">
             <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-              Result
+              {t('tool.result')}
             </p>
             <pre
               className={`m-0 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed ${part.isError ? 'text-[var(--accent-red)]' : 'text-[var(--text-primary)]'}`}
             >
-              {running ? 'Waiting for the tool to finish...' : result}
+              {running ? t('tool.waiting') : result}
             </pre>
           </div>
         </div>

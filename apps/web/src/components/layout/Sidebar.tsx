@@ -1,12 +1,14 @@
 import { ArrowsClockwise, FolderPlus, MagnifyingGlass } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React, { useMemo, useState } from 'react';
+import { useI18n } from '../../lib/i18n.tsx';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { NewItemDropdown } from '../ui/NewItemDropdown.tsx';
 import { SidebarTree } from './SidebarTree.tsx';
 
 export function Sidebar() {
+  const { t } = useI18n();
   const nodes = useWorkspaceStore((state) => state.nodes);
   const loadFiles = useWorkspaceStore((state) => state.loadFiles);
   const createFolder = useWorkspaceStore((state) => state.createFolder);
@@ -51,7 +53,7 @@ export function Sidebar() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search notes..."
+            placeholder={t('sidebar.searchNotes')}
             className="w-full bg-[var(--surface-app)] border border-[var(--border)] rounded h-8 pl-8 pr-14 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)] placeholder:text-[var(--text-secondary)]"
           />
           <kbd className="absolute right-1.5 text-[10px] text-[var(--text-secondary)] bg-[var(--surface-hover)] px-1.5 rounded">
@@ -67,7 +69,7 @@ export function Sidebar() {
           variant="ghost"
           size="icon"
           onClick={() => setIsCreatingFolder(true)}
-          title="New folder"
+          title={t('sidebar.newFolder')}
         >
           <FolderPlus size={15} />
         </Button>
@@ -75,7 +77,7 @@ export function Sidebar() {
           variant="ghost"
           size="icon"
           onClick={() => void loadFiles()}
-          title="Refresh workspace"
+          title={t('sidebar.refresh')}
         >
           <ArrowsClockwise size={15} />
         </Button>
@@ -93,7 +95,7 @@ export function Sidebar() {
               if (event.key === 'Escape') setIsCreatingFolder(false);
             }}
             onBlur={() => void addFolder()}
-            placeholder="Folder name..."
+            placeholder={t('sidebar.folderName')}
             className="w-full bg-[var(--surface-app)] border border-[var(--border)] rounded h-7 px-2.5 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
           />
         </div>
@@ -102,7 +104,7 @@ export function Sidebar() {
       {/* Tree Section */}
       <div className="flex-1 overflow-y-auto p-2">
         <div className="px-2 py-2 text-[11px] font-semibold tracking-wider text-[var(--text-secondary)] uppercase">
-          Workspace
+          {t('sidebar.workspace')}
         </div>
         <SidebarTree nodes={filtered} />
       </div>

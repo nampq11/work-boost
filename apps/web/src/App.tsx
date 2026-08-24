@@ -16,9 +16,11 @@ import { HtmlAppViewer } from './components/viewer/HtmlAppViewer.tsx';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.ts';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync.ts';
 import { useUiStore } from './store/ui-store.ts';
+import { useI18n } from './lib/i18n.tsx';
 import { useWorkspaceStore } from './store/workspace-store.ts';
 
 export function App() {
+  const { t } = useI18n();
   useWorkspaceSync();
   useKeyboardShortcuts();
   const activePath = useWorkspaceStore((state) => state.activePath);
@@ -59,16 +61,16 @@ export function App() {
         event.preventDefault();
         void trash(currentPath)
           .then(({ trashId, originalPath }) => {
-            showToast(`Moved ${originalPath} to trash.`, {
-              label: 'Undo',
+            showToast(t('toast.movedToTrash', { path: originalPath }), {
+              label: t('toast.undo'),
               run: () =>
                 void restore(trashId).catch((error) => {
-                  showToast(error instanceof Error ? error.message : 'Unable to restore file.');
+                  showToast(error instanceof Error ? error.message : t('toast.unableRestore'));
                 }),
             });
           })
           .catch((error) => {
-            showToast(error instanceof Error ? error.message : 'Unable to move file to trash.');
+            showToast(error instanceof Error ? error.message : t('toast.unableMoveToTrash'));
           });
       }
     };

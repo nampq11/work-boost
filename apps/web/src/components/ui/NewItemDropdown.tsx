@@ -1,11 +1,13 @@
 import { Coins, FileText, Plus } from '@phosphor-icons/react';
 import { Dropdown, DropdownItem } from '@work-boost/ui';
 import React from 'react';
+import { useI18n } from '../../lib/i18n.tsx';
 
 export function NewItemDropdown({
   onNewNote,
   onNewDebt,
 }: { onNewNote: () => void; onNewDebt: () => void }) {
+  const { t } = useI18n();
   return (
     <Dropdown
       className="flex-1"
@@ -14,17 +16,17 @@ export function NewItemDropdown({
       trigger={
         <>
           <Plus size={13} />
-          <span className="text-sm">New</span>
+          <span className="text-sm">{t('common.new')}</span>
         </>
       }
     >
       <DropdownItem onClick={onNewNote}>
         <FileText size={14} />
-        <span>New Note</span>
+        <span>{t('editor.newNote')}</span>
       </DropdownItem>
       <DropdownItem onClick={onNewDebt}>
         <Coins size={14} />
-        <span>New Debt</span>
+        <span>{t('editor.newDebt')}</span>
       </DropdownItem>
     </Dropdown>
   );

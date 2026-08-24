@@ -2,6 +2,7 @@ import { Code, Coins, Eye, FileText, FloppyDisk } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React, { useEffect, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
+import { type Translate, useI18n } from '../../lib/i18n.tsx';
 import type { FileNode } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
@@ -10,6 +11,7 @@ import { SourceEditor } from './SourceEditor.tsx';
 import { TiptapEditor } from './TiptapEditor.tsx';
 
 export function EditorContainer() {
+  const { t } = useI18n();
   const document = useWorkspaceStore((state) => state.activeDocument);
   const draft = useWorkspaceStore((state) => state.draft);
   const updateBody = useWorkspaceStore((state) => state.updateBody);
@@ -78,9 +80,11 @@ export function EditorContainer() {
             {/* Heading */}
             <div className="space-y-1 text-center">
               <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] m-0">
-                Recent Notes
+                {t('editor.recentNotes')}
               </h2>
-              <p className="text-xs text-[var(--text-secondary)] m-0">Pick up where you left off</p>
+              <p className="text-xs text-[var(--text-secondary)] m-0">
+                {t('editor.pickUpWhereYouLeftOff')}
+              </p>
             </div>
 
             {/* Recent Notes Grid - centered when odd number of items */}
@@ -89,7 +93,7 @@ export function EditorContainer() {
             >
               {recentNotes.slice(0, 6).map((note) => {
                 const displayName = note.name.replace(/\.(md|html)$/, '');
-                const timeAgo = formatTimeAgo(note.accessedAt);
+                const timeAgo = formatTimeAgo(note.accessedAt, t);
                 const Icon =
                   note.kind === 'debt' || note.kind === 'debt-archive' ? Coins : FileText;
                 const iconColor =
@@ -119,10 +123,10 @@ export function EditorContainer() {
             {/* Quick Actions */}
             <div className="flex justify-center gap-3 pt-2">
               <Button variant="outline" size="sm" onClick={openPalette} className="gap-1.5">
-                <span>New Note</span>
+                <span>{t('editor.newNote')}</span>
               </Button>
               <Button variant="outline" size="sm" onClick={openPalette} className="gap-1.5">
-                <span>New Debt</span>
+                <span>{t('editor.newDebt')}</span>
               </Button>
             </div>
           </div>
@@ -142,10 +146,10 @@ export function EditorContainer() {
           {/* Heading */}
           <div className="space-y-1">
             <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] m-0">
-              Welcome to Work Boost
+              {t('editor.welcomeTitle')}
             </h2>
             <p className="text-xs text-[var(--text-secondary)] m-0">
-              Your personal workspace & productivity hub
+              {t('editor.welcomeSubtitle')}
             </p>
           </div>
 
@@ -158,10 +162,10 @@ export function EditorContainer() {
             >
               <div className="flex items-center gap-2 font-semibold text-xs text-[var(--text-primary)]">
                 <FileText size={16} className="text-[var(--accent-blue)]" />
-                <span>New Note</span>
+                <span>{t('editor.newNote')}</span>
               </div>
               <span className="text-[11px] text-[var(--text-secondary)]">
-                Write daily notes or docs
+                {t('editor.newNoteDescription')}
               </span>
             </button>
 
@@ -172,21 +176,21 @@ export function EditorContainer() {
             >
               <div className="flex items-center gap-2 font-semibold text-xs text-[var(--text-primary)]">
                 <Coins size={16} className="text-[var(--accent-green)]" />
-                <span>New Debt</span>
+                <span>{t('editor.newDebt')}</span>
               </div>
               <span className="text-[11px] text-[var(--text-secondary)]">
-                Track lent or borrowed money
+                {t('editor.newDebtDescription')}
               </span>
             </button>
           </div>
 
           {/* Shortcut Hint */}
           <div className="text-[11px] text-[var(--text-muted)] flex items-center justify-center gap-1.5 pt-2">
-            <span>Press</span>
+            <span>{t('editor.press')}</span>
             <kbd className="bg-[var(--surface-sidebar)] px-1.5 py-0.5 rounded border border-[var(--border)] font-mono text-[10px] text-[var(--text-secondary)]">
               Ctrl + K
             </kbd>
-            <span>to search anything</span>
+            <span>{t('editor.toSearchAnything')}</span>
           </div>
         </div>
       </div>
@@ -214,7 +218,7 @@ export function EditorContainer() {
             className="gap-1.5 text-sm"
           >
             {sourceMode ? <Eye size={14} /> : <Code size={14} />}
-            <span>{sourceMode ? 'WYSIWYG' : 'Raw Source'}</span>
+            <span>{t(sourceMode ? 'editor.wysiwyg' : 'editor.rawSource')}</span>
           </Button>
           <Button
             variant="default"
@@ -223,7 +227,7 @@ export function EditorContainer() {
             className="gap-1.5 bg-[var(--text-primary)] text-[var(--text-inverse)] hover:opacity-90"
           >
             <FloppyDisk size={14} />
-            <span>Save</span>
+            <span>{t('editor.save')}</span>
           </Button>
         </div>
       </div>
@@ -241,16 +245,16 @@ export function EditorContainer() {
   );
 }
 
-function formatTimeAgo(date: Date): string {
+function formatTimeAgo(date: Date, translate: Translate): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffMins < 1) return translate('editor.justNow');
+  if (diffMins < 60) return translate('editor.minutesAgo', { count: diffMins });
+  if (diffHours < 24) return translate('editor.hoursAgo', { count: diffHours });
+  if (diffDays < 7) return translate('editor.daysAgo', { count: diffDays });
   return date.toLocaleDateString();
 }

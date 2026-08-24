@@ -1,5 +1,6 @@
 import { Copy, Minus, Rectangle, X } from '@phosphor-icons/react';
 import React, { useEffect, useState } from 'react';
+import { useI18n } from '../../lib/i18n.tsx';
 import { isTauri } from '../../lib/tauri.ts';
 
 /**
@@ -10,6 +11,7 @@ import { isTauri } from '../../lib/tauri.ts';
  * min/max/close buttons.
  */
 export function WindowControls() {
+  const { t } = useI18n();
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -61,8 +63,8 @@ export function WindowControls() {
         type="button"
         onClick={minimize}
         className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus-visible:hover:bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)] transition-colors"
-        aria-label="Minimize"
-        title="Minimize"
+        aria-label={t('windowControls.minimize')}
+        title={t('windowControls.minimize')}
       >
         <Minus size={16} />
       </button>
@@ -70,8 +72,8 @@ export function WindowControls() {
         type="button"
         onClick={toggleMaximize}
         className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus-visible:hover:bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)] transition-colors"
-        aria-label={isMaximized ? 'Restore' : 'Maximize'}
-        title={isMaximized ? 'Restore' : 'Maximize'}
+        aria-label={t(isMaximized ? 'windowControls.restore' : 'windowControls.maximize')}
+        title={t(isMaximized ? 'windowControls.restore' : 'windowControls.maximize')}
       >
         {isMaximized ? <Copy size={14} /> : <Rectangle size={13} />}
       </button>
@@ -79,8 +81,8 @@ export function WindowControls() {
         type="button"
         onClick={close}
         className="w-11 flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-[var(--accent-red)] focus-visible:hover:bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)] transition-colors"
-        aria-label="Close"
-        title="Close"
+        aria-label={t('windowControls.close')}
+        title={t('windowControls.close')}
       >
         <X size={16} />
       </button>

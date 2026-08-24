@@ -16,6 +16,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Button } from '@work-boost/ui';
 import React, { useEffect, useRef } from 'react';
 import { htmlToMarkdown, markdownToHtml } from '../../lib/markdown-parser.ts';
+import { useI18n } from '../../lib/i18n.tsx';
 
 interface TiptapEditorProps {
   value: string;
@@ -23,6 +24,7 @@ interface TiptapEditorProps {
 }
 
 export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
+  const { t } = useI18n();
   const renderedValue = useRef(value);
 
   const editor = useEditor({
@@ -55,7 +57,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
   }, [editor, value]);
 
   if (!editor) {
-    return <div className="p-8 text-sm text-[var(--text-muted)]">Loading editor...</div>;
+    return <div className="p-8 text-sm text-[var(--text-muted)]">{t('tiptap.loading')}</div>;
   }
 
   return (
@@ -66,7 +68,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
           variant={editor.isActive('heading', { level: 1 }) ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          title="Heading 1"
+          title={t('tiptap.heading1')}
         >
           <TextHOne size={16} />
         </Button>
@@ -74,7 +76,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
           variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          title="Heading 2"
+          title={t('tiptap.heading2')}
         >
           <TextHTwo size={16} />
         </Button>
@@ -83,7 +85,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
           variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => editor.chain().focus().toggleBold().run()}
-          title="Bold (Ctrl+B)"
+          title={t('tiptap.bold')}
         >
           <TextB size={16} weight="bold" />
         </Button>
@@ -91,7 +93,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
           variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          title="Italic (Ctrl+I)"
+          title={t('tiptap.italic')}
         >
           <TextItalic size={16} />
         </Button>
@@ -100,7 +102,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
           variant={editor.isActive('taskList') ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => editor.chain().focus().toggleTaskList().run()}
-          title="Task List"
+          title={t('tiptap.taskList')}
         >
           <ListChecks size={16} />
         </Button>
@@ -108,7 +110,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
           variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          title="Bullet List"
+          title={t('tiptap.bulletList')}
         >
           <ListBullets size={16} />
         </Button>
@@ -116,7 +118,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
           variant={editor.isActive('blockquote') ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          title="Quote"
+          title={t('tiptap.quote')}
         >
           <Quotes size={16} />
         </Button>
@@ -124,7 +126,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
           variant={editor.isActive('codeBlock') ? 'secondary' : 'ghost'}
           size="icon"
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          title="Code Block"
+          title={t('tiptap.codeBlock')}
         >
           <Code size={16} />
         </Button>

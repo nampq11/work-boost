@@ -1,12 +1,14 @@
 import { Circle, FolderOpen, House, Moon, Sparkle, Sun } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React from 'react';
+import { useI18n } from '../../lib/i18n.tsx';
 import { isTauri } from '../../lib/tauri.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { WindowControls } from './WindowControls.tsx';
 
 export function AppHeader() {
+  const { t } = useI18n();
   const activePath = useWorkspaceStore((state) => state.activePath);
   const syncStatus = useWorkspaceStore((state) => state.syncStatus);
   const goHome = useWorkspaceStore((state) => state.goHome);
@@ -26,11 +28,11 @@ export function AppHeader() {
           type="button"
           onClick={() => void goHome()}
           className="flex items-center gap-2 font-semibold text-sm tracking-tight shrink-0 rounded hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
-          aria-label="Return to start page"
-          title="Return to start page"
+          aria-label={t('header.returnToStart')}
+          title={t('header.returnToStart')}
         >
           <img src="/logo.png" alt="" className="w-6 h-6 rounded-full" />
-          <span>Work Boost</span>
+          <span>{t('app.name')}</span>
         </button>
 
         {breadcrumbs.length > 0 && (
@@ -39,8 +41,8 @@ export function AppHeader() {
               type="button"
               onClick={() => void goHome()}
               className="shrink-0 rounded hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
-              aria-label="Return to start page"
-              title="Return to start page"
+              aria-label={t('header.returnToStart')}
+              title={t('header.returnToStart')}
             >
               <House size={15} />
             </button>
@@ -81,7 +83,12 @@ export function AppHeader() {
         </div>
 
         {/* Theme Mode Toggle */}
-        <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          aria-label={t('header.toggleTheme')}
+        >
           {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
         </Button>
 
@@ -93,7 +100,7 @@ export function AppHeader() {
           className="gap-1.5 text-sm text-[var(--accent-blue)] border-[var(--accent-blue)]/30 hover:bg-[var(--accent-blue)]/10"
         >
           <Sparkle size={14} weight="fill" />
-          <span>Copilot</span>
+          <span>{t('header.copilot')}</span>
         </Button>
         <WindowControls />
       </div>

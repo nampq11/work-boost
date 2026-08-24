@@ -8,12 +8,14 @@ import {
   api,
 } from '../../lib/api-client.ts';
 import { openExternalUrl } from '../../lib/external-url.ts';
+import { useI18n } from '../../lib/i18n.tsx';
 import { isTauri } from '../../lib/tauri.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { CopilotAuthPanel } from './CopilotAuthPanel.tsx';
 import { WorkBoostThread } from './WorkBoostThread.tsx';
 
 export function AiCopilotDrawer() {
+  const { t } = useI18n();
   const open = useUiStore((state) => state.copilotOpen);
   const toggle = useUiStore((state) => state.toggleCopilot);
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
@@ -48,7 +50,9 @@ export function AiCopilotDrawer() {
     } catch (error) {
       if (requestId === authRequestRef.current) {
         setAuthStatus(null);
-        setAuthError(error instanceof Error ? error.message : 'The AI provider is unavailable.');
+        setAuthError(
+          error instanceof Error ? error.message : t('copilot.auth.providerUnavailable'),
+        );
       }
     } finally {
       if (requestId === authRequestRef.current) setAuthLoading(false);
@@ -75,11 +79,11 @@ export function AiCopilotDrawer() {
   function handleAuthEvent(event: AuthLoginEvent) {
     if (event.type === 'device_code') {
       setDeviceCode(event);
-      setAuthProgress('Waiting for authorization...');
+      setAuthProgress(t('copilot.auth.waitingForAuthorization'));
     } else if (event.type === 'auth_url') {
       // Browser-flow OAuth: in Tauri, auto-open via opener plugin. In browser,
       // show a clickable link since window.open without user activation is blocked.
-      setAuthProgress(event.instructions ?? 'Open the link below to authorize...');
+      setAuthProgress(event.instructions ?? t('copilot.auth.openLinkBelow'));
       // Only expose http(s) URLs: the event arrives over SSE, and a javascript:/custom-scheme
       // value must never reach an anchor href or the OS opener.
       if (/^https?:\/\//i.test(event.url)) {
@@ -87,7 +91,9 @@ export function AiCopilotDrawer() {
         // Auto-open in Tauri only; browsers block window.open without user activation,
         // so the panel renders a clickable link instead.
         if (isTauri()) {
-          void openExternalUrl(event.url).catch(() => setAuthError('Unable to open the browser.'));
+          void openExternalUrl(event.url).catch(() =>
+            setAuthError(t('copilot.auth.unableOpenBrowser')),
+          );
         }
       } else {
         console.error('Ignoring non-http auth_url event:', event.url);
@@ -107,7 +113,7 @@ export function AiCopilotDrawer() {
       void refreshAuthStatus();
     } else if (event.type === 'cancelled') {
       clearLoginSession();
-      setAuthError('Login cancelled.');
+      setAuthError(t('copilot.auth.loginCancelled'));
       setAuthUrl(null);
       void refreshAuthStatus();
     }
@@ -119,7 +125,7 @@ export function AiCopilotDrawer() {
     setAuthLoading(true);
     setAuthError('');
     setDeviceCode(null);
-    setAuthProgress('Starting secure login...');
+    setAuthProgress(t('copilot.auth.startingLogin'));
     try {
       const session = await api.startAuthLogin(
         authStatus?.provider ?? '',
@@ -133,10 +139,10 @@ export function AiCopilotDrawer() {
       loginSessionRef.current = session;
       setLoginSession(session);
       unsubscribeRef.current = api.subscribeAuthLogin(session.loginId, handleAuthEvent, () => {
-        setAuthError('The login progress connection was interrupted.');
+        setAuthError(t('copilot.auth.progressInterrupted'));
       });
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'The AI provider is unavailable.');
+      setAuthError(error instanceof Error ? error.message : t('copilot.auth.providerUnavailable'));
     } finally {
       setAuthLoading(false);
     }
@@ -151,7 +157,7 @@ export function AiCopilotDrawer() {
     try {
       await api.cancelAuthLogin(session.loginId);
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Unable to cancel login.');
+      setAuthError(error instanceof Error ? error.message : t('copilot.auth.unableCancelLogin'));
     }
     await refreshAuthStatus();
   }
@@ -168,7 +174,7 @@ export function AiCopilotDrawer() {
         <div className="flex h-12 items-center justify-between border-b border-[var(--border)] px-3.5">
           <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
             <Sparkle size={15} className="text-[var(--accent-blue)]" weight="fill" />
-            <span>Copilot Workspace</span>
+            <span>{t('copilot.workspace')}</span>
           </div>
           <Button variant="ghost" size="icon" onClick={() => void closeDrawer()}>
             <X size={15} />

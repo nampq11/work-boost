@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../../lib/i18n.tsx';
 
 interface SourceEditorProps {
   value: string;
@@ -6,13 +7,14 @@ interface SourceEditorProps {
 }
 
 export function SourceEditor({ value, onChange }: SourceEditorProps) {
+  const { t } = useI18n();
   return (
     <textarea
       className="w-full min-h-[500px] p-5 rounded-lg bg-[var(--surface-sidebar)] border border-[var(--border)] text-[var(--text-primary)] font-mono text-sm leading-relaxed outline-none focus:border-[var(--accent-blue)] resize-y"
       value={value}
       onChange={(event) => onChange(event.target.value)}
       spellCheck={false}
-      aria-label="Raw markdown source"
+      aria-label={t('sourceEditor.aria')}
     />
   );
 }
