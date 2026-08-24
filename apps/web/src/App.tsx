@@ -1,3 +1,9 @@
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  useDefaultLayout,
+} from '@work-boost/ui';
 import React, { useEffect } from 'react';
 import { AiCopilotDrawer } from './components/ai/AiCopilotDrawer.tsx';
 import { EditorContainer } from './components/editor/EditorContainer.tsx';
@@ -6,12 +12,6 @@ import { Sidebar } from './components/layout/Sidebar.tsx';
 import { StatusBar } from './components/layout/StatusBar.tsx';
 import { CommandPalette } from './components/palette/CommandPalette.tsx';
 import { Toast } from './components/ui/Toast.tsx';
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-  useDefaultLayout,
-} from './components/ui/resizable.tsx';
 import { HtmlAppViewer } from './components/viewer/HtmlAppViewer.tsx';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.ts';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync.ts';

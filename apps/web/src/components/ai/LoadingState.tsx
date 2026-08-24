@@ -1,6 +1,6 @@
+import { cn } from '@work-boost/ui';
 import type { ComponentProps } from 'react';
 import React from 'react';
-import { cn } from '../../lib/utils.ts';
 
 export type GenerationLoaderVariant = 'dots' | 'squares' | 'rounded';
 

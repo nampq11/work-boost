@@ -1,9 +1,9 @@
 import { Circle, FolderOpen, House, Moon, Sparkle, Sun } from '@phosphor-icons/react';
+import { Button } from '@work-boost/ui';
 import React from 'react';
+import { isTauri } from '../../lib/tauri.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
-import { Button } from '../ui/Button.tsx';
-import { isTauri } from '../../lib/tauri.ts';
 import { WindowControls } from './WindowControls.tsx';
 
 export function AppHeader() {

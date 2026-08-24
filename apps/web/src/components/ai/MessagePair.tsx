@@ -1,6 +1,6 @@
+import { cn } from '@work-boost/ui';
 import type { ComponentProps, ReactNode } from 'react';
 import React, { useEffect, useState } from 'react';
-import { cn } from '../../lib/utils.ts';
 import { GenerationLoader } from './LoadingState.tsx';
 
 export interface MessagePairProps extends Omit<ComponentProps<'div'>, 'children'> {

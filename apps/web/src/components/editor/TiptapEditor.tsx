@@ -13,9 +13,9 @@ import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Button } from '@work-boost/ui';
 import React, { useEffect, useRef } from 'react';
 import { htmlToMarkdown, markdownToHtml } from '../../lib/markdown-parser.ts';
-import { Button } from '../ui/Button.tsx';
 
 interface TiptapEditorProps {
   value: string;

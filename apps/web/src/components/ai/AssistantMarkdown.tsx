@@ -1,5 +1,5 @@
+import { cn } from '@work-boost/ui';
 import React, { useMemo } from 'react';
-import { cn } from '../../lib/utils.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 
 interface AssistantMarkdownProps {
