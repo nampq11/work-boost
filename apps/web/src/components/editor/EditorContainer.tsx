@@ -1,5 +1,5 @@
 import { useAui, useAuiState } from '@assistant-ui/react';
-import { Code, Coins, Eye, FileText, FloppyDisk, PaperPlaneRight } from '@phosphor-icons/react';
+import { Coins, FileText, FloppyDisk, PaperPlaneRight } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
@@ -47,22 +47,46 @@ export function EditorContainer() {
       ?.replace(/\.(md|html)$/, '') ?? '';
 
   return (
-    <div className="max-w-4xl mx-auto px-10 py-10">
-      {/* Editor Header Bar */}
-      <div className="flex items-center justify-between gap-4 pb-4 mb-6 border-b border-[var(--border)]">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] m-0">
-          {title}
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSourceMode(!sourceMode)}
-            className="gap-1.5 text-sm"
+    <div className="flex h-full min-w-0 flex-col">
+      {/* Document toolbar: view tabs on the left (GitHub pattern), actions on the right;
+          the AppHeader breadcrumb already shows the full path */}
+      <div className="flex h-11 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <div
+            role="tablist"
+            aria-label={t('editor.viewMode')}
+            className="flex items-center rounded-md border border-[var(--border)] p-0.5"
           >
-            {sourceMode ? <Eye size={14} /> : <Code size={14} />}
-            <span>{t(sourceMode ? 'editor.wysiwyg' : 'editor.rawSource')}</span>
-          </Button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!sourceMode}
+              onClick={() => setSourceMode(false)}
+              className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
+                sourceMode
+                  ? 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  : 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+              }`}
+            >
+              {t('editor.previewTab')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sourceMode}
+              onClick={() => setSourceMode(true)}
+              className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
+                sourceMode
+                  ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {t('editor.sourceTab')}
+            </button>
+          </div>
+          <span className="truncate text-sm font-semibold text-[var(--text-primary)]">{title}</span>
+        </div>
+        <div className="flex items-center gap-2">
           <Button
             variant="default"
             size="sm"
@@ -76,20 +100,22 @@ export function EditorContainer() {
       </div>
 
       {/* Frontmatter Inspector */}
-      <FrontmatterInspector />
+      <div className="shrink-0">
+        <FrontmatterInspector />
+      </div>
 
-      {/* Editor Body */}
-      {sourceMode ? (
-        <React.Suspense
-          fallback={
-            <div className="min-h-[500px] rounded-lg border border-[var(--border)] bg-[var(--surface-sidebar)]" />
-          }
-        >
-          <SourceEditor value={draft} onChange={updateBody} />
-        </React.Suspense>
-      ) : (
-        <TiptapEditor value={draft} onChange={updateBody} />
-      )}
+      {/* Editor Body: fills the remaining height and scrolls internally (ADR 0013) */}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {sourceMode ? (
+          <React.Suspense
+            fallback={<div className="h-full bg-[var(--surface-sidebar)]" aria-hidden="true" />}
+          >
+            <SourceEditor value={draft} onChange={updateBody} />
+          </React.Suspense>
+        ) : (
+          <TiptapEditor value={draft} onChange={updateBody} />
+        )}
+      </div>
     </div>
   );
 }

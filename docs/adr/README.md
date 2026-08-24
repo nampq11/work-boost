@@ -64,3 +64,8 @@ proposed → active → superseded
 | [0006](0006-configurable-ai-provider.md) | Preserve the legacy AI provider default | active |
 | [0007](0007-browser-oauth-boundary.md) | Keep browser OAuth behind the API | active |
 | [0008](0008-desktop-tauri-sidecar-shell.md) | Run the Deno API as a Tauri 2 sidecar in the desktop shell | proposed |
+| [0009](0009-controlled-value-sync-between-store-and-codemirror.md) | Control store<->CodeMirror value sync via transaction annotations | proposed |
+| [0010](0010-source-editor-viewport-wrapping-and-sizing.md) | Source editor viewport: soft wrapping, height, and resizing | proposed |
+| [0011](0011-codemirror-theme-via-css-variables.md) | CodeMirror theme built from CSS variables | proposed |
+| [0012](0012-source-editor-v1-scope-search-and-markdown-extras.md) | Source editor v1 scope: no search, no markdown extras | proposed |
+| [0013](0013-editor-fills-viewport-height.md) | Editor fills viewport height with slim document toolbar | proposed |

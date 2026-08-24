@@ -15,9 +15,8 @@ export function SourceEditor({ value, onChange }: SourceEditorProps) {
     ariaLabel: t('sourceEditor.aria'),
   });
   return (
-    <div
-      ref={containerRef}
-      className="w-full min-h-[500px] max-h-[75vh] overflow-y-auto rounded-lg bg-[var(--surface-sidebar)] border border-[var(--border)]"
-    />
+    // The container must have a definite height so .cm-editor { height: 100% }
+    // resolves and CodeMirror scrolls internally (ADR 0013).
+    <div ref={containerRef} className="h-full w-full bg-[var(--surface-sidebar)]" />
   );
 }

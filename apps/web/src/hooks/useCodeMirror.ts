@@ -46,6 +46,7 @@ const workBoostHighlight = HighlightStyle.define([
 const workBoostTheme = EditorView.theme(
   {
     '&': {
+      height: '100%',
       color: 'var(--text-primary)',
       backgroundColor: 'var(--surface-sidebar)',
       fontSize: '0.875rem',
@@ -53,10 +54,12 @@ const workBoostTheme = EditorView.theme(
     '.cm-scroller': {
       fontFamily: '"IBM Plex Mono", monospace',
       lineHeight: '1.625',
+      overflow: 'auto',
     },
     '.cm-content': {
       caretColor: 'var(--accent-blue)',
-      padding: '20px 0',
+      // Bottom padding keeps the caret visible above the pane edge on the last line
+      padding: '20px 0 120px',
     },
     '.cm-gutters': {
       backgroundColor: 'var(--surface-card)',

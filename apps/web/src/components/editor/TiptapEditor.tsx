@@ -43,7 +43,9 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
     },
     editorProps: {
       attributes: {
-        class: 'tiptap-content prose dark:prose-invert max-w-none focus:outline-none min-h-[300px]',
+        // Centered readable column; the scroll container adds horizontal padding
+        class:
+          'tiptap-content prose dark:prose-invert mx-auto max-w-3xl focus:outline-none min-h-[300px]',
         spellcheck: 'false',
       },
     },
@@ -61,9 +63,9 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
   }
 
   return (
-    <div className="flex flex-col min-h-[400px]">
-      {/* Sleek Floating Toolbar */}
-      <div className="sticky top-0 z-10 flex items-center gap-0.5 py-1.5 px-1 mb-4 border-b border-[var(--border)] bg-[var(--surface-app)] backdrop-blur-sm select-none">
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Formatting toolbar; the content below it is the scroll container */}
+      <div className="flex shrink-0 select-none items-center gap-0.5 border-b border-[var(--border)] px-1 py-1.5">
         <Button
           variant={editor.isActive('heading', { level: 1 }) ? 'secondary' : 'ghost'}
           size="icon"
@@ -132,8 +134,9 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         </Button>
       </div>
 
-      {/* Editor Surface */}
-      <EditorContent editor={editor} />
+      {/* Editor Surface: scrolls internally so the toolbar stays visible; content sits in a
+          centered readable column like GitHub's Preview mode (ADR 0013) */}
+      <EditorContent editor={editor} className="min-h-0 flex-1 overflow-y-auto px-8" />
     </div>
   );
 }
