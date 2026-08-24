@@ -22,6 +22,7 @@ interface WorkspaceState {
   updateFrontmatter: (frontmatter: Record<string, unknown>) => void;
   save: () => Promise<void>;
   handleEvent: (event: WorkspaceEvent) => Promise<void>;
+  moveFile: (fromPath: string, targetDir: string) => Promise<boolean>;
   trash: (path: string) => Promise<{ trashId: string; originalPath: string }>;
   restore: (trashId: string) => Promise<void>;
   createFolder: (path: string) => Promise<void>;
@@ -70,7 +71,7 @@ function addToRecentFiles(recentFiles: Map<string, Date>, path: string): Map<str
 function classify(path: string): FileNode['kind'] {
   if (path.toLowerCase().endsWith('.html')) return 'html-app';
   if (path.startsWith('daily/')) return 'daily';
-  if (path.startsWith('debts/archive/')) return 'debt-archive';
+  if (path.startsWith('archive/')) return 'archived';
   if (path.startsWith('debts/')) return 'debt';
   return 'markdown';
 }
@@ -95,7 +96,7 @@ export function buildFileTree(paths: string[], directories: string[] = []): File
     parentChildren.push(folder);
     return folder;
   };
-  for (const directory of ['daily', 'debts', 'debts/archive', ...directories].filter(Boolean))
+  for (const directory of ['daily', 'debts', 'archive', ...directories].filter(Boolean))
     ensureFolder(directory);
   for (const path of paths.filter(Boolean).sort()) {
     const parts = path.split('/');
@@ -106,7 +107,7 @@ export function buildFileTree(paths: string[], directories: string[] = []): File
       relativePath: path,
       name: parts.at(-1)!,
       kind: classify(path),
-      isArchived: path.startsWith('debts/archive/'),
+      isArchived: path.startsWith('archive/'),
     });
   }
   return root;
@@ -366,6 +367,28 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     await current.selectFile(activePath, true);
+  },
+  async moveFile(fromPath, targetDir) {
+    const fileName = fromPath.split('/').at(-1) ?? fromPath;
+    const targetPath = `${targetDir}/${fileName}`;
+    if (targetPath === fromPath) return false;
+    try {
+      await api.moveFile(fromPath, targetPath);
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Unable to move file' });
+      return false;
+    }
+    // Keep the editor open on the file's new location instead of closing it.
+    if (get().activePath === fromPath) {
+      set((current) => ({
+        activePath: targetPath,
+        activeDocument: current.activeDocument
+          ? { ...current.activeDocument, path: targetPath }
+          : current.activeDocument,
+      }));
+    }
+    await get().loadFiles();
+    return true;
   },
   async trash(path) {
     const result = await api.trashFile(path);

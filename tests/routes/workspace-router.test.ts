@@ -391,7 +391,7 @@ Deno.test('Workspace router - POST /api/workspace/debts/:id/settle moves file to
     const payload = await json(res);
     assertEquals(payload.data.frontmatter.status, 'paid');
     assertEquals(await dataLayer.fs.exists('debts/alice.md'), false);
-    assertEquals(await dataLayer.fs.exists('debts/archive/alice.md'), true);
+    assertEquals(await dataLayer.fs.exists('archive/alice.md'), true);
   });
 });
 
@@ -413,7 +413,7 @@ Deno.test('Workspace router - POST /api/workspace/debts/:id/cancel moves file to
     const payload = await json(res);
     assertEquals(payload.data.frontmatter.status, 'cancelled');
     assertEquals(await dataLayer.fs.exists('debts/bob.md'), false);
-    assertEquals(await dataLayer.fs.exists('debts/archive/bob.md'), true);
+    assertEquals(await dataLayer.fs.exists('archive/bob.md'), true);
   });
 });
 
@@ -429,6 +429,57 @@ Deno.test('Workspace router - DELETE /api/workspace/debts/:id removes file', asy
     const res = await handle(`/api/workspace/debts/${id}`, { method: 'DELETE' }, loopbackInfo());
     assertEquals(res.status, 200);
     assertEquals(await dataLayer.fs.exists('debts/carol.md'), false);
+  });
+});
+
+Deno.test('Workspace router - POST /api/workspace/fs/move relocates a file', async () => {
+  await withTempWorkspace(async ({ dataLayer }) => {
+    const handle = routerFor(dataLayer);
+    await dataLayer.fs.writeTextAtomic('daily/2026-01-01.md', '# day');
+
+    const res = await handle(
+      '/api/workspace/fs/move',
+      {
+        method: 'POST',
+        body: JSON.stringify({ fromPath: 'daily/2026-01-01.md', toPath: 'archive/2026-01-01.md' }),
+        headers: { 'content-type': 'application/json' },
+      },
+      loopbackInfo(),
+    );
+    assertEquals(res.status, 200);
+    assertEquals(await dataLayer.fs.exists('daily/2026-01-01.md'), false);
+    assertEquals(await dataLayer.fs.exists('archive/2026-01-01.md'), true);
+  });
+});
+
+Deno.test('Workspace router - POST /api/workspace/fs/move rejects bad paths and conflicts', async () => {
+  await withTempWorkspace(async ({ dataLayer }) => {
+    const handle = routerFor(dataLayer);
+    await dataLayer.fs.writeTextAtomic('daily/2026-01-01.md', '# day');
+
+    const move = (body: Record<string, string>) =>
+      handle(
+        '/api/workspace/fs/move',
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+          headers: { 'content-type': 'application/json' },
+        },
+        loopbackInfo(),
+      );
+
+    assertEquals((await move({ fromPath: '../escape.md', toPath: 'archive/x.md' })).status, 403);
+    assertEquals((await move({ fromPath: 'missing.md', toPath: 'archive/x.md' })).status, 404);
+    assertEquals(
+      (await move({ fromPath: 'daily/2026-01-01.md', toPath: 'daily/2026-01-01.md' })).status,
+      400,
+    );
+
+    await dataLayer.fs.writeTextAtomic('archive/2026-01-01.md', 'exists');
+    assertEquals(
+      (await move({ fromPath: 'daily/2026-01-01.md', toPath: 'archive/2026-01-01.md' })).status,
+      409,
+    );
   });
 });
 

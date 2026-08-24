@@ -31,7 +31,23 @@ Deno.test('WorkspaceFS - should initialize workspace directories', async () => {
     assertEquals(await checkDir('.workboost'), true);
     assertEquals(await checkDir('daily'), true);
     assertEquals(await checkDir('debts'), true);
-    assertEquals(await checkDir('debts/archive'), true);
+  });
+});
+
+Deno.test('WorkspaceFS - should migrate legacy debts/archive to top-level archive', async () => {
+  await withTempDir(async (root) => {
+    await Deno.mkdir(join(root, 'debts', 'archive'), { recursive: true });
+    await Deno.writeTextFile(join(root, 'debts', 'archive', 'old-debt.md'), 'legacy');
+    await Deno.mkdir(join(root, 'archive'), { recursive: true });
+    await Deno.writeTextFile(join(root, 'archive', 'existing.md'), 'existing');
+
+    const fs = createWorkspaceFS(root);
+    await fs.init();
+
+    assertEquals(await fs.exists('archive/old-debt.md'), true);
+    assertEquals(await fs.exists('archive/existing.md'), true);
+    // The colliding legacy folder is kept so no data is ever lost.
+    assertEquals(await fs.exists('debts/archive/old-debt.md'), false);
   });
 });
 

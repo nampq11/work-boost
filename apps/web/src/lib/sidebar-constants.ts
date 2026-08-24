@@ -4,7 +4,7 @@ export const SidebarItemType = {
   FOLDER: 'Folder',
   ARCHIVE: 'Archive',
   DEBT: 'Debt',
-  DEBT_ARCHIVE: 'Archived Debt',
+  ARCHIVED: 'Archived',
   BOARD_VIEW: 'Board view',
   NOTE: 'Note',
   DAILY: 'Daily note',
@@ -42,10 +42,10 @@ export const SIDEBAR_ITEM_CONFIG: Record<FileNode['kind'], SidebarItemConfig> = 
     colorClass: 'text-[var(--accent-green)]',
     getLabel: () => SidebarItemType.DEBT,
   },
-  'debt-archive': {
-    type: SidebarItemType.DEBT_ARCHIVE,
-    colorClass: 'text-[var(--accent-green)]',
-    getLabel: () => SidebarItemType.DEBT_ARCHIVE,
+  archived: {
+    type: SidebarItemType.ARCHIVED,
+    colorClass: 'text-[var(--text-muted)]',
+    getLabel: () => SidebarItemType.ARCHIVED,
   },
   'html-app': {
     type: SidebarItemType.BOARD_VIEW,
@@ -67,7 +67,7 @@ export function formatNodeDisplayName(node: FileNode): string {
 
   // Handle auto-generated debt note titles (e.g., "nam-6d98")
   if (
-    (node.kind === 'debt' || node.kind === 'debt-archive') &&
+    (node.kind === 'debt' || node.kind === 'archived') &&
     /^[a-z0-9]+-[a-z0-9]+$/.test(baseName)
   ) {
     return `Debt (${baseName})`;

@@ -175,6 +175,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path, patch, expectedModifiedAt }),
     }),
+  moveFile: (fromPath: string, toPath: string) =>
+    request<{ fromPath: string; toPath: string }>(`${workspaceBase}/fs/move`, {
+      method: 'POST',
+      body: JSON.stringify({ fromPath, toPath }),
+    }),
   trashFile: (path: string) =>
     request<{ trashId: string; originalPath: string }>(
       `${workspaceBase}/fs/delete?path=${encodeURIComponent(path)}`,

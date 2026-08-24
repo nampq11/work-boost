@@ -1,7 +1,8 @@
 /// <reference lib="deno.ns" />
 
-import { ensureDir } from '@std/fs';
+import { ensureDir, exists } from '@std/fs';
 import { basename, dirname, globToRegExp, isAbsolute, join, relative, resolve } from '@std/path';
+import { logger } from '@work-boost/shared/logger/logger.ts';
 
 /**
  * Workspace file system abstraction with safety features
@@ -37,6 +38,36 @@ export type ConditionalUpdateResult =
   | { status: 'updated'; content: string; modifiedAt: string }
   | { status: 'not-found' }
   | { status: 'conflict'; modifiedAt: string };
+
+/**
+ * Older workspaces stored archived debts under debts/archive/. The archive is
+ * now workspace-wide (archive/ at the root), so relocate any legacy content on
+ * startup. Name collisions are skipped and the legacy folder is only removed
+ * when it ends up empty.
+ */
+async function migrateLegacyDebtArchive(rootPath: string): Promise<void> {
+  const legacyDir = join(rootPath, 'debts', 'archive');
+  const targetDir = join(rootPath, 'archive');
+  try {
+    await ensureDir(targetDir);
+    for await (const entry of Deno.readDir(legacyDir)) {
+      const from = join(legacyDir, entry.name);
+      const to = join(targetDir, entry.name);
+      if (await exists(to)) {
+        logger.warn('Legacy archive entry conflicts with existing file, skipped', {
+          from,
+          to,
+        });
+        continue;
+      }
+      await Deno.rename(from, to);
+    }
+    // Fails when collisions kept the legacy dir non-empty; that is fine.
+    await Deno.remove(legacyDir).catch(() => undefined);
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error;
+  }
+}
 
 /**
  * Create a new WorkspaceFS instance
@@ -141,7 +172,8 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       await ensureDir(join(rootPath, '.workboost'));
       await ensureDir(join(rootPath, 'daily'));
       await ensureDir(join(rootPath, 'debts'));
-      await ensureDir(join(rootPath, 'debts', 'archive'));
+      await ensureDir(join(rootPath, 'archive'));
+      await migrateLegacyDebtArchive(rootPath);
     },
 
     async readText(relPath: string): Promise<string> {

@@ -52,6 +52,15 @@ export interface DebtRepository {
 }
 
 /**
+ * Cheap structural check to distinguish debt files from regular notes that
+ * share the workspace-wide archive/ folder. Full validation still runs through
+ * DebtFrontmatterSchema afterwards.
+ */
+function isDebtFrontmatter(frontmatter: Record<string, unknown>): boolean {
+  return typeof frontmatter.id === 'string' && typeof frontmatter.amount === 'number';
+}
+
+/**
  * Create a new debt repository instance
  * @param fs Workspace file system instance
  */
@@ -131,7 +140,9 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
 
     async listAll(includeArchived = false): Promise<DebtDocument[]> {
       const activePaths = await fs.listFiles('debts');
-      const archivePaths = includeArchived ? await fs.listFiles('debts/archive') : [];
+      // archive/ is workspace-wide, so it also holds regular notes that were
+      // archived by hand; non-debt files must be skipped without warning noise.
+      const archivePaths = includeArchived ? await fs.listFiles('archive') : [];
       const allPaths = [...activePaths, ...archivePaths];
       const mdPaths = allPaths.filter((p) => p.endsWith('.md'));
 
@@ -139,7 +150,8 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
       for (const p of mdPaths) {
         try {
           const raw = await fs.readText(p);
-          const { frontmatter, body } = parseMarkdown<unknown>(raw);
+          const { frontmatter, body } = parseMarkdown<Record<string, unknown>>(raw);
+          if (!isDebtFrontmatter(frontmatter)) continue;
           results.push({
             frontmatter: DebtFrontmatterSchema.parse(frontmatter),
             reason: body,
@@ -157,7 +169,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
     },
 
     async filter(options: DebtFilterOptions): Promise<DebtDocument[]> {
-      // Paid and cancelled debts live in debts/archive/, so terminal-status filters must include it
+      // Paid and cancelled debts live in archive/, so terminal-status filters must include it
       const archivedStatuses = [DebtStatus.PAID, DebtStatus.CANCELLED];
       const all = await this.listAll(
         options.status !== undefined && archivedStatuses.includes(options.status),
@@ -191,7 +203,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
         await fs.writeTextAtomic(debt.filePath, updatedRaw);
 
         const fileName = basename(debt.filePath);
-        const archivePath = join('debts', 'archive', fileName);
+        const archivePath = join('archive', fileName);
         await fs.move(debt.filePath, archivePath);
         debt.filePath = archivePath;
 
@@ -210,7 +222,7 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
         const updatedRaw = stringifyMarkdown(debt.frontmatter, debt.reason);
         await fs.writeTextAtomic(debt.filePath, updatedRaw);
 
-        const archivePath = join('debts', 'archive', basename(debt.filePath));
+        const archivePath = join('archive', basename(debt.filePath));
         await fs.move(debt.filePath, archivePath);
         debt.filePath = archivePath;
 

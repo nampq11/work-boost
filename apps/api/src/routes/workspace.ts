@@ -570,6 +570,32 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
       await fs.mkdir(path);
       return created({ path });
     }
+    if (route === '/fs/move' && method === 'POST') {
+      const body = await readJsonBody(request);
+      if (!body) {
+        return fail(ERROR_CODES.VALIDATION_ERROR, 'Request body must be a JSON object', 400);
+      }
+      const fromPath = typeof body.fromPath === 'string' ? body.fromPath : '';
+      const toPath = typeof body.toPath === 'string' ? body.toPath : '';
+      const fromGuard = guardPath(fromPath);
+      if (fromGuard) return fromGuard;
+      const toGuard = guardPath(toPath);
+      if (toGuard) return toGuard;
+      if (fromPath === toPath) {
+        return fail(ERROR_CODES.VALIDATION_ERROR, "'fromPath' and 'toPath' are identical", 400);
+      }
+      // Prevent moving a file into itself or its own subtree.
+      if (toPath.startsWith(`${fromPath}/`)) return accessDenied();
+      if (!(await fs.exists(fromPath))) return notFound(fromPath);
+      if (await fs.exists(toPath)) {
+        return fail(ERROR_CODES.CONFLICT, 'The destination already exists.', 409, undefined, {
+          path: toPath,
+        });
+      }
+      await fs.move(fromPath, toPath);
+      return ok({ fromPath, toPath });
+    }
+
     if ((route === '/fs/patch' || route === '/fs/write') && method === 'POST') {
       const body = await readJsonBody(request);
       if (!body) {

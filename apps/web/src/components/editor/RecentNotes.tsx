@@ -40,7 +40,7 @@ export function RecentNotes({ notes }: { notes: RecentNote[] }) {
             path: note.path,
             relativePath: note.path,
           } as FileNode);
-          const Icon = note.kind === 'debt' || note.kind === 'debt-archive' ? Coins : FileText;
+          const Icon = note.kind === 'debt' ? Coins : FileText;
 
           return (
             <button

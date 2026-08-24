@@ -30,7 +30,7 @@ function NodeIcon({ node, isExpanded }: { node: FileNode; isExpanded?: boolean }
     );
   }
   if (node.kind === 'html-app') return <Browser size={16} className={colorClass} />;
-  if (node.kind === 'debt' || node.kind === 'debt-archive') {
+  if (node.kind === 'debt') {
     return <Coins size={16} className={colorClass} />;
   }
   return <FileText size={16} className={colorClass} />;
@@ -47,9 +47,27 @@ function TreeNode({
   const closeCopilot = useUiStore((state) => state.closeCopilot);
   const isFolder = node.kind === 'folder';
   const isActive = activePath === node.path;
+  const moveFile = useWorkspaceStore((state) => state.moveFile);
+  const [isDropTarget, setIsDropTarget] = useState(false);
   const itemType = getSidebarItemType(node);
   const displayName = formatNodeDisplayName(node);
   const hasChildren = node.children && node.children.length > 0;
+  const dragProps = isFolder
+    ? {
+        onDragOver: (event: React.DragEvent) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          setIsDropTarget(true);
+        },
+        onDragLeave: () => setIsDropTarget(false),
+        onDrop: (event: React.DragEvent) => {
+          event.preventDefault();
+          setIsDropTarget(false);
+          const fromPath = event.dataTransfer.getData('application/x-workboost-path');
+          if (fromPath) void moveFile(fromPath, node.path);
+        },
+      }
+    : {};
 
   return (
     <div className="tree-node relative" data-depth={depth} data-last={isLast}>
@@ -60,8 +78,14 @@ function TreeNode({
             isActive
               ? 'bg-[var(--surface-selected)] text-[var(--text-primary)] font-medium'
               : 'text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
-          }`}
+          }${isDropTarget ? ' ring-1 ring-[var(--accent-blue)]' : ''}`}
           style={{ paddingLeft: `${10 + depth * 16}px` }}
+          draggable={!isFolder}
+          onDragStart={(event) => {
+            event.dataTransfer.setData('application/x-workboost-path', node.path);
+            event.dataTransfer.effectAllowed = 'move';
+          }}
+          {...dragProps}
           onClick={() => {
             if (isFolder) {
               setExpanded(!expanded);
