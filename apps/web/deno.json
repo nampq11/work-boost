@@ -25,6 +25,7 @@
     "tailwind-merge": "npm:tailwind-merge@2.5.5",
     "class-variance-authority": "npm:class-variance-authority@0.7.1",
     "@radix-ui/react-slot": "npm:@radix-ui/react-slot@1.1.2",
+    "@base-ui/react": "npm:@base-ui/react@1.7.0",
     "react-resizable-panels": "npm:react-resizable-panels@4.12.3",
     "@tauri-apps/api": "npm:@tauri-apps/api@^2.5.0",
     "@tauri-apps/plugin-opener": "npm:@tauri-apps/plugin-opener@^2.3.0"

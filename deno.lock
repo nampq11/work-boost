@@ -5616,6 +5616,7 @@
         "dependencies": [
           "npm:@assistant-ui/react-streamdown@0.3.11",
           "npm:@assistant-ui/react@0.15.16",
+          "npm:@base-ui/react@1.7.0",
           "npm:@phosphor-icons/react@2.1.7",
           "npm:@radix-ui/react-slot@1.1.2",
           "npm:@tailwindcss/vite@4.1.11",
