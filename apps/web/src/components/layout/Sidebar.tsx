@@ -1,9 +1,9 @@
 import { ArrowsClockwise, FolderPlus, MagnifyingGlass } from '@phosphor-icons/react';
+import { Button } from '@work-boost/ui';
 import React, { useMemo, useState } from 'react';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
-import { Button } from '../ui/Button.tsx';
-import { NewItemDropdown } from '../ui/Dropdown.tsx';
+import { NewItemDropdown } from '../ui/NewItemDropdown.tsx';
 import { SidebarTree } from './SidebarTree.tsx';
 
 export function Sidebar() {

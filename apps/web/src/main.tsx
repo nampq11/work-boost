@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
-import { resolveApiBase } from './lib/api-base.ts';
 import { CopilotRuntimeProvider } from './components/ai/CopilotRuntimeProvider.tsx';
+import { resolveApiBase } from './lib/api-base.ts';
 import './index.css';
 import 'streamdown/styles.css';
 

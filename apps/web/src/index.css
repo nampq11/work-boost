@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../../../packages/ui/src/styles/tokens.css";
 
 :root {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -8,68 +9,6 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  /* Surfaces (Light Mode) */
-  --surface-app: #ffffff;
-  --surface-sidebar: #f7f6f3;
-  --surface-card: #ffffff;
-  --surface-hover: #ebebea;
-  --surface-selected: #e8f4fe;
-
-  /* Text (Light Mode) */
-  --text-primary: #37352f;
-  --text-secondary: #6b6a66;
-  --text-muted: #9c9c99;
-  --text-inverse: #ffffff;
-
-  /* Borders */
-  --border: #e9e9e7;
-
-  /* Accents */
-  /*
-   * Primary: Blue - Used for primary actions, active states, focus rings
-   * Success: Green - Used for success states, debt items
-   * Warning: Orange - Used for warnings, unsaved changes indicators
-   * Error: Red - Used for error states, destructive actions
-   
-   */
-  --accent-blue: #155dff;
-  --accent-green: #38a169;
-  --accent-orange: #d9730d;
-  --accent-red: #e53e3e;
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-
-  /* Surfaces (Dark Mode) */
-  --surface-app: #1f1e1b;
-  --surface-sidebar: #191814;
-  --surface-card: #23221f;
-  --surface-hover: #2d2b27;
-  --surface-selected: #1e344c;
-
-  /* Text (Dark Mode) */
-  --text-primary: #e6e1d8;
-  --text-secondary: #c4beb5;
-  --text-muted: #9e958a;
-  --text-inverse: #151411;
-
-  /* Borders */
-  --border: #34322d;
-
-  /* Accents */
-  /*
-   * Primary: Blue - Used for primary actions, active states, focus rings
-   * Success: Green - Used for success states, debt items
-   * Warning: Orange - Used for warnings, unsaved changes indicators
-   * Error: Red - Used for error states, destructive actions
-   
-   */
-  --accent-blue: #78a4ff;
-  --accent-green: #79d89d;
-  --accent-orange: #f3a15b;
-  --accent-red: #ff8a86;
 }
 
 * {

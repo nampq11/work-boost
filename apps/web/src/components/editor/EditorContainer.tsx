@@ -1,10 +1,10 @@
 import { Code, Coins, Eye, FileText, FloppyDisk } from '@phosphor-icons/react';
+import { Button } from '@work-boost/ui';
 import React, { useEffect, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
 import type { FileNode } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
-import { Button } from '../ui/Button.tsx';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
 import { SourceEditor } from './SourceEditor.tsx';
 import { TiptapEditor } from './TiptapEditor.tsx';

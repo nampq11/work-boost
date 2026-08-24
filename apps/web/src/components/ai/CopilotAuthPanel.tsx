@@ -1,7 +1,7 @@
 import { Check, Copy } from '@phosphor-icons/react';
+import { Button } from '@work-boost/ui';
 import React, { useState } from 'react';
 import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '../../lib/api-client.ts';
-import { Button } from '../ui/Button.tsx';
 
 interface CopilotAuthPanelProps {
   authStatus: AuthStatus | null;

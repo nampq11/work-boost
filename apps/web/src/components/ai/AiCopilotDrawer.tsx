@@ -1,4 +1,5 @@
 import { Sparkle, X } from '@phosphor-icons/react';
+import { Button, ResizablePanel } from '@work-boost/ui';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   type AuthLoginEvent,
@@ -9,8 +10,6 @@ import {
 import { openExternalUrl } from '../../lib/external-url.ts';
 import { isTauri } from '../../lib/tauri.ts';
 import { useUiStore } from '../../store/ui-store.ts';
-import { Button } from '../ui/Button.tsx';
-import { ResizablePanel } from '../ui/resizable.tsx';
 import { CopilotAuthPanel } from './CopilotAuthPanel.tsx';
 import { WorkBoostThread } from './WorkBoostThread.tsx';
 
