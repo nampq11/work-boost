@@ -1,3 +1,4 @@
+import type { ThreadMessage } from '@assistant-ui/react';
 // Derive the file path a Work Boost write tool reported. The agent is
 // instructed to reply with the saved file path, and write tools put it either
 // in details.data.path (create_document) or inside the content summary text
@@ -26,6 +27,25 @@ export function filePathFromToolResult(result: unknown): string | null {
       .join('\n');
     const match = text.match(/(?:daily|notes|debts|archive)\/[A-Za-z0-9._-]+\.md/);
     if (match) return match[0];
+  }
+  return null;
+}
+
+// Scan the thread backwards for the most recent daily report the assistant
+// saved via create_document, so Today can show "grounded in Markdown". Notes
+// and debts go through the same tool but are not today's work report.
+export function lastSavedDailyPathFromThread(messages: readonly ThreadMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== 'assistant') continue;
+    const content = message.content;
+    for (let j = content.length - 1; j >= 0; j--) {
+      const part = content[j];
+      if (part.type !== 'tool-call' || part.toolName !== 'create_document') continue;
+      if ((part.args as { type?: unknown }).type !== 'daily') continue;
+      const path = filePathFromToolResult(part.result);
+      if (path) return path;
+    }
   }
   return null;
 }
