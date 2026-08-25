@@ -1,4 +1,5 @@
-import { assert, assertEquals } from '@std/assert';
+/// <reference lib="deno.ns" />
+import { assertEquals } from '@std/assert';
 import type { FileNode } from '../lib/types.ts';
 import {
   applyMention,
@@ -52,10 +53,12 @@ Deno.test('fileMentionItems flattens the tree to mentionable files', () => {
   const items = fileMentionItems(nodes);
   assertEquals(
     items.map((item) => item.id),
-    ['daily/2025-01-15.md', 'data.json', 'notes/a.md'],
+    ['daily', 'daily/2025-01-15.md', 'data.json', 'notes/a.md'],
   );
-  assertEquals(items[0].label, '2025-01-15.md');
-  assertEquals(items[0].kind, 'daily');
+  assertEquals(items[0].label, 'daily');
+  assertEquals(items[0].kind, 'folder');
+  assertEquals(items[1].label, '2025-01-15.md');
+  assertEquals(items[1].kind, 'daily');
 });
 
 Deno.test('filterMentionItems matches path and basename substrings', () => {

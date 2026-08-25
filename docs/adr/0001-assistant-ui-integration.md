@@ -37,7 +37,7 @@ callback, so the transport can evolve independently from the model provider.
 ## Amendment: @ file mentions (2026-08-25)
 
 The composer's @-mention picker uses `unstable_useComposerInput()` from assistant-ui 0.15.x to read
-the composer text and insert `@path ` tokens. This bridge is deprecated-prone, so all usage is
+the composer text and insert `@path` tokens. This bridge is deprecated-prone, so all usage is
 isolated to `CopilotComposer`/`FileMentionMenu` in `apps/web/src/components/ai/`; an upgrade that
 renames or removes the hook is a two-file change. Mention syntax is plain human-readable `@path`
 (not assistant-ui directive tokens) because the message is persisted verbatim in thread history.
@@ -46,3 +46,8 @@ Referenced files are resolved server-side in `AssistantService.executeResponse`:
 message keeps the raw `@path` text, and only the agent turn is augmented with a `[Referenced files]`
 block. Because pi-ai's `Message` union has no developer role, this context plus the layered prompt
 sections live inside the single `SYSTEM_PROMPT` string rather than a separate message role.
+
+Folder mentions (`@daily`) resolve to a directory listing (files plus subfolders, capped at 50
+entries) instead of inlined content; the agent is told to read individual files from the listing
+with the workspace tool. A token only counts as a folder reference when the path actually exists as
+a workspace directory, so prose like "@john did X" never produces "(not found)" noise.

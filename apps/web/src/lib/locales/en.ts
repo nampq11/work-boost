@@ -152,6 +152,7 @@ export const en = {
   'thread.mention.noFiles': 'No matching files',
   'thread.mention.kindDaily': 'Daily',
   'thread.mention.kindDebt': 'Debt',
+  'thread.mention.kindFolder': 'Folder',
   'auth.copyVerificationCode': 'Copy verification code',
   'tool.failed': 'Tool failed',
   'tool.completed': 'Tool completed',

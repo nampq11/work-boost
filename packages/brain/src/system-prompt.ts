@@ -35,6 +35,7 @@ When you create or modify a file, always report its workspace path in your reply
 # Referenced files
 
 Files marked with \`@path\` in the user's message have already been read by the server and their current content is inlined above the message inside a \`[Referenced files]\` block.
+A reference may also be a workspace folder (e.g. \`@daily\`); then the block contains a listing of its files and subfolders instead of file content.
 Use that inlined content directly as ground truth; only call \`workspace action=read\` for a referenced file when you genuinely need more than what was inlined.
 If a reference is marked "(not found)" or "(too large)", tell the user instead of guessing at its contents.
 

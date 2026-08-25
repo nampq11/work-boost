@@ -5,13 +5,50 @@ import {
   parseFileReferences,
 } from '../../apps/api/src/services/file-context.ts';
 
-function fakeFs(files: Record<string, string>, failPaths: string[] = []): WorkspaceFS {
+function fakeFs(
+  files: Record<string, string>,
+  failPaths: string[] = [],
+  extraDirs: string[] = [],
+): WorkspaceFS {
+  // Derive the directory tree from file paths so listDirs/listFiles behave
+  // like the real WorkspaceFS for direct children of any mentioned folder.
+  const dirSet = new Set(extraDirs);
+  for (const path of Object.keys(files)) {
+    const parts = path.split('/');
+    parts.pop();
+    let current = '';
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      dirSet.add(current);
+    }
+  }
+  const childEntries = (dir: string): string[] => {
+    const prefix = dir ? `${dir}/` : '';
+    const names = new Set<string>();
+    for (const path of Object.keys(files)) {
+      if (path.startsWith(prefix)) names.add(path.slice(prefix.length).split('/')[0]);
+    }
+    for (const dirPath of dirSet) {
+      if (dirPath.startsWith(prefix)) names.add(dirPath.slice(prefix.length).split('/')[0]);
+    }
+    return [...names];
+  };
+  const isDirectChild = (path: string, dir: string): boolean => {
+    const prefix = dir ? `${dir}/` : '';
+    return path.startsWith(prefix) && !path.slice(prefix.length).includes('/');
+  };
   return {
     exists: (path) => Promise.resolve(path in files || failPaths.includes(path)),
     readText: (path) =>
       failPaths.includes(path)
         ? Promise.reject(new Error(`read failed for ${path}`))
         : Promise.resolve(files[path] ?? ''),
+    listDirs: (dir) =>
+      Promise.resolve(
+        childEntries(dir).filter((name) => dirSet.has(dir ? `${dir}/${name}` : name)),
+      ),
+    listFiles: (dir) =>
+      Promise.resolve(Object.keys(files).filter((path) => isDirectChild(path, dir))),
   } as unknown as WorkspaceFS;
 }
 
@@ -80,4 +117,33 @@ Deno.test('buildReferencedFileBlock survives a per-file read failure', async () 
   const result = await buildReferencedFileBlock(fs, 'Read @bad.md and @ok.md');
   assert(result.includes('--- bad.md ---\n(unreadable: read failed for bad.md)'));
   assert(result.includes('fine'));
+});
+
+Deno.test('buildReferencedFileBlock inlines a folder listing for a folder mention', async () => {
+  const fs = fakeFs({
+    'daily/2025-01-14.md': 'yesterday',
+    'daily/2025-01-15.md': 'today',
+    'notes/a.md': 'note',
+  });
+  const result = await buildReferencedFileBlock(fs, 'Summarize @daily');
+  assert(result.includes('--- daily ---'));
+  assert(result.includes('(folder listing'));
+  assert(result.includes('daily/2025-01-14.md'));
+  assert(result.includes('daily/2025-01-15.md'));
+});
+
+Deno.test('folder listing includes subfolders and skips unknown @words', async () => {
+  const fs = fakeFs({ 'daily/old/x.md': 'x' });
+  const withFolder = await buildReferencedFileBlock(fs, 'Check @daily and subfolders');
+  assert(withFolder.includes('old/'));
+
+  // "@john" resolves to no directory, so the message stays untouched.
+  const withoutFolder = await buildReferencedFileBlock(fs, 'Ping @john about tomorrow');
+  assertEquals(withoutFolder, 'Ping @john about tomorrow');
+});
+
+Deno.test('empty folder mention reports an empty folder', async () => {
+  const fs = fakeFs({}, [], ['archive']);
+  const result = await buildReferencedFileBlock(fs, 'What is in @archive?');
+  assert(result.includes('--- archive ---\n(empty folder)'));
 });

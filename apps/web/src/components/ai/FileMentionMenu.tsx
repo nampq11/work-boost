@@ -1,5 +1,5 @@
 import { unstable_useComposerInput } from '@assistant-ui/react';
-import { FileText } from '@phosphor-icons/react';
+import { FileText, Folder } from '@phosphor-icons/react';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   applyMention,
@@ -13,6 +13,7 @@ import { useWorkspaceStore } from '../../store/workspace-store.ts';
 function kindLabel(kind: string, t: Translate): string | null {
   if (kind === 'daily') return t('thread.mention.kindDaily');
   if (kind === 'debt') return t('thread.mention.kindDebt');
+  if (kind === 'folder') return t('thread.mention.kindFolder');
   return null;
 }
 
@@ -90,7 +91,9 @@ export function FileMentionMenu() {
             type="button"
             role="option"
             aria-selected={index === activeIndex}
-            className={`file-mention-item${index === activeIndex ? ' file-mention-item-active' : ''}`}
+            className={`file-mention-item${
+              index === activeIndex ? ' file-mention-item-active' : ''
+            }`}
             onMouseDown={(event) => {
               // mousedown keeps composer focus; click would blur the input.
               event.preventDefault();
@@ -98,7 +101,11 @@ export function FileMentionMenu() {
             }}
             onMouseEnter={() => setActiveIndex(index)}
           >
-            <FileText size={13} className="file-mention-icon" />
+            {item.kind === 'folder' ? (
+              <Folder size={13} className="file-mention-icon" />
+            ) : (
+              <FileText size={13} className="file-mention-icon" />
+            )}
             <span className="file-mention-label">{item.label}</span>
             <span className="file-mention-description">
               {kind ? `${kind} · ${item.description}` : item.description}

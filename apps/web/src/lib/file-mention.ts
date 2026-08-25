@@ -25,6 +25,7 @@ const MENTIONABLE_EXTENSIONS = /\.(?:md|json|txt)$/i;
 function flattenFiles(nodes: FileNode[], items: FileMentionItem[]): void {
   for (const node of nodes) {
     if (node.kind === 'folder') {
+      items.push({ id: node.path, label: node.name, description: node.path, kind: 'folder' });
       flattenFiles(node.children ?? [], items);
       continue;
     }
