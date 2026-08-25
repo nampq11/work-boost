@@ -1,5 +1,5 @@
 import { type AgentToolResult } from '@earendil-works/pi-agent-core';
-import { assertEquals } from '@std/assert';
+import { assertEquals, assertRejects } from '@std/assert';
 import { createDailyWorkTool } from '@work-boost/brain';
 import type { DailyWorkRepository } from '@work-boost/data-provider';
 import type { DailyWorkDocument } from '@work-boost/data-schemas/agent.ts';
@@ -92,6 +92,22 @@ Deno.test('daily_work get reports not found for missing date', async () => {
   const tool = createDailyWorkTool(repo);
   const result = await tool.execute('call_1', { action: 'get', date: '2025-01-15' });
   assertEquals(textOf(result), '❌ No daily work report found for 2025-01-15.');
+});
+Deno.test('daily_work get reports not found for missing date', async () => {
+  const repo = createFakeDailyWorkRepository([]);
+  const tool = createDailyWorkTool(repo);
+  const result = await tool.execute('call_1', { action: 'get', date: '2025-01-15' });
+  assertEquals(textOf(result), '❌ No daily work report found for 2025-01-15.');
+});
+
+Deno.test('daily_work get throws when date is missing', async () => {
+  const repo = createFakeDailyWorkRepository([]);
+  const tool = createDailyWorkTool(repo);
+  await assertRejects(
+    () => tool.execute('call_1', { action: 'get' }),
+    Error,
+    'Missing date to view the daily work report.',
+  );
 });
 
 Deno.test('daily_work list_dates returns all dates', async () => {
