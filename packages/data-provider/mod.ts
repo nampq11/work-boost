@@ -19,6 +19,14 @@ export {
 } from './src/repositories/daily-work-repository.ts';
 export { createDebtRepository, type DebtRepository } from './src/repositories/debt-repository.ts';
 
+// Document templates (single source of truth for creating each document type)
+export {
+  createDocumentTemplates,
+  formatDebtSummary,
+  type DocumentCreateResult,
+  type DocumentTemplate,
+} from './src/documents/document-templates.ts';
+
 import type { WorkspaceFS } from './src/fs/workspace-fs.ts';
 import { createWorkspaceFS } from './src/fs/workspace-fs.ts';
 import { type ConfigManager, createConfigManager } from './src/repositories/config-manager.ts';

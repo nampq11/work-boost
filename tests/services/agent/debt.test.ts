@@ -149,47 +149,6 @@ function sampleDebts(): DebtDocument[] {
   ];
 }
 
-Deno.test('debt create creates a new debt record', async () => {
-  const repo = createFakeDebtRepository([]);
-  const tool = createDebtTool(repo);
-  const result = await tool.execute('call_1', {
-    action: 'create',
-    personName: 'John',
-    amount: 50000,
-    direction: 'lent',
-    reason: 'lunch',
-    currency: 'VND',
-  });
-  assertEquals(textOf(result).includes('cho vay'), true);
-  assertEquals(textOf(result).includes('John'), true);
-  assertEquals(textOf(result).includes('50'), true);
-  assertEquals(textOf(result).includes('📄'), true);
-});
-
-Deno.test('debt create defaults currency to VND', async () => {
-  const repo = createFakeDebtRepository([]);
-  const tool = createDebtTool(repo);
-  const result = await tool.execute('call_1', {
-    action: 'create',
-    personName: 'John',
-    amount: 50000,
-    direction: 'borrowed',
-  });
-  const data = (result.details as { data: DebtDocument }).data;
-  assertEquals(data.frontmatter.currency, 'VND');
-});
-
-Deno.test('debt create throws when required fields are missing', async () => {
-  const repo = createFakeDebtRepository([]);
-  const tool = createDebtTool(repo);
-  await assertRejects(() => tool.execute('call_1', { action: 'create' }), Error);
-
-  await assertRejects(
-    () => tool.execute('call_1', { action: 'create', personName: 'John' }),
-    Error,
-  );
-});
-
 Deno.test('debt list returns all debts without filters', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
   const tool = createDebtTool(repo);
@@ -324,5 +283,5 @@ Deno.test('getWorkspaceTools returns the generic tool set', () => {
   assertEquals(names.includes('debt'), true);
   assertEquals(names.includes('daily_work'), true);
   assertEquals(names.includes('workspace'), true);
-  assertEquals(names.includes('create_note'), true);
+  assertEquals(names.includes('create_document'), true);
 });

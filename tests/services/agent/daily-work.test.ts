@@ -77,41 +77,6 @@ function sampleDocs(): DailyWorkDocument[] {
   ];
 }
 
-Deno.test('daily_work save stores a report', async () => {
-  const repo = createFakeDailyWorkRepository([]);
-  const tool = createDailyWorkTool(repo);
-  const result = await tool.execute('call_1', {
-    action: 'save',
-    date: '2025-01-15',
-    completed: [{ project: 'A', task: 'Fix bug' }],
-    incomplete: [],
-    planned: [],
-  });
-
-  assertEquals(textOf(result).includes('Đã lưu báo cáo công việc ngày 2025-01-15'), true);
-  assertEquals(textOf(result).includes('File:'), true);
-});
-
-Deno.test('daily_work save defaults missing sections to empty', async () => {
-  const repo = createFakeDailyWorkRepository([]);
-  const tool = createDailyWorkTool(repo);
-  const result = await tool.execute('call_1', { action: 'save', date: '2025-01-15' });
-  const data = (result.details as { data: DailyWorkDocument }).data;
-  assertEquals(data.report.completed.length, 0);
-  assertEquals(data.report.incomplete.length, 0);
-  assertEquals(data.report.planned.length, 0);
-});
-
-Deno.test('daily_work save throws when date is missing', async () => {
-  const repo = createFakeDailyWorkRepository([]);
-  const tool = createDailyWorkTool(repo);
-  await assertRejects(
-    () => tool.execute('call_1', { action: 'save' }),
-    Error,
-    'Thiếu date để lưu báo cáo công việc.',
-  );
-});
-
 Deno.test('daily_work get returns the report for a date', async () => {
   const repo = createFakeDailyWorkRepository(sampleDocs());
   const tool = createDailyWorkTool(repo);

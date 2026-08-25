@@ -1,51 +1,21 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { StringEnum, Type } from '@earendil-works/pi-ai';
+import { formatDebtSummary } from '@work-boost/data-provider';
 import type { DebtRepository } from '@work-boost/data-provider';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
-import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import { successResult } from './result.ts';
 
-/**
- * Format a debt document into a concise summary string with file path.
- */
-function formatDebtSummary(doc: DebtDocument): string {
-  const frontmatter = doc.frontmatter;
-  const directionText = frontmatter.direction === DebtDirection.LENT ? 'cho vay' : 'vay';
-
-  let statusText: string;
-  if (frontmatter.status === DebtStatus.PAID) {
-    statusText = '✅ Đã trả';
-  } else if (frontmatter.status === DebtStatus.CANCELLED) {
-    statusText = '❌ Đã hủy';
-  } else {
-    statusText = '⏳ Chờ thanh toán';
-  }
-
-  const amount = new Intl.NumberFormat('vi-VN').format(frontmatter.amount);
-
-  return `💰 ${directionText} ${frontmatter.personName}: ${amount} ${frontmatter.currency} (${frontmatter.debtDate}) - ${statusText}\n📄 File: ${doc.filePath}${
-    doc.reason ? `\n📝 Lý do: ${doc.reason}` : ''
-  }`;
-}
-
 const debtParams = Type.Object({
-  action: StringEnum(['create', 'list', 'settle', 'summary', 'delete'], {
+  action: StringEnum(['list', 'settle', 'summary', 'delete'], {
     description: 'Hành động cần thực hiện trên khoản nợ',
   }),
-  // create
-  personName: Type.Optional(Type.String({ description: 'Tên người involved trong khoản này' })),
-  amount: Type.Optional(Type.Number({ description: 'Số tiền (số dương)' })),
-  currency: Type.Optional(Type.String({ description: 'Mã tiền tệ (mặc định: VND)' })),
-  direction: Type.Optional(
-    StringEnum(['lent', 'borrowed'], {
-      description: 'Hướng tiền: "lent" (cho vay) hoặc "borrowed" (vay)',
-    }),
-  ),
-  reason: Type.Optional(Type.String({ description: 'Lý do cho khoản này' })),
-  debtDate: Type.Optional(Type.String({ description: 'Ngày nợ (ISO date YYYY-MM-DD)' })),
   // list
+  personName: Type.Optional(Type.String({ description: 'Tên người involved trong khoản này' })),
   status: Type.Optional(
     StringEnum(['pending', 'paid', 'cancelled'], { description: 'Lọc theo trạng thái' }),
+  ),
+  direction: Type.Optional(
+    StringEnum(['lent', 'borrowed'], { description: 'Lọc theo hướng tiền' }),
   ),
   // settle / delete
   debtId: Type.Optional(Type.String({ description: 'ID của khoản nợ' })),
@@ -54,21 +24,20 @@ const debtParams = Type.Object({
 /**
  * Generic debt tool with an action discriminator.
  *
- * Each action keeps the same domain invariants as the original narrow tools:
- * creating requires the identity/amount/direction, settling flips status and
- * moves the file to the archive, deleting requires an existing debt id.
+ * Creation is handled by the `create_document` tool (type=debt); this tool
+ * covers the read/write operations that carry debt-specific invariants:
+ * settling flips status and moves the file to the archive, deleting requires an
+ * existing debt id, and listing/Summary aggregate across the workspace.
  */
 export function createDebtTool(debts: DebtRepository): AgentTool<typeof debtParams> {
   return {
     name: 'debt',
     label: 'Debt',
     description:
-      'Quản lý khoản nợ: tạo, liệt kê, thanh toán, tổng kết và xóa. Dùng khi người dùng đề cập cho vay/vay tiền, trả nợ, hoặc hỏi về số nợ.',
+      'Quản lý khoản nợ: liệt kê, thanh toán, tổng kết và xóa. Dùng khi người dùng trả nợ, hoặc hỏi về số nợ. Muốn tạo khoản nợ mới, dùng create_document với type=debt.',
     parameters: debtParams,
     execute: async (_toolCallId, params) => {
       switch (params.action) {
-        case 'create':
-          return createDebt(debts, params);
         case 'list':
           return listDebts(debts, params);
         case 'settle':
@@ -82,34 +51,6 @@ export function createDebtTool(debts: DebtRepository): AgentTool<typeof debtPara
       }
     },
   };
-}
-
-async function createDebt(
-  debts: DebtRepository,
-  params: {
-    personName?: string;
-    amount?: number;
-    direction?: string;
-    currency?: string;
-    reason?: string;
-    debtDate?: string;
-  },
-): Promise<AgentToolResult<unknown>> {
-  const { personName, amount, direction, reason, currency, debtDate } = params;
-  if (!personName) throw new Error('Thiếu personName để tạo khoản nợ.');
-  if (amount === undefined || amount < 0) throw new Error('amount phải là số dương.');
-  if (!direction) throw new Error('Thiếu direction (lent/borrowed) để tạo khoản nợ.');
-
-  const doc = await debts.create({
-    direction: direction as DebtDirection,
-    amount,
-    currency: currency ?? 'VND',
-    personName,
-    reason,
-    debtDate,
-  });
-
-  return successResult(doc, formatDebtSummary(doc));
 }
 
 async function listDebts(
