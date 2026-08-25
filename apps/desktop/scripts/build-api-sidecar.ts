@@ -113,8 +113,6 @@ async function main() {
         'packages/runtime/src/theme.css',
         '--include',
         'packages/runtime/src/apps/debt-tracker.html',
-        '--include',
-        'packages/runtime/src/apps/standup-viewer.html',
         '--output',
         outputPath,
         'apps/api/src/main.ts',

@@ -5,7 +5,7 @@ import type { WorkspaceFS } from '@work-boost/data-provider';
  * HTML Apps shipped with Work Boost. They are seeded into the user's
  * workspace root so users can freely edit or delete them.
  */
-export const HTML_APPS = ['debt-tracker.html', 'standup-viewer.html'] as const;
+export const HTML_APPS = ['debt-tracker.html'] as const;
 
 export interface BrokerRuntime {
   /** Broker client script defining window.workboost (packages/runtime/src/global.js) */

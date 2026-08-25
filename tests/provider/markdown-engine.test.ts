@@ -62,15 +62,15 @@ Another note below.
 
 Deno.test('MarkdownEngine - parses daily report sections correctly', () => {
   const markdownBody = `
-### 1. Việc hoàn thành hôm trước?
+### 1. What did I complete?
 - **PROJ1**: Task completed
 - **INBOX**: Another completed task
 
-### 2. Việc dự định làm nhưng chưa hoàn thành?
+### 2. What did I plan but not finish?
 - **PROJ2**: Incomplete task
 - N/A
 
-### 3. Việc dự định làm hôm nay?
+### 3. What will I do today?
 - **PROJ3**: Planned task
 - **PROJ4**: Another planned task
 `;
@@ -91,7 +91,7 @@ Deno.test('MarkdownEngine - parses daily report sections correctly', () => {
   assertEquals(customSections, '');
 });
 
-Deno.test('MarkdownEngine - formats daily reports with Vietnamese headers', () => {
+Deno.test('MarkdownEngine - formats daily reports with English headers', () => {
   const report = {
     completed: [{ project: 'PROJ1', task: 'Completed task' }],
     incomplete: [],
@@ -100,9 +100,9 @@ Deno.test('MarkdownEngine - formats daily reports with Vietnamese headers', () =
 
   const formatted = formatDailyReport(report);
 
-  assertEquals(formatted.includes('### 1. Việc hoàn thành hôm trước?'), true);
-  assertEquals(formatted.includes('### 2. Việc dự định làm nhưng chưa hoàn thành?'), true);
-  assertEquals(formatted.includes('### 3. Việc dự định làm hôm nay?'), true);
+  assertEquals(formatted.includes('### 1. What did I complete?'), true);
+  assertEquals(formatted.includes('### 2. What did I plan but not finish?'), true);
+  assertEquals(formatted.includes('### 3. What will I do today?'), true);
   assertEquals(formatted.includes('**PROJ1**: Completed task'), true);
   assertEquals(formatted.includes('- N/A'), true); // For empty incomplete section
 });

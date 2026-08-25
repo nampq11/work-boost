@@ -1,12 +1,12 @@
 import { useAui, useAuiState } from '@assistant-ui/react';
-import { Coins, FileText, PaperPlaneRight } from '@phosphor-icons/react';
+import { Coins, Copy, FileText, PaperPlaneRight } from '@phosphor-icons/react';
 import type { Editor } from '@tiptap/react';
 import { Button } from '@work-boost/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
 import { api } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
-import { stringifyMarkdown } from '../../lib/markdown-parser.ts';
+import { parseFrontmatter, stringifyMarkdown } from '../../lib/markdown-parser.ts';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
@@ -212,6 +212,19 @@ function TodayPanel() {
   function retryLoad(): void {
     setRetryCount((count) => count + 1);
   }
+  async function copyReportMarkdown(): Promise<void> {
+    const rawMarkdown = daily?.rawMarkdown;
+    if (!rawMarkdown) return;
+    // Copy the report body only; the YAML frontmatter is internal bookkeeping
+    // (id, date, status, updatedAt, updatedBy) and would be noise in a paste.
+    const markdown = parseFrontmatter(rawMarkdown).body;
+    try {
+      await navigator.clipboard.writeText(markdown);
+      useUiStore.getState().showToast(t('editor.todayCopyMarkdownDone'));
+    } catch {
+      useUiStore.getState().showToast(t('editor.todayCopyMarkdownFailed'));
+    }
+  }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -299,10 +312,23 @@ function TodayPanel() {
 
       {/* Today's summary */}
       <section className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-tight text-[var(--text-primary)] m-0">
-          <FileText size={15} className="text-[var(--accent-blue)]" />
-          {t('editor.todaySummaryTitle')}
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-tight text-[var(--text-primary)] m-0">
+            <FileText size={15} className="text-[var(--accent-blue)]" />
+            {t('editor.todaySummaryTitle')}
+          </h2>
+          {!loading && hasReport && (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => void copyReportMarkdown()}
+              className="shrink-0"
+            >
+              <Copy size={12} />
+              <span>{t('editor.todayCopyMarkdown')}</span>
+            </Button>
+          )}
+        </div>
         {loading ? (
           <p className="text-xs text-[var(--text-muted)] m-0">…</p>
         ) : !hasReport ? (

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sổ Nợ Work Boost</title>
+  <title>Debt Ledger Work Boost</title>
 </head>
 <body>
   <div class="wb-app" x-data="debtTracker()" x-init="init()">
@@ -13,13 +13,13 @@
             <span class="wb-kicker-mark">Debt ledger</span>
             <span class="wb-live">Live sync</span>
           </div>
-          <h1 class="wb-title">Sổ Nợ <span class="wb-title-accent">Work Boost</span></h1>
-          <p class="wb-subtitle">Theo dõi các khoản cho vay và đi vay từ một sổ Markdown duy nhất.</p>
+          <h1 class="wb-title">Debt Ledger <span class="wb-title-accent">Work Boost</span></h1>
+          <p class="wb-subtitle">Track loans and borrowings from a single Markdown ledger.</p>
         </div>
         <div class="wb-actions">
-          <button class="wb-button wb-button-quiet" type="button" @click="loadData()" title="Tải lại dữ liệu">
+          <button class="wb-button wb-button-quiet" type="button" @click="loadData()" title="Reload data">
             <span aria-hidden="true">↻</span>
-            <span>Làm mới</span>
+            <span>Refresh</span>
           </button>
         </div>
       </header>
@@ -31,7 +31,7 @@
       <section class="wb-section" aria-labelledby="position-heading">
         <div class="wb-section-head">
           <span id="position-heading" class="wb-section-label">Position</span>
-          <span class="wb-section-note">Tổng hợp theo loại tiền</span>
+          <span class="wb-section-note">Aggregated by currency</span>
         </div>
         <div class="wb-summary-grid">
           <template x-for="(totals, curr) in summary.currencies" :key="curr">
@@ -40,12 +40,12 @@
                 <span class="wb-currency" x-text="curr"></span>
                 <span class="wb-balance-state"
                       :class="(totals.lent - totals.borrowed) >= 0 ? 'wb-balance-positive' : 'wb-balance-negative'"
-                      x-text="(totals.lent - totals.borrowed) >= 0 ? 'Dương' : 'Âm'"></span>
+                      x-text="(totals.lent - totals.borrowed) >= 0 ? 'Positive' : 'Negative'"></span>
               </div>
               <div class="wb-amount" x-text="formatMoney(totals.lent - totals.borrowed, curr)"></div>
               <div class="wb-breakdown">
-                <span>Được nợ <strong class="wb-positive" x-text="formatMoney(totals.lent, curr)"></strong></span>
-                <span>Cần trả <strong class="wb-negative" x-text="formatMoney(totals.borrowed, curr)"></strong></span>
+                <span>Owed to me <strong class="wb-positive" x-text="formatMoney(totals.lent, curr)"></strong></span>
+                <span>I owe <strong class="wb-negative" x-text="formatMoney(totals.borrowed, curr)"></strong></span>
               </div>
             </article>
           </template>
@@ -55,9 +55,9 @@
       <section class="wb-section" aria-labelledby="ledger-heading">
         <div class="wb-section-head">
           <span id="ledger-heading" class="wb-section-label">Ledger</span>
-          <span class="wb-section-note">Các khoản đang theo dõi</span>
+          <span class="wb-section-note">Entries being tracked</span>
         </div>
-        <div class="wb-filterbar" role="group" aria-label="Lọc khoản nợ">
+        <div class="wb-filterbar" role="group" aria-label="Filter debts">
           <template x-for="f in ['all', 'pending', 'paid', 'lent', 'borrowed']" :key="f">
             <button type="button"
                     class="wb-filter"
@@ -72,7 +72,7 @@
           <template x-if="debts.length === 0">
             <div class="wb-empty">
               <span class="wb-empty-mark" aria-hidden="true">∅</span>
-              Chưa có khoản nợ phù hợp với bộ lọc này.
+              No debts match this filter.
             </div>
           </template>
           <template x-for="debt in debts" :key="debt.frontmatter.id">
@@ -81,22 +81,22 @@
                 <div class="wb-row-label">
                   <span class="wb-direction"
                         :class="debt.frontmatter.direction === 'lent' ? 'wb-direction-lent' : 'wb-direction-borrowed'"
-                        x-text="debt.frontmatter.direction === 'lent' ? 'Cho vay' : 'Đi vay'"></span>
+                        x-text="debt.frontmatter.direction === 'lent' ? 'Lent' : 'Borrowed'"></span>
                   <span class="wb-person" x-text="debt.frontmatter.personName"></span>
                   <span class="wb-date" x-text="debt.frontmatter.debtDate"></span>
                 </div>
-                <p class="wb-reason" x-text="debt.reason || 'Không có ghi chú cho khoản này.'"></p>
+                <p class="wb-reason" x-text="debt.reason || 'No note for this entry.'"></p>
               </div>
               <div class="wb-row-side">
                 <div>
                   <div class="wb-row-amount" x-text="formatMoney(debt.frontmatter.amount, debt.frontmatter.currency)"></div>
                   <span class="wb-status"
                         :class="debt.frontmatter.status === 'paid' ? 'wb-status-paid' : 'wb-status-pending'"
-                        x-text="debt.frontmatter.status === 'paid' ? 'Đã trả' : 'Chờ trả'"></span>
+                        x-text="debt.frontmatter.status === 'paid' ? 'Paid' : 'Pending'"></span>
                 </div>
                 <template x-if="debt.frontmatter.status === 'pending'">
                   <button type="button" class="wb-button wb-button-quiet" @click="settle(debt.frontmatter.id)">
-                    Xác nhận trả
+                    Mark as paid
                   </button>
                 </template>
               </div>
@@ -123,7 +123,7 @@
           try {
             await Promise.all([this.loadSummary(), this.loadDebts()]);
           } catch (err) {
-            this.error = 'Không tải được dữ liệu: ' + (err.message || err);
+            this.error = 'Could not load data: ' + (err.message || err);
           }
         },
         async loadSummary() {
@@ -141,7 +141,7 @@
         },
         formatMoney(amount, currency = 'VND') {
           try {
-            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency }).format(amount || 0);
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount || 0);
           } catch {
             return `${amount || 0} ${currency}`;
           }

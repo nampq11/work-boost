@@ -114,14 +114,14 @@ export function App() {
               {error && (
                 <div className="mx-6 mt-4 p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold">Lỗi kết nối workspace:</span>
+                    <span className="font-semibold">{t('app.workspaceConnectionError')}</span>
                     <span>{error}</span>
                   </div>
                   <button
                     onClick={() => void useWorkspaceStore.getState().loadFiles()}
                     className="underline font-medium hover:opacity-80"
                   >
-                    Thử lại
+                    {t('app.retry')}
                   </button>
                 </div>
               )}

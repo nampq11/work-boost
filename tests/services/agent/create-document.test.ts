@@ -233,7 +233,7 @@ Deno.test('create_document type=debt creates a debt and reports the path', async
     data: { personName: 'John', amount: 50000, direction: 'lent', reason: 'lunch' },
   });
 
-  assertEquals(textOf(result).includes('cho vay'), true);
+  assertEquals(textOf(result).includes('Lent to'), true);
   assertEquals(textOf(result).includes('John'), true);
   assertEquals(textOf(result).includes('50'), true);
   assertEquals((result.details as { data: { path: string } }).data.path.startsWith('debts/'), true);
@@ -261,7 +261,7 @@ Deno.test('create_document type=daily saves a report', async () => {
     },
   });
 
-  assertEquals(textOf(result).includes('Đã lưu báo cáo công việc ngày 2025-01-15'), true);
+  assertEquals(textOf(result).includes('Saved daily work report for 2025-01-15'), true);
   assertEquals((result.details as { data: { path: string } }).data.path, 'daily/2025-01-15.md');
 });
 

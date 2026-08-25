@@ -103,9 +103,9 @@ export function formatDailyReport(report: DailyWorkReport, customSections = ''):
   }
 
   let result =
-    `### 1. Việc hoàn thành hôm trước?\n${formatSection(report.completed)}\n\n` +
-    `### 2. Việc dự định làm nhưng chưa hoàn thành?\n${formatSection(report.incomplete)}\n\n` +
-    `### 3. Việc dự định làm hôm nay?\n${formatSection(report.planned)}`;
+    `### 1. What did I complete?\n${formatSection(report.completed)}\n\n` +
+    `### 2. What did I plan but not finish?\n${formatSection(report.incomplete)}\n\n` +
+    `### 3. What will I do today?\n${formatSection(report.planned)}`;
 
   if (customSections.trim()) {
     result += `\n\n${customSections.trim()}`;

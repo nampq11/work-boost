@@ -66,33 +66,33 @@ function fileStamp(): string {
  */
 export function formatDebtSummary(doc: DebtDocument): string {
   const frontmatter = doc.frontmatter;
-  const directionText = frontmatter.direction === DebtDirection.LENT ? 'cho vay' : 'vay';
+  const directionText = frontmatter.direction === DebtDirection.LENT ? 'Lent to' : 'Borrowed from';
 
   let statusText: string;
   if (frontmatter.status === DebtStatus.PAID) {
-    statusText = '✅ Đã trả';
+    statusText = '✅ Paid';
   } else if (frontmatter.status === DebtStatus.CANCELLED) {
-    statusText = '❌ Đã hủy';
+    statusText = '❌ Cancelled';
   } else {
-    statusText = '⏳ Chờ thanh toán';
+    statusText = '⏳ Pending';
   }
 
-  const amount = new Intl.NumberFormat('vi-VN').format(frontmatter.amount);
+  const amount = new Intl.NumberFormat('en-US').format(frontmatter.amount);
 
   return `💰 ${directionText} ${frontmatter.personName}: ${amount} ${frontmatter.currency} (${frontmatter.debtDate}) - ${statusText}\n📄 File: ${doc.filePath}${
-    doc.reason ? `\n📝 Lý do: ${doc.reason}` : ''
+    doc.reason ? `\n📝 Note: ${doc.reason}` : ''
   }`;
 }
 
 const NoteDataSchema = z.object({
-  content: z.string().refine((s) => s.trim().length > 0, 'Nội dung ghi chú không được để trống.'),
+  content: z.string().refine((s) => s.trim().length > 0, 'Note content must not be empty.'),
   title: z.string().optional(),
 });
 
 const DebtCreateSchema = z.object({
-  personName: z.string().trim().min(1, 'Thiếu personName để tạo khoản nợ.'),
-  amount: z.number().nonnegative('amount phải là số dương.'),
-  direction: z.enum(['lent', 'borrowed'], { message: 'direction phải là lent hoặc borrowed.' }),
+  personName: z.string().trim().min(1, 'Missing personName to create a debt.'),
+  amount: z.number().nonnegative('amount must be a positive number.'),
+  direction: z.enum(['lent', 'borrowed'], { message: 'direction must be lent or borrowed.' }),
   currency: z.string().optional(),
   reason: z.string().optional(),
   debtDate: z.string().optional(),
@@ -104,7 +104,7 @@ const TaskItemSchema = z.object({
 });
 
 const DailyCreateSchema = z.object({
-  date: z.string().min(1, 'Thiếu date để lưu báo cáo công việc.'),
+  date: z.string().min(1, 'Missing date to save the work report.'),
   completed: z.array(TaskItemSchema).optional(),
   incomplete: z.array(TaskItemSchema).optional(),
   planned: z.array(TaskItemSchema).optional(),
@@ -116,7 +116,7 @@ function createNoteTemplate(fs: WorkspaceFS): DocumentTemplate<z.infer<typeof No
     type: 'note',
     folder: 'notes',
     description:
-      'Tạo một ghi chú mới dưới dạng file Markdown trong thư mục notes/. Dùng để lưu ý tưởng, thông tin hoặc nội dung tự do không thuộc công việc hay nợ nần.',
+      'Create a new note as a Markdown file in the notes/ folder. Use it to capture ideas, information, or free-form content that is not work or debt.',
     schema: NoteDataSchema,
     async create(data) {
       const { content, title } = data;
@@ -131,13 +131,13 @@ function createNoteTemplate(fs: WorkspaceFS): DocumentTemplate<z.infer<typeof No
       for (let attempt = 1; !(await fs.writeTextIfAbsent(filePath, body)); attempt++) {
         if (attempt >= MAX_PATH_ATTEMPTS) {
           throw new Error(
-            `Không thể tạo ghi chú: đã thử ${MAX_PATH_ATTEMPTS} đường dẫn đều bị trùng.`,
+            `Could not create a note: tried ${MAX_PATH_ATTEMPTS} paths, all duplicates.`,
           );
         }
         filePath = `notes/${slug}-${stamp}-${attempt}.md`;
       }
 
-      return { path: filePath, summary: `📝 Đã lưu ghi chú: ${filePath}` };
+      return { path: filePath, summary: `📝 Saved note: ${filePath}` };
     },
   };
 }
@@ -149,7 +149,7 @@ function createDebtTemplate(
     type: 'debt',
     folder: 'debts',
     description:
-      'Tạo một khoản nợ mới trong thư mục debts/. Dùng khi người dùng cho ai vay hoặc vay ai.',
+      'Create a new debt in the debts/ folder. Use it when the user lends to or borrows from someone.',
     schema: DebtCreateSchema,
     async create(data) {
       const doc = await debts.create({
@@ -172,7 +172,7 @@ function createDailyTemplate(
     type: 'daily',
     folder: 'daily',
     description:
-      'Lưu báo cáo công việc hằng ngày vào thư mục daily/. Dùng khi người dùng cập nhật tiến độ công việc.',
+      'Save a daily work report into the daily/ folder. Use it when the user updates work progress.',
     schema: DailyCreateSchema,
     async create(data) {
       const report = {
@@ -185,7 +185,7 @@ function createDailyTemplate(
       });
       return {
         path: doc.filePath,
-        summary: `📝 Đã lưu báo cáo công việc ngày ${data.date}.\n📄 File: ${doc.filePath}`,
+        summary: `📝 Saved daily work report for ${data.date}.\n📄 File: ${doc.filePath}`,
       };
     },
   };
