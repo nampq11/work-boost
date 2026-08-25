@@ -58,8 +58,10 @@ Rules:
 ## Consequences
 The hook has no hidden mutable mirrors of the store value. Cursor jumps on file switches are explicit
 behavior instead of accidents. Undo history never leaks across documents. IME composition is safe
-because external sets are skipped while composing (`view.composing`) rather than suppressed after the
-fact.
+because external sets are skipped while composing (`view.composing`) and deferred: they are applied only
+after the composition ends without the user committing text (e.g. cancelled input). If the user commits
+text during composition, that edit echoes to the store via `onChange` and wins, so the deferred value is
+discarded rather than clobbering the user's input.
 
 ## Advice
 Unilateral decision based on the CodeMirror 6 controlled-component pattern documented in the CM6

@@ -11,7 +11,7 @@ import {
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { useEffect, useRef } from 'react';
-import { shouldReplaceExternally } from '../lib/source-editor-sync.ts';
+import { shouldApplyDeferredExternal, shouldReplaceExternally } from '../lib/source-editor-sync.ts';
 
 // Tags transactions that originate from prop-driven value sync, so the update
 // listener can distinguish them from user edits and avoid a feedback loop.
@@ -142,6 +142,11 @@ export function useCodeMirror({ value, onChange, ariaLabel }: UseCodeMirrorOptio
   // Last prop value seen; lets us tell an echo of a local edit apart from a
   // document replacement arriving through the store.
   const previousValueRef = useRef(value);
+  // External value received while the user is composing IME input. The sync
+  // effect defers it (never clobbers an in-progress composition), and the
+  // compositionend listener in the mount effect reconciles it once the
+  // composition completes (see that listener for the apply rule).
+  const deferredValueRef = useRef<string | null>(null);
   const createStateRef = useRef<((doc: string) => EditorState) | null>(null);
   useEffect(() => {
     const container = containerRef.current;
@@ -162,7 +167,38 @@ export function useCodeMirror({ value, onChange, ariaLabel }: UseCodeMirrorOptio
     createStateRef.current = createState;
     viewRef.current = view;
 
+    // Reconcile a deferred external value once composition ends. The sync
+    // effect below skips external sets while view.composing is true, so an
+    // external value that lands mid-composition is held in deferredValueRef.
+    // It is applied only if the user committed no text during that
+    // composition (e.g. they cancelled their IME input). If they did commit
+    // text, that edit already echoes into the store via onChange, so the
+    // user's text wins and the deferred value is discarded.
+    let compositionStartDoc: string | null = null;
+    const onCompositionStart = () => {
+      compositionStartDoc = view.state.doc.toString();
+    };
+    const onCompositionEnd = () => {
+      const deferred = deferredValueRef.current;
+      deferredValueRef.current = null;
+      const currentDoc = view.state.doc.toString();
+      if (!shouldApplyDeferredExternal(currentDoc, deferred, compositionStartDoc)) {
+        compositionStartDoc = null;
+        return;
+      }
+      compositionStartDoc = null;
+      view.dispatch({
+        changes: { from: 0, to: currentDoc.length, insert: deferred },
+        annotations: externalSyncAnnotation.of(true),
+      });
+      previousValueRef.current = deferred;
+    };
+    view.dom.addEventListener('compositionstart', onCompositionStart);
+    view.dom.addEventListener('compositionend', onCompositionEnd);
+
     return () => {
+      view.dom.removeEventListener('compositionstart', onCompositionStart);
+      view.dom.removeEventListener('compositionend', onCompositionEnd);
       viewRef.current = null;
       view.destroy();
     };
@@ -178,9 +214,13 @@ export function useCodeMirror({ value, onChange, ariaLabel }: UseCodeMirrorOptio
       previousValueRef.current = value;
       return;
     }
-    // Never interrupt an active IME composition; once composition ends, the
-    // resulting edit echoes back as a local change or re-triggers this effect.
-    if (view.composing) return;
+    // Never interrupt an active IME composition. Hold the external value and
+    // let the compositionend listener reconcile it once composition completes
+    // (applying it only if the user committed no text).
+    if (view.composing) {
+      deferredValueRef.current = value;
+      return;
+    }
 
     if (value !== previousValueRef.current) {
       // Prop moved beyond our own echo: treat it as a different document.
