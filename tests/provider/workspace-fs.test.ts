@@ -205,3 +205,13 @@ Deno.test('WorkspaceFS - listFiles returns [] for an existing but empty folder',
     assertEquals(files, []);
   });
 });
+
+Deno.test('WorkspaceFS - listByGlob reports a missing root, not an empty result', async () => {
+  const missingRoot = join(
+    Deno.env.get('TEMP') || '/tmp',
+    `workspace-fs-test-${crypto.randomUUID()}`,
+  );
+  const fs = createWorkspaceFS(missingRoot);
+
+  await assertRejects(() => fs.listByGlob('**/*.md'), Error, 'Workspace root not found');
+});

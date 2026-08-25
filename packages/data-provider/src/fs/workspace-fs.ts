@@ -296,8 +296,11 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
         } catch (error) {
           // Missing/unreadable subdirectories contribute no matches, but a
           // missing workspace root is a real failure, not an empty result.
-          if (isRoot && error instanceof Deno.errors.NotFound) {
-            throw new Error(`Workspace root not found: ${rootPath}`);
+          if (isRoot) {
+            if (error instanceof Deno.errors.NotFound) {
+              throw new Error(`Workspace root not found: ${rootPath}`);
+            }
+            throw error;
           }
         }
       };
