@@ -11,7 +11,7 @@ export function createTimeTool(configMgr: ConfigManager): AgentTool<any> {
     name: 'get_current_time',
     label: 'Get Current Time',
     description:
-      'Lấy ngày và giờ hiện tại theo Timezone đã cấu hình của Workspace. Gọi công cụ này khi cần xác định ngày hôm nay hoặc giải quyết các từ ngữ thời gian tương đối như "hôm nay", "hôm qua", "tuần này".',
+      'Get the current date and time in the Workspace configured timezone. Call this tool when you need to determine today date or resolve relative time words like "today", "yesterday", "this week".',
     parameters: Type.Object({}),
     execute: async () => {
       const config = await configMgr.load();
@@ -25,13 +25,13 @@ export function createTimeTool(configMgr: ConfigManager): AgentTool<any> {
         day: '2-digit',
       }).format(now);
 
-      const localTime = new Intl.DateTimeFormat('vi-VN', {
+      const localTime = new Intl.DateTimeFormat('en-US', {
         timeZone: timezone,
         timeStyle: 'full',
         dateStyle: 'full',
       }).format(now);
 
-      const summary = `📅 Ngày ${localDate} | ${localTime} (Múi giờ: ${timezone})`;
+      const summary = `📅 ${localDate} | ${localTime} (Timezone: ${timezone})`;
 
       return successResult({ currentDate: localDate, fullTime: localTime, timezone }, summary);
     },

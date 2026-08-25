@@ -270,7 +270,7 @@ Deno.test('create_document rejects an unknown type', async () => {
   await assertRejects(
     () => tool.execute('call_1', { type: 'nope', data: {} }),
     Error,
-    'không hợp lệ',
+    'Invalid document type',
   );
 });
 

@@ -7,18 +7,20 @@ import { successResult } from './result.ts';
 
 const debtParams = Type.Object({
   action: StringEnum(['list', 'settle', 'summary', 'delete'], {
-    description: 'Hành động cần thực hiện trên khoản nợ',
+    description: 'Action to perform on a debt',
   }),
   // list
-  personName: Type.Optional(Type.String({ description: 'Tên người involved trong khoản này' })),
+  personName: Type.Optional(
+    Type.String({ description: 'Name of the person involved in this debt' }),
+  ),
   status: Type.Optional(
-    StringEnum(['pending', 'paid', 'cancelled'], { description: 'Lọc theo trạng thái' }),
+    StringEnum(['pending', 'paid', 'cancelled'], { description: 'Filter by status' }),
   ),
   direction: Type.Optional(
-    StringEnum(['lent', 'borrowed'], { description: 'Lọc theo hướng tiền' }),
+    StringEnum(['lent', 'borrowed'], { description: 'Filter by direction' }),
   ),
   // settle / delete
-  debtId: Type.Optional(Type.String({ description: 'ID của khoản nợ' })),
+  debtId: Type.Optional(Type.String({ description: 'ID of the debt' })),
 });
 
 /**
@@ -34,7 +36,7 @@ export function createDebtTool(debts: DebtRepository): AgentTool<typeof debtPara
     name: 'debt',
     label: 'Debt',
     description:
-      'Quản lý khoản nợ: liệt kê, thanh toán, tổng kết và xóa. Dùng khi người dùng trả nợ, hoặc hỏi về số nợ. Muốn tạo khoản nợ mới, dùng create_document với type=debt.',
+      'Manage debts: list, settle, summarize, and delete. Use when the user repays a debt or asks about debt amounts. To create a new debt, use create_document with type=debt.',
     parameters: debtParams,
     execute: async (_toolCallId, params) => {
       switch (params.action) {
@@ -65,7 +67,7 @@ async function listDebts(
   });
 
   if (docs.length === 0) {
-    return successResult([], '📭 Không có khoản nợ nào.');
+    return successResult([], '📭 No debts.');
   }
 
   const summary = docs.map((doc) => formatDebtSummary(doc)).join('\n\n');
@@ -77,7 +79,7 @@ async function settleDebt(
   params: { debtId?: string },
 ): Promise<AgentToolResult<unknown>> {
   const { debtId } = params;
-  if (!debtId) throw new Error('Thiếu debtId để thanh toán khoản nợ.');
+  if (!debtId) throw new Error('Missing debtId to settle the debt.');
   const doc = await debts.getById(debtId);
 
   if (!doc) {
@@ -85,7 +87,7 @@ async function settleDebt(
   }
 
   if (doc.frontmatter.status === DebtStatus.PAID) {
-    return successResult(null, `✅ Khoản nợ ${debtId.slice(0, 8)} đã được thanh toán rồi.`);
+    return successResult(null, `✅ Debt ${debtId.slice(0, 8)} is already settled.`);
   }
 
   const settled = await debts.settle(debtId);
@@ -95,7 +97,7 @@ async function settleDebt(
 
   return successResult(
     settled,
-    `✅ Đã đánh dấu khoản nợ ${debtId.slice(0, 8)} là đã trả.\n📄 File: ${settled.filePath}`,
+    `✅ Marked debt ${debtId.slice(0, 8)} as paid.\n📄 File: ${settled.filePath}`,
   );
 }
 
@@ -105,35 +107,35 @@ async function debtSummary(debts: DebtRepository): Promise<AgentToolResult<unkno
   const currencyKeys = Object.keys(summary.currencies);
   const defaultCurrency = currencyKeys.length === 1 ? currencyKeys[0] : 'VND';
   function formatAmount(amount: number): string {
-    return `${amount.toLocaleString('vi-VN')} ${defaultCurrency}`;
+    return `${amount.toLocaleString('en-US')} ${defaultCurrency}`;
   }
 
   const parts: string[] = [];
   if (summary.totalLent > 0) {
     parts.push(
-      `💰 Bạn được nợ: ${formatAmount(summary.totalLent)} (${summary.pendingLentCount} khoản chưa trả)`,
+      `💰 Owed to you: ${formatAmount(summary.totalLent)} (${summary.pendingLentCount} pending)`,
     );
   }
   if (summary.totalBorrowed > 0) {
     parts.push(
-      `📥 Bạn cần trả: ${formatAmount(summary.totalBorrowed)} (${summary.pendingBorrowedCount} khoản chưa trả)`,
+      `📥 You owe: ${formatAmount(summary.totalBorrowed)} (${summary.pendingBorrowedCount} pending)`,
     );
   }
 
   const net = summary.netPosition;
   let netText: string;
   if (net > 0) {
-    netText = `🟢 Bạn là người có quyền lợi: ${formatAmount(net)}`;
+    netText = `🟢 You are owed: ${formatAmount(net)}`;
   } else if (net < 0) {
-    netText = `🔴 Bạn cần thanh toán: ${formatAmount(Math.abs(net))}`;
+    netText = `🔴 You need to pay: ${formatAmount(Math.abs(net))}`;
   } else {
-    netText = '⚪ Mỗi khoản đã cân bằng';
+    netText = '⚪ Everything is balanced';
   }
   parts.push(netText);
 
   const summaryText =
     Object.entries(summary.currencies).length > 1
-      ? parts.join('\n') + '\n\n💱 Đa tiền tệ đã được tính riêng biệt.'
+      ? parts.join('\n') + '\n\n💱 Multi-currency amounts are calculated separately.'
       : parts.join('\n');
 
   return successResult(summary, summaryText);
@@ -144,7 +146,7 @@ async function deleteDebt(
   params: { debtId?: string },
 ): Promise<AgentToolResult<unknown>> {
   const { debtId } = params;
-  if (!debtId) throw new Error('Thiếu debtId để xóa khoản nợ.');
+  if (!debtId) throw new Error('Missing debtId to delete the debt.');
 
   const existing = await debts.getById(debtId);
   if (!existing) {
@@ -152,5 +154,5 @@ async function deleteDebt(
   }
 
   await debts.delete(debtId);
-  return successResult({ debtId }, `🗑 Đã xóa khoản nợ ${debtId.slice(0, 8)}.`);
+  return successResult({ debtId }, `🗑 Deleted debt ${debtId.slice(0, 8)}.`);
 }

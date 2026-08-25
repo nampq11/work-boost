@@ -5,10 +5,10 @@ import { successResult } from './result.ts';
 
 const createDocumentParams = Type.Object({
   type: Type.String({
-    description: 'Loại tài liệu cần tạo (ví dụ: note, debt, daily)',
+    description: 'Document type to create (e.g., note, debt, daily)',
   }),
   data: Type.Record(Type.String(), Type.Unknown(), {
-    description: 'Dữ liệu theo loại tài liệu. Xem mô tả từng loại để biết các trường bắt buộc.',
+    description: 'Data for the document type. See each type description for the required fields.',
   }),
 });
 
@@ -28,15 +28,15 @@ export function createDocumentTool(
     name: 'create_document',
     label: 'Create Document',
     description:
-      'Tạo một tài liệu mới theo loại và lưu vào thư mục riêng của nó. Các loại hợp lệ: ' +
+      'Create a new document of a given type and save it to its own folder. Valid types: ' +
       validTypes.join(', ') +
-      '. Dùng để tạo ghi chú (note), khoản nợ (debt) hoặc báo cáo công việc (daily).',
+      '. Use to create a note, a debt, or a daily work report.',
     parameters: createDocumentParams,
     execute: async (_toolCallId, params) => {
       const template = templates[params.type];
       if (!template) {
         throw new Error(
-          `Loại tài liệu không hợp lệ: ${params.type}. Các loại hợp lệ: ${validTypes.join(', ')}`,
+          `Invalid document type: ${params.type}. Valid types: ${validTypes.join(', ')}`,
         );
       }
 

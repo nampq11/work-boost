@@ -6,10 +6,10 @@ import { successResult } from './result.ts';
 
 const dailyWorkParams = Type.Object({
   action: StringEnum(['get', 'list_dates'], {
-    description: 'Hành động cần thực hiện trên báo cáo công việc',
+    description: 'Action to perform on a daily work report',
   }),
-  date: Type.Optional(Type.String({ description: 'Ngày (ISO date YYYY-MM-DD)' })),
-  includeRaw: Type.Optional(Type.Boolean({ description: 'Trả về raw markdown nếu true' })),
+  date: Type.Optional(Type.String({ description: 'Date (ISO date YYYY-MM-DD)' })),
+  includeRaw: Type.Optional(Type.Boolean({ description: 'Return raw markdown if true' })),
 });
 
 /**
@@ -26,7 +26,7 @@ export function createDailyWorkTool(
     name: 'daily_work',
     label: 'Daily Work',
     description:
-      'Xem báo cáo công việc hằng ngày: lấy báo cáo của một ngày và liệt kê các ngày đã ghi. Muốn lưu báo cáo mới, dùng create_document với type=daily.',
+      'View daily work reports: get the report for a date and list the dates that have one. To save a new report, use create_document with type=daily.',
     parameters: dailyWorkParams,
     execute: async (_toolCallId, params) => {
       switch (params.action) {
@@ -46,12 +46,12 @@ async function getDailyWork(
   params: { date?: string; includeRaw?: boolean },
 ): Promise<AgentToolResult<unknown>> {
   const { date, includeRaw } = params;
-  if (!date) throw new Error('Thiếu date để xem báo cáo công việc.');
+  if (!date) throw new Error('Missing date to view the daily work report.');
 
   const doc = await dailyWork.get(date);
 
   if (!doc) {
-    return successResult(null, `❌ Không tìm thấy báo cáo công việc ngày ${date}.`);
+    return successResult(null, `❌ No daily work report found for ${date}.`);
   }
 
   const summary = formatDailyReport(doc.report, doc.customSections);
@@ -64,7 +64,7 @@ async function listDailyDates(dailyWork: DailyWorkRepository): Promise<AgentTool
   const dates = await dailyWork.listDates();
 
   if (dates.length === 0) {
-    return successResult([], '📭 Chưa có báo cáo công việc nào.');
+    return successResult([], '📭 No daily work reports yet.');
   }
 
   const summary = dates
@@ -73,5 +73,5 @@ async function listDailyDates(dailyWork: DailyWorkRepository): Promise<AgentTool
     .map((d) => `  - ${d}`)
     .join('\n');
 
-  return successResult(dates, `📅 Các ngày có báo cáo:\n${summary}`);
+  return successResult(dates, `📅 Dates with reports:\n${summary}`);
 }
