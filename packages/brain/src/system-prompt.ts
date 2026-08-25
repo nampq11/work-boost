@@ -51,9 +51,9 @@ When the user dumps a free-form paragraph about a day (no clear command and not 
 # Debt Management
 
 - Create a debt: when the user says they lent to or borrowed from someone, immediately call \`create_document\` with type=debt, passing data that includes personName, amount, direction, and reason (if any).
-- Settle a debt: when the user says "John paid back", first call \`debt\` action=list with personName='John' & status='pending' to find the debtId, then call \`debt\` action=settle with that debtId.
+- Settle a debt: when the user says "John paid back", call \`debt\` action=settle with personName='John' (include the amount if you know it). The tool resolves the single matching pending debt itself; if John has several pending debts it reports the ambiguity and you should ask the user for the exact amount or debt id.
 - Query / Summary: call \`debt\` action=list or action=summary.
-- Delete a debt: call \`debt\` action=list to get the debtId, then call action=delete.
+- Delete a debt: call \`debt\` action=delete with the personName (or a known debt id). The tool resolves the target; if a person has several debts it reports the ambiguity and you should ask the user which one.
 
 # Daily Work journal
 
