@@ -45,12 +45,12 @@ export function EditorContainer() {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {/* Document toolbar: view tabs on the left (GitHub pattern); the save
-          shortcut lives in the AppHeader breadcrumb and the status bar shows
-          the save state */}
+      {/* Document toolbar: view-mode toggle on the left (GitHub pattern); the
+          save shortcut lives in the AppHeader breadcrumb and the status bar
+          shows the save state */}
       <div className="flex h-11 shrink-0 items-center gap-4 border-b border-[var(--border)] px-6">
         <div
-          role="tablist"
+          role="group"
           aria-label={t('editor.viewMode')}
           className="flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-hover)] p-0.5"
         >
@@ -99,8 +99,7 @@ function ViewTab({
   return (
     <button
       type="button"
-      role="tab"
-      aria-selected={selected}
+      aria-pressed={selected}
       onClick={onSelect}
       className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
         selected
