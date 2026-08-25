@@ -1,24 +1,31 @@
 import { useAui, useAuiState } from '@assistant-ui/react';
-import { Code, Coins, Eye, FileText, FloppyDisk, PaperPlaneRight } from '@phosphor-icons/react';
+import { Coins, FileText, PaperPlaneRight } from '@phosphor-icons/react';
+import type { Editor } from '@tiptap/react';
 import { Button } from '@work-boost/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
 import { api } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
+import { stringifyMarkdown } from '../../lib/markdown-parser.ts';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
-import { SourceEditor } from './SourceEditor.tsx';
-import { TiptapEditor } from './TiptapEditor.tsx';
+import { EditorToolbar, TiptapEditor } from './TiptapEditor.tsx';
+
+const SourceEditor = React.lazy(() =>
+  import('./SourceEditor.tsx').then((m) => ({ default: m.SourceEditor })),
+);
 
 export function EditorContainer() {
   const { t } = useI18n();
   const document = useWorkspaceStore((state) => state.activeDocument);
   const draft = useWorkspaceStore((state) => state.draft);
   const updateBody = useWorkspaceStore((state) => state.updateBody);
-  const save = useWorkspaceStore((state) => state.save);
+  const updateSource = useWorkspaceStore((state) => state.updateSource);
   const [sourceMode, setSourceMode] = useState(false);
+  // Editor instance is owned by TiptapEditor; the header only hosts its toolbar
+  const [editor, setEditor] = useState<Editor | null>(null);
 
   useAutosave();
 
@@ -29,8 +36,8 @@ export function EditorContainer() {
         setSourceMode((mode) => !mode);
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, []);
 
   // Today view (front door): shown whenever no file is selected
@@ -38,51 +45,80 @@ export function EditorContainer() {
     return <TodayPanel />;
   }
 
-  const title =
-    document.path
-      .split('/')
-      .pop()
-      ?.replace(/\.(md|html)$/, '') ?? '';
-
   return (
-    <div className="max-w-4xl mx-auto px-10 py-10">
-      {/* Editor Header Bar */}
-      <div className="flex items-center justify-between gap-4 pb-4 mb-6 border-b border-[var(--border)]">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] m-0">
-          {title}
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSourceMode(!sourceMode)}
-            className="gap-1.5 text-sm"
-          >
-            {sourceMode ? <Eye size={14} /> : <Code size={14} />}
-            <span>{t(sourceMode ? 'editor.wysiwyg' : 'editor.rawSource')}</span>
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => void save().catch(() => undefined)}
-            className="gap-1.5 bg-[var(--text-primary)] text-[var(--text-inverse)] hover:opacity-90"
-          >
-            <FloppyDisk size={14} />
-            <span>{t('editor.save')}</span>
-          </Button>
+    <div className="flex h-full min-w-0 flex-col">
+      {/* Document toolbar: view-mode toggle on the left (GitHub pattern); the
+          save shortcut lives in the AppHeader breadcrumb and the status bar
+          shows the save state */}
+      <div className="flex h-11 shrink-0 items-center gap-4 border-b border-[var(--border)] px-6">
+        <div
+          role="group"
+          aria-label={t('editor.viewMode')}
+          className="flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-hover)] p-0.5"
+        >
+          <ViewTab selected={!sourceMode} onSelect={() => setSourceMode(false)}>
+            {t('editor.previewTab')}
+          </ViewTab>
+          <ViewTab selected={sourceMode} onSelect={() => setSourceMode(true)}>
+            {t('editor.sourceTab')}
+          </ViewTab>
         </div>
+        {/* Formatting toolbar shares the header row, right-aligned; only
+            relevant in Preview mode */}
+        {!sourceMode && editor && <EditorToolbar editor={editor} />}
       </div>
 
-      {/* Frontmatter Inspector */}
-      <FrontmatterInspector />
-
-      {/* Editor Body */}
-      {sourceMode ? (
-        <SourceEditor value={draft} onChange={updateBody} />
-      ) : (
-        <TiptapEditor value={draft} onChange={updateBody} />
+      {/* Frontmatter Inspector: only preview mode. In source mode the raw
+          frontmatter is part of the editable document, so the form is hidden. */}
+      {!sourceMode && (
+        <div className="shrink-0">
+          <FrontmatterInspector />
+        </div>
       )}
+
+      {/* Editor Body: fills the remaining height and scrolls internally (ADR 0013) */}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {sourceMode ? (
+          <React.Suspense
+            fallback={<div className="h-full bg-[var(--surface-app)]" aria-hidden="true" />}
+          >
+            {/* Source mode edits the whole file, frontmatter included, so it
+                shows and turns back into the full markdown document. */}
+            <SourceEditor
+              value={stringifyMarkdown(document.frontmatter, draft)}
+              onChange={updateSource}
+            />
+          </React.Suspense>
+        ) : (
+          <TiptapEditor value={draft} onChange={updateBody} onEditorReady={setEditor} />
+        )}
+      </div>
     </div>
+  );
+}
+
+function ViewTab({
+  selected,
+  onSelect,
+  children,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
+        selected
+          ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -251,7 +287,11 @@ function TodayPanel() {
       {!loading && loadFailed && (
         <div className="p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
           <span>{t('editor.todayLoadFailed')}</span>
-          <button onClick={retryLoad} className="underline font-medium hover:opacity-80">
+          <button
+            type="button"
+            onClick={retryLoad}
+            className="underline font-medium hover:opacity-80"
+          >
             {t('editor.todayRetry')}
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { Sparkle, X } from '@phosphor-icons/react';
-import { Button, ResizablePanel } from '@work-boost/ui';
+import { Button, ResizablePanel, usePanelRef } from '@work-boost/ui';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   type AuthLoginEvent,
@@ -17,6 +17,9 @@ import { WorkBoostThread } from './WorkBoostThread.tsx';
 export function AiCopilotDrawer() {
   const { t } = useI18n();
   const open = useUiStore((state) => state.copilotOpen);
+  const panelRef = usePanelRef();
+  const lastWidthRef = useRef(320);
+
   const toggle = useUiStore((state) => state.toggleCopilot);
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
@@ -74,7 +77,19 @@ export function AiCopilotDrawer() {
     };
   }, [open]);
 
-  if (!open) return null;
+  // The panel stays mounted and collapses instead of unmounting, so the
+  // panel set never changes and sibling sizes (e.g. a widened sidebar)
+  // survive toggling the drawer. expand() alone can fall back to minSize
+  // because the internally remembered size is not always captured across a
+  // reload, so re-apply the last user-visible width explicitly.
+  useEffect(() => {
+    if (open) {
+      panelRef.current?.expand();
+      panelRef.current?.resize(lastWidthRef.current);
+    } else {
+      panelRef.current?.collapse();
+    }
+  }, [open, panelRef]);
 
   function handleAuthEvent(event: AuthLoginEvent) {
     if (event.type === 'device_code') {
@@ -169,38 +184,52 @@ export function AiCopilotDrawer() {
 
   const isConnected = authStatus?.auth.status === 'connected';
   return (
-    <ResizablePanel id="copilot" defaultSize={320} minSize={280} maxSize={640} className="min-w-0">
-      <aside className="flex h-full select-none flex-col border-l border-[var(--border)] bg-[var(--surface-sidebar)]">
-        <div className="flex h-12 items-center justify-between border-b border-[var(--border)] px-3.5">
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
-            <Sparkle size={15} className="text-[var(--accent-blue)]" weight="fill" />
-            <span>{t('copilot.workspace')}</span>
+    <ResizablePanel
+      id="copilot"
+      panelRef={panelRef}
+      collapsible
+      collapsedSize={0}
+      defaultSize={320}
+      minSize={280}
+      maxSize={640}
+      onResize={(size) => {
+        if (size.inPixels > 0) lastWidthRef.current = size.inPixels;
+      }}
+      className="min-w-0"
+    >
+      {open && (
+        <aside className="flex h-full select-none flex-col border-l border-[var(--border)] bg-[var(--surface-sidebar)]">
+          <div className="flex h-12 items-center justify-between border-b border-[var(--border)] px-3.5">
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
+              <Sparkle size={15} className="text-[var(--accent-blue)]" weight="fill" />
+              <span>{t('copilot.workspace')}</span>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => void closeDrawer()}>
+              <X size={15} />
+            </Button>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => void closeDrawer()}>
-            <X size={15} />
-          </Button>
-        </div>
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          {isConnected ? (
-            <WorkBoostThread />
-          ) : (
-            <CopilotAuthPanel
-              authStatus={authStatus}
-              authLoading={authLoading}
-              authError={authError}
-              loginSession={loginSession}
-              deviceCode={deviceCode}
-              authProgress={authProgress}
-              authUrl={authUrl}
-              onRetry={() => void refreshAuthStatus()}
-              onStartLogin={() => void startLogin()}
-              onCancelLogin={() => void cancelLogin()}
-              onError={setAuthError}
-            />
-          )}
-        </div>
-      </aside>
+          <div className="flex min-h-0 flex-1 flex-col">
+            {isConnected ? (
+              <WorkBoostThread />
+            ) : (
+              <CopilotAuthPanel
+                authStatus={authStatus}
+                authLoading={authLoading}
+                authError={authError}
+                loginSession={loginSession}
+                deviceCode={deviceCode}
+                authProgress={authProgress}
+                authUrl={authUrl}
+                onRetry={() => void refreshAuthStatus()}
+                onStartLogin={() => void startLogin()}
+                onCancelLogin={() => void cancelLogin()}
+                onError={setAuthError}
+              />
+            )}
+          </div>
+        </aside>
+      )}
     </ResizablePanel>
   );
 }

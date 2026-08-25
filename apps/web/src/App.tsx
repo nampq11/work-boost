@@ -4,7 +4,7 @@ import {
   ResizablePanelGroup,
   useDefaultLayout,
 } from '@work-boost/ui';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AiCopilotDrawer } from './components/ai/AiCopilotDrawer.tsx';
 import { EditorContainer } from './components/editor/EditorContainer.tsx';
 import { AppHeader } from './components/layout/AppHeader.tsx';
@@ -16,6 +16,11 @@ import { HtmlAppViewer } from './components/viewer/HtmlAppViewer.tsx';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.ts';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync.ts';
 import { useI18n } from './lib/i18n.tsx';
+import {
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  defaultSidebarWidth,
+} from './lib/sidebar-constants.ts';
 import { useUiStore } from './store/ui-store.ts';
 import { useWorkspaceStore } from './store/workspace-store.ts';
 
@@ -32,10 +37,16 @@ export function App() {
   const showToast = useUiStore((state) => state.showToast);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'workboost-workspace-layout',
-    panelIds: ['main', 'copilot'],
+    panelIds: ['sidebar', 'main', 'copilot'],
     onlySaveAfterUserInteractions: true,
     storage: typeof window === 'undefined' ? undefined : window.localStorage,
   });
+  // Freeze the mount-time layout: the Group only reads defaultLayout on
+  // mount, and a fresh object identity later would re-trigger layout logic.
+  const [initialLayout] = useState(defaultLayout);
+  // Resizable panels read defaultSize on mount only; a stable mount-time
+  // snapshot keeps the width viewport-derived without re-render churn.
+  const sidebarDefaultSize = useMemo(() => defaultSidebarWidth(window.innerWidth), []);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
@@ -81,14 +92,23 @@ export function App() {
     <div className="app-shell">
       <AppHeader />
       <div className="app-body">
-        <Sidebar />
         <ResizablePanelGroup
           id="workboost-workspace"
           orientation="horizontal"
-          defaultLayout={defaultLayout}
+          defaultLayout={initialLayout}
           onLayoutChanged={onLayoutChanged}
           className="min-w-0 flex-1"
         >
+          <ResizablePanel
+            id="sidebar"
+            defaultSize={sidebarDefaultSize}
+            minSize={SIDEBAR_MIN_WIDTH}
+            maxSize={SIDEBAR_MAX_WIDTH}
+            className="min-w-0"
+          >
+            <Sidebar />
+          </ResizablePanel>
+          <ResizableHandle />
           <ResizablePanel id="main" minSize={0} className="min-w-0">
             <main className="main-viewport">
               {error && (

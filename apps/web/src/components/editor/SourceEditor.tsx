@@ -1,4 +1,5 @@
 import React from 'react';
+import { useCodeMirror } from '../../hooks/useCodeMirror.ts';
 import { useI18n } from '../../lib/i18n.tsx';
 
 interface SourceEditorProps {
@@ -8,13 +9,14 @@ interface SourceEditorProps {
 
 export function SourceEditor({ value, onChange }: SourceEditorProps) {
   const { t } = useI18n();
+  const containerRef = useCodeMirror({
+    value,
+    onChange,
+    ariaLabel: t('sourceEditor.aria'),
+  });
   return (
-    <textarea
-      className="w-full min-h-[500px] p-5 rounded-lg bg-[var(--surface-sidebar)] border border-[var(--border)] text-[var(--text-primary)] font-mono text-sm leading-relaxed outline-none focus:border-[var(--accent-blue)] resize-y"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      spellCheck={false}
-      aria-label={t('sourceEditor.aria')}
-    />
+    // The container must have a definite height so .cm-editor { height: 100% }
+    // resolves and CodeMirror scrolls internally (ADR 0013).
+    <div ref={containerRef} className="h-full w-full bg-[var(--surface-app)]" />
   );
 }

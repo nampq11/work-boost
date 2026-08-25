@@ -5,6 +5,7 @@ import { useI18n } from '../../lib/i18n.tsx';
 import { isTauri } from '../../lib/tauri.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
+import { SettingsMenu } from '../ui/SettingsMenu.tsx';
 import { WindowControls } from './WindowControls.tsx';
 
 export function AppHeader() {
@@ -91,6 +92,9 @@ export function AppHeader() {
         >
           {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
         </Button>
+
+        {/* Settings */}
+        <SettingsMenu />
 
         {/* Copilot Drawer Toggle */}
         <Button

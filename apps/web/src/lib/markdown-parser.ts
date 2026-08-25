@@ -15,7 +15,11 @@ export function parseFrontmatter(raw: string): {
     if (!key) continue;
     frontmatter[key] = parseScalar(value);
   }
-  return { frontmatter, body: raw.slice(close + 4).replace(/^\n/, '') };
+  // Strip every leading newline after the closing `---` so that
+  // parse(stringify(x)) is a fixed point. `stringifyMarkdown` writes a `\n\n`
+  // separator, so removing only one newline would add a blank line on each
+  // round-trip.
+  return { frontmatter, body: raw.slice(close + 4).replace(/^\n+/, '') };
 }
 
 function parseScalar(value: string): unknown {
@@ -45,6 +49,19 @@ export function stringifyMarkdown(frontmatter: Record<string, unknown>, body: st
   return `---\n${entries
     .map(([key, value]) => `${key}: ${scalarToYaml(value)}`)
     .join('\n')}\n---\n\n${body}`;
+}
+
+export function isDebtFrontmatter(frontmatter: Record<string, unknown>): boolean {
+  // Detect a debt document from parsed frontmatter. Debt notes carry fields
+  // that no other note type uses (amount, personName, direction, debtDate).
+  // Never key on `status`: daily notes also include a `status` field
+  // ('draft' | 'completed'), so it would misclassify them as debts.
+  return (
+    typeof frontmatter.amount === 'number' ||
+    typeof frontmatter.personName === 'string' ||
+    typeof frontmatter.direction === 'string' ||
+    typeof frontmatter.debtDate === 'string'
+  );
 }
 
 export function markdownToHtml(markdown: string): string {
