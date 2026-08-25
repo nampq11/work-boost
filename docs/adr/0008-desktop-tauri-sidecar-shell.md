@@ -2,7 +2,7 @@
 type: ADR
 id: "0008"
 title: "Run the Deno API as a Tauri 2 sidecar in the desktop shell"
-status: proposed
+status: active
 date: 2026-08-22
 ---
 

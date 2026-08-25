@@ -2,7 +2,7 @@
 type: ADR
 id: "0012"
 title: "Source editor v1 scope: no search panel, disable markdown() paste/autocomplete extras"
-status: proposed
+status: active
 date: 2026-08-24
 ---
 

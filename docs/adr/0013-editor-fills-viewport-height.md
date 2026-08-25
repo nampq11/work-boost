@@ -2,7 +2,7 @@
 type: ADR
 id: "0013"
 title: "Editor fills the viewport height with a slim document toolbar"
-status: proposed
+status: active
 date: 2026-08-25
 ---
 

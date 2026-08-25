@@ -2,7 +2,7 @@
 type: ADR
 id: "0009"
 title: "Controlled value sync between the Zustand store and CodeMirror"
-status: proposed
+status: active
 date: 2026-08-24
 ---
 

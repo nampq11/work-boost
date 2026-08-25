@@ -2,7 +2,7 @@
 type: ADR
 id: "0011"
 title: "CodeMirror theme built from CSS variables, no JS re-reading"
-status: proposed
+status: active
 date: 2026-08-24
 ---
 

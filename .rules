@@ -36,6 +36,12 @@ Release Notes:
 - N/A
 ```
 
+# Architecture Decision Records
+
+* When a model makes an architecture decision not already recorded in `docs/adr/`, create a new `NNNN-short-title.md` ADR with the next monotonic number and `status: proposed`, add it to the README index, and include Context / Decision / Options considered / Consequences. Do not implement a new architecture decision without first recording it.
+* When a model implements or changes a decision recorded as `proposed`, the model must verify the decision is reflected in the code, then set that ADR's `status` to `active` and update the README index table in the same change. Never ship implemented work with its ADR still `proposed`.
+* To reverse an `active` decision, the model must not edit the ADR - add a new ADR and set the old one to `superseded` with `superseded_by`.
+
 # Rules Hygiene
 
 These `.rules` files are read by every agent session. Keep them high-signal.

@@ -2,7 +2,7 @@
 type: ADR
 id: "0010"
 title: "Source editor viewport: soft wrapping, height, and resizing"
-status: proposed
+status: active
 date: 2026-08-24
 ---
 
