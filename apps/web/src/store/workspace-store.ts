@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { ApiError, api } from '../lib/api-client.ts';
 import { t } from '../lib/i18n.tsx';
-import { stringifyMarkdown } from '../lib/markdown-parser.ts';
+import { parseFrontmatter, stringifyMarkdown } from '../lib/markdown-parser.ts';
 import type { ActiveDocument, FileNode, SyncStatus, WorkspaceEvent } from '../lib/types.ts';
 
 interface WorkspaceState {
@@ -20,6 +20,7 @@ interface WorkspaceState {
   goHome: () => Promise<boolean>;
   updateBody: (body: string) => void;
   updateFrontmatter: (frontmatter: Record<string, unknown>) => void;
+  updateSource: (raw: string) => void;
   save: () => Promise<void>;
   handleEvent: (event: WorkspaceEvent) => Promise<void>;
   moveFile: (fromPath: string, targetDir: string) => Promise<boolean>;
@@ -286,6 +287,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     setDraft(activePath, { body: draft, frontmatter });
     set((current) => ({
       activeDocument: { ...activeDocument, frontmatter, isDirty: true },
+      isDirty: true,
+      documentRevision: current.documentRevision + 1,
+    }));
+  },
+  // Source mode edits the whole markdown document (frontmatter + body), so we
+  // split it back into the store's separate body/frontmatter slices.
+  updateSource(raw) {
+    const { activeDocument, activePath } = get();
+    if (!activeDocument || !activePath) return;
+    const { frontmatter, body } = parseFrontmatter(raw);
+    setDraft(activePath, { body, frontmatter });
+    set((current) => ({
+      activeDocument: { ...activeDocument, body, frontmatter, isDirty: true },
+      draft: body,
       isDirty: true,
       documentRevision: current.documentRevision + 1,
     }));

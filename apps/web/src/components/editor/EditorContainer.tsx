@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
 import { api } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
+import { stringifyMarkdown } from '../../lib/markdown-parser.ts';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
@@ -21,6 +22,7 @@ export function EditorContainer() {
   const document = useWorkspaceStore((state) => state.activeDocument);
   const draft = useWorkspaceStore((state) => state.draft);
   const updateBody = useWorkspaceStore((state) => state.updateBody);
+  const updateSource = useWorkspaceStore((state) => state.updateSource);
   const [sourceMode, setSourceMode] = useState(false);
   // Editor instance is owned by TiptapEditor; the header only hosts its toolbar
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -66,10 +68,13 @@ export function EditorContainer() {
         {!sourceMode && editor && <EditorToolbar editor={editor} />}
       </div>
 
-      {/* Frontmatter Inspector */}
-      <div className="shrink-0">
-        <FrontmatterInspector />
-      </div>
+      {/* Frontmatter Inspector: only preview mode. In source mode the raw
+          frontmatter is part of the editable document, so the form is hidden. */}
+      {!sourceMode && (
+        <div className="shrink-0">
+          <FrontmatterInspector />
+        </div>
+      )}
 
       {/* Editor Body: fills the remaining height and scrolls internally (ADR 0013) */}
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -77,7 +82,12 @@ export function EditorContainer() {
           <React.Suspense
             fallback={<div className="h-full bg-[var(--surface-app)]" aria-hidden="true" />}
           >
-            <SourceEditor value={draft} onChange={updateBody} />
+            {/* Source mode edits the whole file, frontmatter included, so it
+                shows and turns back into the full markdown document. */}
+            <SourceEditor
+              value={stringifyMarkdown(document.frontmatter, draft)}
+              onChange={updateSource}
+            />
           </React.Suspense>
         ) : (
           <TiptapEditor value={draft} onChange={updateBody} onEditorReady={setEditor} />

@@ -1,6 +1,12 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { markdown } from '@codemirror/lang-markdown';
-import { HighlightStyle, foldGutter, foldKeymap, syntaxHighlighting } from '@codemirror/language';
+import {
+  HighlightStyle,
+  StreamLanguage,
+  foldGutter,
+  foldKeymap,
+  foldService,
+  syntaxHighlighting,
+} from '@codemirror/language';
 import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state';
 import {
   EditorView,
@@ -16,39 +22,173 @@ import { shouldApplyDeferredExternal, shouldReplaceExternally } from '../lib/sou
 // Tags transactions that originate from prop-driven value sync, so the update
 // listener can distinguish them from user edits and avoid a feedback loop.
 const externalSyncAnnotation = Annotation.define<boolean>();
-// Markdown highlighting tuned to the Work Boost palette. Marks (###, -, **)
-// are dimmed so content reads first, inline code takes an accent color, and
-// headings scale like a desktop code editor.
-const workBoostHighlight = HighlightStyle.define([
-  { tag: tags.heading1, fontWeight: '700', fontSize: '1.5em', color: 'var(--text-primary)' },
-  { tag: tags.heading2, fontWeight: '700', fontSize: '1.3em', color: 'var(--text-primary)' },
-  { tag: tags.heading3, fontWeight: '700', fontSize: '1.15em', color: 'var(--text-primary)' },
-  {
-    tag: [tags.heading4, tags.heading5, tags.heading6],
-    fontWeight: '700',
-    color: 'var(--text-primary)',
-  },
+// Zed-inspired highlight: structural tokens (frontmatter braces, fences, keys)
+// stay muted so content reads first; values and text render bright; code blocks
+// take the accent color. Uses design tokens so it adapts to light/dark.
+const zedHighlight = HighlightStyle.define([
+  { tag: tags.meta, color: 'var(--text-muted)' },
+  { tag: tags.propertyName, color: 'var(--text-muted)' },
+  { tag: tags.string, color: 'var(--text-primary)' },
+  { tag: tags.number, color: 'var(--text-primary)' },
   { tag: tags.monospace, color: 'var(--accent-orange)' },
-  { tag: tags.labelName, color: 'var(--text-muted)' },
+  { tag: tags.heading, color: 'var(--text-primary)', fontWeight: '700' },
+  { tag: tags.strong, color: 'var(--text-primary)', fontWeight: '700' },
+  { tag: tags.emphasis, color: 'var(--text-primary)', fontStyle: 'italic' },
   { tag: tags.link, color: 'var(--accent-blue)', textDecoration: 'underline' },
   { tag: tags.url, color: 'var(--accent-blue)' },
-  { tag: tags.strong, fontWeight: '700', color: 'var(--text-primary)' },
-  { tag: tags.emphasis, fontStyle: 'italic' },
-  { tag: tags.strikethrough, textDecoration: 'line-through', color: 'var(--text-muted)' },
-  { tag: tags.quote, color: 'var(--text-secondary)', fontStyle: 'italic' },
-  { tag: tags.contentSeparator, color: 'var(--accent-blue)', fontWeight: '700' },
-  { tag: [tags.character, tags.escape], color: 'var(--accent-orange)' },
-  // Marks must come after heading/strong rules: lezer-markdown tags them via
-  // parent prefixes (ATXHeading3/..., StrongEmphasis/...), so this rule has to
-  // win the CSS cascade to keep punctuation small, unbolded, and dimmed.
-  {
-    tag: tags.processingInstruction,
-    color: 'var(--text-muted)',
-    fontWeight: '400',
-    fontSize: '1em',
-  },
+  { tag: tags.comment, color: 'var(--text-muted)', fontStyle: 'italic' },
 ]);
 
+interface SourceState {
+  first: boolean;
+  frontmatter: boolean;
+  fence: '```' | '~~~' | null;
+}
+
+// Hand-rolled line-based tokenizer. lezer-markdown has no YAML-frontmatter
+// concept and mis-tokenizes a frontmatter block as a setext heading (bold,
+// oversized). A single stream language lets us shade the frontmatter as muted
+// keys + bright values and the body as markdown, in one consistent mono style.
+const sourceLanguage = StreamLanguage.define<SourceState>({
+  name: 'workboost-markdown',
+  startState: () => ({ first: true, frontmatter: false, fence: null }),
+  token(stream, state) {
+    const atLineStart = stream.pos === 0;
+    if (stream.eatSpace()) return null;
+    const line = stream.string;
+    const trimmed = line.trim();
+
+    // Frontmatter opens only on the document's first line and must be `---`.
+    if (state.first) {
+      state.first = false;
+      if (atLineStart && /^---+$/.test(trimmed)) {
+        state.frontmatter = true;
+        stream.skipToEnd();
+        return 'meta';
+      }
+    }
+
+    if (state.frontmatter) {
+      // Closing `---`
+      if (atLineStart && /^---+$/.test(trimmed)) {
+        state.frontmatter = false;
+        stream.skipToEnd();
+        return 'meta';
+      }
+      // `key: value` — shade the key as a muted property and the rest as value.
+      if (atLineStart) {
+        const key = /^([^:\n]+?):/.exec(line);
+        if (key && !key[1].trim().startsWith('#')) {
+          stream.pos += key[1].length;
+          return 'propertyName';
+        }
+      }
+      stream.skipToEnd();
+      return 'string';
+    }
+
+    // Fenced code block
+    if (state.fence) {
+      if (atLineStart && trimmed.startsWith(state.fence)) {
+        state.fence = null;
+        stream.skipToEnd();
+        return 'meta';
+      }
+      stream.skipToEnd();
+      return 'monospace';
+    }
+    const fence = /^(```+|~~~+)\s*$/.exec(line);
+    if (atLineStart && fence) {
+      state.fence = fence[1].startsWith('`') ? '```' : '~~~';
+      stream.skipToEnd();
+      return 'meta';
+    }
+
+    // ATX heading
+    if (atLineStart && /^\s{0,3}#{1,6}\s/.test(line)) {
+      stream.skipToEnd();
+      return 'heading';
+    }
+
+    // Inline code / bold / emphasis
+    if (stream.match(/`[^`\n]+`/)) return 'monospace';
+    if (stream.match(/\*\*[^*\n]+\*\*/)) return 'strong';
+    if (stream.match(/__[^_\n]+__/)) return 'strong';
+    if (stream.match(/\*[^*\n]+\*/)) return 'emphasis';
+    if (stream.match(/_([^_\n]+)_/)) return 'emphasis';
+
+    stream.skipToEnd();
+    return null;
+  },
+});
+
+// Folding support for the stream language: lezer-markdown provides folding via
+// its syntax tree, which a StreamLanguage does not. We compute fold ranges for
+// the frontmatter block, ATX headings, and fenced code blocks so the fold
+// gutter has ranges to show arrows for.
+const markdownFold = foldService.of((state, lineStart) => {
+  const line = state.doc.lineAt(lineStart);
+  const trimmed = line.text.trim();
+
+  // End the fold at the close of the line just before the boundary line, not at
+  // the boundary line's start. Using `next.from` includes the newline separator,
+  // so CodeMirror pulls the boundary line (next heading, closing frontmatter
+  // fence, closing code fence) up onto the fold line and merges it with the
+  // placeholder. Mirrors @codemirror/lang-markdown: it ends the range at the
+  // section's last content node and returns null for empty sections.
+  const foldTo = (boundaryLine: number): { from: number; to: number } | null => {
+    if (boundaryLine - 1 <= line.number) return null;
+    const to = state.doc.line(boundaryLine - 1).to;
+    return to > line.to ? { from: line.to, to } : null;
+  };
+
+  // Frontmatter block (opens on the document's first `---`).
+  if (line.number === 1 && /^---+$/.test(trimmed)) {
+    for (let n = line.number + 1; n <= state.doc.lines; n++) {
+      if (/^---+$/.test(state.doc.line(n).text.trim())) return foldTo(n);
+    }
+    return null;
+  }
+
+  // ATX heading: fold until the next heading. The last heading has nothing
+  // below it to fold, so it gets no arrow.
+  if (/^\s{0,3}#{1,6}\s/.test(line.text)) {
+    for (let n = line.number + 1; n <= state.doc.lines; n++) {
+      if (/^\s{0,3}#{1,6}\s/.test(state.doc.line(n).text)) return foldTo(n);
+    }
+    return null;
+  }
+
+  // Fenced code block: only the opening fence is foldable (must have a closing
+  // fence); the closing fence and unclosed fences get no arrow.
+  const fence = /^(```+|~~~+)\s*$/.exec(line.text);
+  if (fence) {
+    const mark = fence[1];
+    for (let n = line.number + 1; n <= state.doc.lines; n++) {
+      if (state.doc.line(n).text.trim().startsWith(mark)) return foldTo(n);
+    }
+    return null;
+  }
+
+  return null;
+});
+
+// Fold-gutter glyphs. CodeMirror's defaults ("⌄"/"›" text arrows) render as
+// small, cramped characters; an SVG chevron stays crisp at any size and gives
+// us a hover affordance via CSS. open=true means the line can still be folded
+// (expanded, chevron-down); open=false means the block is folded (chevron-right).
+function createFoldMarker(open: boolean): HTMLElement {
+  const el = document.createElement('span');
+  el.className = 'cm-fold-marker';
+  // markerDOM bypasses the default span, which would otherwise set the title.
+  el.title = open ? 'Fold line' : 'Unfold line';
+  const path = open ? 'M2.5 4.25 6 7.75l3.5-3.5' : 'M4.25 2.5 7.75 6l-3.5 3.5';
+  el.innerHTML =
+    '<svg class="cm-fold-chevron" viewBox="0 0 12 12" aria-hidden="true">' +
+    `<path d="${path}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>` +
+    '</svg>';
+  return el;
+}
 const workBoostTheme = EditorView.theme(
   {
     '&': {
@@ -86,10 +226,40 @@ const workBoostTheme = EditorView.theme(
       color: 'var(--text-muted)',
     },
     '.cm-foldGutter .cm-gutterElement': {
-      padding: '0 2px',
+      width: '22px',
+      padding: '0',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    '.cm-foldGutter span': {
+    '.cm-foldGutter .cm-fold-marker': {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxSizing: 'border-box',
+      width: '16px',
+      height: '16px',
+      borderRadius: '4px',
+      color: 'var(--text-muted)',
       cursor: 'pointer',
+      // Hidden until the line's gutter is hovered: keeps the gutter clean and
+      // reveals the fold arrow only where the user is looking. The folded
+      // state stays discoverable via the inline "..." placeholder.
+      opacity: '0',
+      transition: 'opacity 120ms ease, color 120ms ease, background-color 120ms ease',
+    },
+    '.cm-foldGutter .cm-gutterElement:hover .cm-fold-marker, .cm-foldGutter .cm-fold-marker:hover, .cm-foldGutter .cm-fold-marker:focus-visible':
+      {
+        opacity: '1',
+      },
+    '.cm-foldGutter .cm-fold-marker:hover': {
+      color: 'var(--text-primary)',
+      backgroundColor: 'color-mix(in srgb, var(--text-muted) 16%, transparent)',
+    },
+    '.cm-foldGutter .cm-fold-chevron': {
+      width: '12px',
+      height: '12px',
+      display: 'block',
     },
     '.cm-cursor': {
       borderLeftColor: 'var(--accent-blue)',
@@ -103,14 +273,15 @@ const workBoostTheme = EditorView.theme(
 
 const baseExtensions: Extension[] = [
   lineNumbers(),
-  foldGutter(),
+  foldGutter({ markerDOM: createFoldMarker }),
   keymap.of(foldKeymap),
   highlightActiveLine(),
   highlightActiveLineGutter(),
   history(),
   keymap.of([...defaultKeymap, ...historyKeymap]),
-  markdown({ completeHTMLTags: false, pasteURLAsLink: false }),
-  syntaxHighlighting(workBoostHighlight, { fallback: true }),
+  sourceLanguage,
+  markdownFold,
+  syntaxHighlighting(zedHighlight, { fallback: true }),
   EditorView.lineWrapping,
   workBoostTheme,
 ];

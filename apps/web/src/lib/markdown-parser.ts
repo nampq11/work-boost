@@ -15,7 +15,11 @@ export function parseFrontmatter(raw: string): {
     if (!key) continue;
     frontmatter[key] = parseScalar(value);
   }
-  return { frontmatter, body: raw.slice(close + 4).replace(/^\n/, '') };
+  // Strip every leading newline after the closing `---` so that
+  // parse(stringify(x)) is a fixed point. `stringifyMarkdown` writes a `\n\n`
+  // separator, so removing only one newline would add a blank line on each
+  // round-trip.
+  return { frontmatter, body: raw.slice(close + 4).replace(/^\n+/, '') };
 }
 
 function parseScalar(value: string): unknown {
