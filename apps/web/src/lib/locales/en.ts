@@ -9,6 +9,8 @@ export const en = {
   // Main.tsx bootstrapping / connection states
   'app.connecting': 'Connecting to workspace...',
   'app.failedToConnect': 'Failed to connect to the workspace API.',
+  'app.workspaceConnectionError': 'Workspace connection error:',
+  'app.retry': 'Retry',
 
   // Empty-state dashboards and editor chrome
   'editor.recentNotes': 'Recent Notes',

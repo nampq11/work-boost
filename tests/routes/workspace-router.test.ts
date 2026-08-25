@@ -91,7 +91,7 @@ Deno.test('Workspace router - serves seeded HTML apps with CSP + injected runtim
     assertEquals(text.includes('cdn.tailwindcss.com/3.4.17'), true);
     assertEquals(text.includes('cdn.jsdelivr.net/npm/alpinejs@3.16.2'), true);
     assertEquals(text.includes('window.workboost'), true);
-    assertEquals(text.includes('Sổ Nợ Work Boost'), true);
+    assertEquals(text.includes('Debt Ledger Work Boost'), true);
   });
 });
 

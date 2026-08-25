@@ -486,13 +486,6 @@ button:focus-visible {
   color: var(--wb-success);
 }
 
-.wb-empty-standup {
-  margin-top: 26px;
-  border: 1px solid var(--wb-border);
-  border-radius: 8px;
-  background: var(--wb-surface);
-}
-
 .wb-empty-note {
   margin-top: 6px;
 }
@@ -508,19 +501,6 @@ button:focus-visible {
   margin-bottom: 8px;
   color: var(--wb-text-secondary);
   font-size: 22px;
-}
-
-.wb-standup-date {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 12px;
-  padding: 5px 8px;
-  border: 1px solid var(--wb-border);
-  border-radius: 5px;
-  background: var(--wb-surface-subtle);
-  color: var(--wb-text-secondary);
-  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: 11px;
 }
 
 .wb-report-grid {
