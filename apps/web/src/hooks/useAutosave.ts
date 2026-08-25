@@ -15,7 +15,7 @@ export function useAutosave() {
     let cancelled = false;
     let retryDelay = 300;
     const schedule = (delay: number) => {
-      timer = window.setTimeout(() => {
+      timer = globalThis.setTimeout(() => {
         void save().catch((error) => {
           if (cancelled || (error instanceof ApiError && error.code === 'CONFLICT')) return;
           retryDelay = Math.min(retryDelay * 2, 5000);
@@ -26,7 +26,7 @@ export function useAutosave() {
     schedule(300);
     return () => {
       cancelled = true;
-      if (timer !== undefined) window.clearTimeout(timer);
+      if (timer !== undefined) globalThis.clearTimeout(timer);
     };
   }, [documentRevision, isDirty, isAutosaveEnabled, save]);
 }

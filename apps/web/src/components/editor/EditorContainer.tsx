@@ -33,8 +33,8 @@ export function EditorContainer() {
         setSourceMode((mode) => !mode);
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, []);
 
   // Today view (front door): shown whenever no file is selected
@@ -280,7 +280,11 @@ function TodayPanel() {
       {!loading && loadFailed && (
         <div className="p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">
           <span>{t('editor.todayLoadFailed')}</span>
-          <button onClick={retryLoad} className="underline font-medium hover:opacity-80">
+          <button
+            type="button"
+            onClick={retryLoad}
+            className="underline font-medium hover:opacity-80"
+          >
             {t('editor.todayRetry')}
           </button>
         </div>
