@@ -42,7 +42,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 border-r border-[var(--border)] bg-[var(--surface-sidebar)] flex flex-col shrink-0 select-none">
+    <aside className="h-full w-full border-r border-[var(--border)] bg-[var(--surface-sidebar)] flex flex-col select-none">
       {/* Search Input Box */}
       <div className="p-2.5 border-b border-[var(--border)]">
         <div className="relative flex items-center">

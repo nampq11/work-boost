@@ -84,3 +84,20 @@ export function formatNodeDisplayName(node: FileNode): string {
 
   return baseName;
 }
+
+// The sidebar is a resizable panel. These bounds are shared between the
+// panel constraints and the default-width heuristic so both stay in sync.
+export const SIDEBAR_MIN_WIDTH = 180;
+export const SIDEBAR_MAX_WIDTH = 480;
+// Matches the previous fixed `w-64` (16rem at the 14px root font size).
+export const SIDEBAR_BASE_WIDTH = 224;
+
+// Default sidebar width for a fresh layout: keep the classic width on laptop
+// windows, then widen roughly proportionally on large/fullscreen windows so
+// the rail stays in harmony with the centered content column.
+export function defaultSidebarWidth(viewportWidth: number): number {
+  return Math.min(
+    SIDEBAR_MAX_WIDTH,
+    Math.max(SIDEBAR_BASE_WIDTH, Math.round(viewportWidth * 0.14)),
+  );
+}

@@ -7,4 +7,5 @@ export {
   ResizablePanel,
   ResizablePanelGroup,
   useDefaultLayout,
+  usePanelRef,
 } from './src/resizable.tsx';
