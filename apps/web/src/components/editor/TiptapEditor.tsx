@@ -17,6 +17,7 @@ import { Button } from '@work-boost/ui';
 import React, { useEffect, useRef } from 'react';
 import { useI18n } from '../../lib/i18n.tsx';
 import { htmlToMarkdown, markdownToHtml } from '../../lib/markdown-parser.ts';
+import type { MessageKey } from '../../lib/locales/en.ts';
 
 interface TiptapEditorProps {
   value: string;
@@ -80,76 +81,88 @@ export function TiptapEditor({ value, onChange, onEditorReady }: TiptapEditorPro
   );
 }
 
+// One entry per toolbar control; strings separate visual divider groups.
+type ToolbarItem =
+  | {
+      titleKey: MessageKey;
+      icon: React.ReactNode;
+      isActive: (editor: Editor) => boolean;
+      run: (editor: Editor) => void;
+    }
+  | 'divider';
+
+const toolbarItems: ToolbarItem[] = [
+  {
+    titleKey: 'tiptap.heading1',
+    icon: <TextHOne size={16} />,
+    isActive: (editor) => editor.isActive('heading', { level: 1 }),
+    run: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+  },
+  {
+    titleKey: 'tiptap.heading2',
+    icon: <TextHTwo size={16} />,
+    isActive: (editor) => editor.isActive('heading', { level: 2 }),
+    run: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+  },
+  'divider',
+  {
+    titleKey: 'tiptap.bold',
+    icon: <TextB size={16} weight="bold" />,
+    isActive: (editor) => editor.isActive('bold'),
+    run: (editor) => editor.chain().focus().toggleBold().run(),
+  },
+  {
+    titleKey: 'tiptap.italic',
+    icon: <TextItalic size={16} />,
+    isActive: (editor) => editor.isActive('italic'),
+    run: (editor) => editor.chain().focus().toggleItalic().run(),
+  },
+  'divider',
+  {
+    titleKey: 'tiptap.taskList',
+    icon: <ListChecks size={16} />,
+    isActive: (editor) => editor.isActive('taskList'),
+    run: (editor) => editor.chain().focus().toggleTaskList().run(),
+  },
+  {
+    titleKey: 'tiptap.bulletList',
+    icon: <ListBullets size={16} />,
+    isActive: (editor) => editor.isActive('bulletList'),
+    run: (editor) => editor.chain().focus().toggleBulletList().run(),
+  },
+  {
+    titleKey: 'tiptap.quote',
+    icon: <Quotes size={16} />,
+    isActive: (editor) => editor.isActive('blockquote'),
+    run: (editor) => editor.chain().focus().toggleBlockquote().run(),
+  },
+  {
+    titleKey: 'tiptap.codeBlock',
+    icon: <Code size={16} />,
+    isActive: (editor) => editor.isActive('codeBlock'),
+    run: (editor) => editor.chain().focus().toggleCodeBlock().run(),
+  },
+];
+
 export function EditorToolbar({ editor }: { editor: Editor }) {
   const { t } = useI18n();
   return (
     <div className="ml-auto flex select-none items-center gap-0.5">
-      <Button
-        variant={editor.isActive('heading', { level: 1 }) ? 'secondary' : 'ghost'}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        title={t('tiptap.heading1')}
-      >
-        <TextHOne size={16} />
-      </Button>
-      <Button
-        variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        title={t('tiptap.heading2')}
-      >
-        <TextHTwo size={16} />
-      </Button>
-      <div className="w-[1px] h-4 bg-[var(--border)] mx-1.5" />
-      <Button
-        variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        title={t('tiptap.bold')}
-      >
-        <TextB size={16} weight="bold" />
-      </Button>
-      <Button
-        variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        title={t('tiptap.italic')}
-      >
-        <TextItalic size={16} />
-      </Button>
-      <div className="w-[1px] h-4 bg-[var(--border)] mx-1.5" />
-      <Button
-        variant={editor.isActive('taskList') ? 'secondary' : 'ghost'}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleTaskList().run()}
-        title={t('tiptap.taskList')}
-      >
-        <ListChecks size={16} />
-      </Button>
-      <Button
-        variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        title={t('tiptap.bulletList')}
-      >
-        <ListBullets size={16} />
-      </Button>
-      <Button
-        variant={editor.isActive('blockquote') ? 'secondary' : 'ghost'}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        title={t('tiptap.quote')}
-      >
-        <Quotes size={16} />
-      </Button>
-      <Button
-        variant={editor.isActive('codeBlock') ? 'secondary' : 'ghost'}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-        title={t('tiptap.codeBlock')}
-      >
-        <Code size={16} />
-      </Button>
+      {toolbarItems.map((item) =>
+        item === 'divider' ? (
+          <div key={item} className="mx-1.5 h-4 w-[1px] bg-[var(--border)]" />
+        ) : (
+          <Button
+            key={item.titleKey}
+            variant={item.isActive(editor) ? 'secondary' : 'ghost'}
+            size="icon"
+            onClick={() => item.run(editor)}
+            title={t(item.titleKey)}
+          >
+            {item.icon}
+          </Button>
+        ),
+      )}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { GearSix } from '@phosphor-icons/react';
 import { Menu, Switch } from '@base-ui/react';
+import { Button } from '@work-boost/ui';
 import React from 'react';
 import { useI18n } from '../../lib/i18n.tsx';
 import { useUiStore } from '../../store/ui-store.ts';
-import { Button } from '@work-boost/ui';
 
 const MENU_CLASSES =
   'min-w-[220px] bg-[var(--surface-app)] border border-[var(--border)] rounded-md shadow-lg z-50 py-1';

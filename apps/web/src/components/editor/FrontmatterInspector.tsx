@@ -16,10 +16,9 @@ export function FrontmatterInspector() {
   const document = useWorkspaceStore((state) => state.activeDocument);
   const update = useWorkspaceStore((state) => state.updateFrontmatter);
 
-  if (!document) return null;
-  const frontmatter = document.frontmatter;
+  const frontmatter = document?.frontmatter;
+  if (!frontmatter || !isDebtFrontmatter(frontmatter)) return null;
   const set = (key: string, value: unknown) => update({ ...frontmatter, [key]: value });
-  if (!isDebtFrontmatter(frontmatter)) return null;
 
   return (
     <div className="mb-6 p-4 rounded-lg border border-[var(--border)] bg-[var(--surface-sidebar)] text-sm">
@@ -30,22 +29,16 @@ export function FrontmatterInspector() {
 
       <div className="grid grid-cols-3 gap-4">
         {/* Person */}
-        <label className="flex flex-col gap-1.5 text-[var(--text-secondary)]">
-          <span className="flex items-center gap-1.5 text-sm">
-            <User size={13} /> {t('frontmatter.person')}
-          </span>
+        <DebtField label={t('frontmatter.person')} icon={<User size={13} />}>
           <input
             className="h-8 px-2.5 rounded bg-[var(--surface-app)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)] text-sm"
             value={String(frontmatter.personName ?? '')}
             onChange={(event) => set('personName', event.target.value)}
           />
-        </label>
+        </DebtField>
 
         {/* Amount */}
-        <label className="flex flex-col gap-1.5 text-[var(--text-secondary)]">
-          <span className="flex items-center gap-1.5 text-sm">
-            <CurrencyDollar size={13} /> {t('frontmatter.amount')}
-          </span>
+        <DebtField label={t('frontmatter.amount')} icon={<CurrencyDollar size={13} />}>
           <input
             type="number"
             className="h-8 px-2.5 rounded bg-[var(--surface-app)] border border-[var(--border)] text-[var(--text-primary)] font-mono outline-none focus:border-[var(--accent-blue)] text-sm"
@@ -56,23 +49,19 @@ export function FrontmatterInspector() {
               if (Number.isFinite(amount) && amount > 0) set('amount', amount);
             }}
           />
-        </label>
+        </DebtField>
 
         {/* Currency */}
-        <label className="flex flex-col gap-1.5 text-[var(--text-secondary)]">
-          <span className="text-sm">{t('frontmatter.currency')}</span>
+        <DebtField label={t('frontmatter.currency')}>
           <input
             className="h-8 px-2.5 rounded bg-[var(--surface-app)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)] uppercase font-semibold text-xs"
             value={String(frontmatter.currency ?? 'VND')}
             onChange={(event) => set('currency', event.target.value)}
           />
-        </label>
+        </DebtField>
 
         {/* Status */}
-        <label className="flex flex-col gap-1.5 text-[var(--text-secondary)]">
-          <span className="flex items-center gap-1.5 text-sm">
-            <CheckCircle size={13} /> {t('frontmatter.status')}
-          </span>
+        <DebtField label={t('frontmatter.status')} icon={<CheckCircle size={13} />}>
           <select
             className="h-8 px-2.5 rounded bg-[var(--surface-app)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)] cursor-pointer text-sm"
             value={String(frontmatter.status ?? 'pending')}
@@ -82,13 +71,10 @@ export function FrontmatterInspector() {
             <option value="paid">{t('frontmatter.statusPaid')}</option>
             <option value="cancelled">{t('frontmatter.statusCancelled')}</option>
           </select>
-        </label>
+        </DebtField>
 
         {/* Direction */}
-        <label className="flex flex-col gap-1.5 text-[var(--text-secondary)]">
-          <span className="flex items-center gap-1.5 text-sm">
-            <ArrowsLeftRight size={13} /> {t('frontmatter.direction')}
-          </span>
+        <DebtField label={t('frontmatter.direction')} icon={<ArrowsLeftRight size={13} />}>
           <select
             className="h-8 px-2.5 rounded bg-[var(--surface-app)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)] cursor-pointer text-sm"
             value={String(frontmatter.direction ?? 'lent')}
@@ -97,21 +83,38 @@ export function FrontmatterInspector() {
             <option value="lent">{t('frontmatter.directionLent')}</option>
             <option value="borrowed">{t('frontmatter.directionBorrowed')}</option>
           </select>
-        </label>
+        </DebtField>
 
         {/* Date */}
-        <label className="flex flex-col gap-1.5 text-[var(--text-secondary)]">
-          <span className="flex items-center gap-1.5 text-sm">
-            <CalendarBlank size={13} /> {t('frontmatter.date')}
-          </span>
+        <DebtField label={t('frontmatter.date')} icon={<CalendarBlank size={13} />}>
           <input
             type="date"
             className="h-8 px-2.5 rounded bg-[var(--surface-app)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)] text-sm"
             value={String(frontmatter.debtDate ?? '')}
             onChange={(event) => set('debtDate', event.target.value)}
           />
-        </label>
+        </DebtField>
       </div>
     </div>
+  );
+}
+
+function DebtField({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-1.5 text-[var(--text-secondary)]">
+      <span className="flex items-center gap-1.5 text-sm">
+        {icon}
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }

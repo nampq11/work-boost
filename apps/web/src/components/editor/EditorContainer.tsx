@@ -10,10 +10,11 @@ import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
+import { EditorToolbar, TiptapEditor } from './TiptapEditor.tsx';
+
 const SourceEditor = React.lazy(() =>
   import('./SourceEditor.tsx').then((m) => ({ default: m.SourceEditor })),
 );
-import { EditorToolbar, TiptapEditor } from './TiptapEditor.tsx';
 
 export function EditorContainer() {
   const { t } = useI18n();
@@ -53,32 +54,12 @@ export function EditorContainer() {
           aria-label={t('editor.viewMode')}
           className="flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-hover)] p-0.5"
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!sourceMode}
-            onClick={() => setSourceMode(false)}
-            className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
-              sourceMode
-                ? 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                : 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
-            }`}
-          >
+          <ViewTab selected={!sourceMode} onSelect={() => setSourceMode(false)}>
             {t('editor.previewTab')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sourceMode}
-            onClick={() => setSourceMode(true)}
-            className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
-              sourceMode
-                ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
+          </ViewTab>
+          <ViewTab selected={sourceMode} onSelect={() => setSourceMode(true)}>
             {t('editor.sourceTab')}
-          </button>
+          </ViewTab>
         </div>
         {/* Formatting toolbar shares the header row, right-aligned; only
             relevant in Preview mode */}
@@ -103,6 +84,32 @@ export function EditorContainer() {
         )}
       </div>
     </div>
+  );
+}
+
+function ViewTab({
+  selected,
+  onSelect,
+  children,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onSelect}
+      className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
+        selected
+          ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
