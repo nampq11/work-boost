@@ -1,6 +1,7 @@
 import type { AgentPort, AgentToolEvent } from '@work-boost/brain';
 import type { DataLayer } from '@work-boost/data-provider';
 import { logger } from '@work-boost/shared/logger/logger.ts';
+import { buildReferencedFileBlock } from './file-context.ts';
 
 const THREADS_DIR = '.workboost/assistant/threads';
 const MAX_EVENTS = 500;
@@ -425,7 +426,10 @@ export class AssistantService {
         (message) => message.id === response.inputMessageId,
       );
       if (!inputMessage) throw new Error('The response input message is missing.');
-      const output = await this.agent.stream(inputMessage.content, {
+      // History keeps the raw @path text; only the agent turn is augmented
+      // with inlined file content.
+      const finalMessage = await buildReferencedFileBlock(this.dataLayer.fs, inputMessage.content);
+      const output = await this.agent.stream(finalMessage, {
         sessionId: response.threadId,
         signal: controller.signal,
         onText: (delta) => {

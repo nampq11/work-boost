@@ -1,5 +1,5 @@
-import { GearSix } from '@phosphor-icons/react';
 import { Menu, Switch } from '@base-ui/react';
+import { GearSix } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React from 'react';
 import { useI18n } from '../../lib/i18n.tsx';

@@ -11,13 +11,13 @@ import {
 import CodeBlock from '@tiptap/extension-code-block';
 import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
-import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import { type Editor, EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Button } from '@work-boost/ui';
 import React, { useEffect, useRef } from 'react';
 import { useI18n } from '../../lib/i18n.tsx';
-import { htmlToMarkdown, markdownToHtml } from '../../lib/markdown-parser.ts';
 import type { MessageKey } from '../../lib/locales/en.ts';
+import { htmlToMarkdown, markdownToHtml } from '../../lib/markdown-parser.ts';
 
 interface TiptapEditorProps {
   value: string;

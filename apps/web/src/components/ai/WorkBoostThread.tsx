@@ -4,6 +4,7 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  unstable_useComposerInput,
   useAuiState,
 } from '@assistant-ui/react';
 import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
@@ -11,6 +12,7 @@ import { Copy, PaperPlaneRight, Stop } from '@phosphor-icons/react';
 import React from 'react';
 import { useI18n } from '../../lib/i18n.tsx';
 import { AssistantMarkdown } from './AssistantMarkdown.tsx';
+import { FileMentionMenu } from './FileMentionMenu.tsx';
 import { MessagePair } from './MessagePair.tsx';
 import { ToolTimeline } from './ToolCall.tsx';
 
@@ -143,9 +145,11 @@ function Welcome() {
 function CopilotComposer() {
   const { t } = useI18n();
   const isRunning = useAuiState((state) => state.thread.isRunning);
+  const { value, setText } = unstable_useComposerInput();
 
   return (
     <ComposerPrimitive.Root className="copilot-composer">
+      <FileMentionMenu value={value} onApply={setText} containerClass=".copilot-composer" />
       <ComposerPrimitive.Input
         placeholder={t('thread.messagePlaceholder')}
         rows={1}
