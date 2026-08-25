@@ -108,7 +108,7 @@ export function EditorContainer() {
       <div className="min-h-0 flex-1 overflow-hidden">
         {sourceMode ? (
           <React.Suspense
-            fallback={<div className="h-full bg-[var(--surface-sidebar)]" aria-hidden="true" />}
+            fallback={<div className="h-full bg-[var(--surface-app)]" aria-hidden="true" />}
           >
             <SourceEditor value={draft} onChange={updateBody} />
           </React.Suspense>

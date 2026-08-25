@@ -17,6 +17,6 @@ export function SourceEditor({ value, onChange }: SourceEditorProps) {
   return (
     // The container must have a definite height so .cm-editor { height: 100% }
     // resolves and CodeMirror scrolls internally (ADR 0013).
-    <div ref={containerRef} className="h-full w-full bg-[var(--surface-sidebar)]" />
+    <div ref={containerRef} className="h-full w-full bg-[var(--surface-app)]" />
   );
 }

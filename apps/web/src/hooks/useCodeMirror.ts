@@ -1,8 +1,14 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { HighlightStyle, foldGutter, foldKeymap, syntaxHighlighting } from '@codemirror/language';
 import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import {
+  EditorView,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  keymap,
+  lineNumbers,
+} from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { useEffect, useRef } from 'react';
 import { shouldReplaceExternally } from '../lib/source-editor-sync.ts';
@@ -48,7 +54,7 @@ const workBoostTheme = EditorView.theme(
     '&': {
       height: '100%',
       color: 'var(--text-primary)',
-      backgroundColor: 'var(--surface-sidebar)',
+      backgroundColor: 'var(--surface-app)',
       fontSize: '0.875rem',
     },
     '.cm-scroller': {
@@ -62,10 +68,28 @@ const workBoostTheme = EditorView.theme(
       padding: '20px 0 120px',
     },
     '.cm-gutters': {
-      backgroundColor: 'var(--surface-card)',
+      backgroundColor: 'var(--surface-app)',
       color: 'var(--text-muted)',
       border: 'none',
-      borderRight: '1px solid var(--border)',
+    },
+    '.cm-lineNumbers .cm-gutterElement': {
+      textAlign: 'right',
+    },
+    '.cm-activeLine': {
+      backgroundColor: 'color-mix(in srgb, var(--accent-blue) 6%, transparent)',
+    },
+    '.cm-activeLineGutter': {
+      backgroundColor: 'color-mix(in srgb, var(--accent-blue) 10%, transparent)',
+      color: 'var(--text-primary)',
+    },
+    '.cm-foldGutter': {
+      color: 'var(--text-muted)',
+    },
+    '.cm-foldGutter .cm-gutterElement': {
+      padding: '0 2px',
+    },
+    '.cm-foldGutter span': {
+      cursor: 'pointer',
     },
     '.cm-cursor': {
       borderLeftColor: 'var(--accent-blue)',
@@ -79,6 +103,10 @@ const workBoostTheme = EditorView.theme(
 
 const baseExtensions: Extension[] = [
   lineNumbers(),
+  foldGutter(),
+  keymap.of(foldKeymap),
+  highlightActiveLine(),
+  highlightActiveLineGutter(),
   history(),
   keymap.of([...defaultKeymap, ...historyKeymap]),
   markdown({ completeHTMLTags: false, pasteURLAsLink: false }),

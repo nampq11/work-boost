@@ -63,7 +63,7 @@ export function TiptapEditor({ value, onChange }: TiptapEditorProps) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--surface-app)]">
       {/* Formatting toolbar; the content below it is the scroll container */}
       <div className="flex shrink-0 select-none items-center gap-0.5 border-b border-[var(--border)] px-1 py-1.5">
         <Button
