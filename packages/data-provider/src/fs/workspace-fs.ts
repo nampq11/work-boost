@@ -262,40 +262,47 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
 
     async listFiles(relDir: string): Promise<string[]> {
       const fullDir = await assertInside(relDir);
-      const files: string[] = [];
       try {
+        const files: string[] = [];
         for await (const entry of Deno.readDir(fullDir)) {
           if (entry.isFile && /\.(md|json|txt|html)$/i.test(entry.name)) {
             files.push(join(relDir, entry.name));
           }
         }
-      } catch {
-        return [];
+        return files;
+      } catch (error) {
+        if (error instanceof Deno.errors.NotFound) {
+          throw new Error(`Folder not found: ${relDir}`);
+        }
+        throw error;
       }
-      return files;
     },
 
     async listByGlob(globPattern: string): Promise<string[]> {
       const pattern = globToRegExp(globPattern, { globstar: true });
       const matches: string[] = [];
 
-      const walk = async (relDir: string) => {
+      const walk = async (relDir: string, isRoot: boolean) => {
         try {
           for await (const entry of Deno.readDir(join(rootPath, relDir))) {
             const entryRelPath = relDir === '' ? entry.name : join(relDir, entry.name);
             if (entry.isDirectory) {
               // Hidden dirs (.git, .workboost, ...) are internal state, never listable
-              if (!entry.name.startsWith('.')) await walk(entryRelPath);
+              if (!entry.name.startsWith('.')) await walk(entryRelPath, false);
             } else if (entry.isFile && pattern.test(entryRelPath)) {
               matches.push(entryRelPath);
             }
           }
-        } catch {
-          // Unreadable or missing directories simply contribute no matches
+        } catch (error) {
+          // Missing/unreadable subdirectories contribute no matches, but a
+          // missing workspace root is a real failure, not an empty result.
+          if (isRoot && error instanceof Deno.errors.NotFound) {
+            throw new Error(`Workspace root not found: ${rootPath}`);
+          }
         }
       };
 
-      await walk('');
+      await walk('', true);
       return matches.sort();
     },
 
@@ -316,17 +323,20 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
 
     async listDirs(relDir: string): Promise<string[]> {
       const fullDir = await assertInside(relDir);
-      const dirs: string[] = [];
       try {
+        const dirs: string[] = [];
         for await (const entry of Deno.readDir(fullDir)) {
           if (entry.isDirectory) {
             dirs.push(entry.name);
           }
         }
-      } catch {
-        return [];
+        return dirs;
+      } catch (error) {
+        if (error instanceof Deno.errors.NotFound) {
+          throw new Error(`Folder not found: ${relDir}`);
+        }
+        throw error;
       }
-      return dirs;
     },
 
     async mkdir(relPath: string): Promise<void> {
