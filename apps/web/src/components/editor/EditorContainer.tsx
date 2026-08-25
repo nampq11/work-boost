@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
 import { api } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
-import { stringifyMarkdown } from '../../lib/markdown-parser.ts';
+import { parseFrontmatter, stringifyMarkdown } from '../../lib/markdown-parser.ts';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
@@ -213,8 +213,11 @@ function TodayPanel() {
     setRetryCount((count) => count + 1);
   }
   async function copyReportMarkdown(): Promise<void> {
-    const markdown = daily?.rawMarkdown;
-    if (!markdown) return;
+    const rawMarkdown = daily?.rawMarkdown;
+    if (!rawMarkdown) return;
+    // Copy the report body only; the YAML frontmatter is internal bookkeeping
+    // (id, date, status, updatedAt, updatedBy) and would be noise in a paste.
+    const markdown = parseFrontmatter(rawMarkdown).body;
     try {
       await navigator.clipboard.writeText(markdown);
       useUiStore.getState().showToast(t('editor.todayCopyMarkdownDone'));
