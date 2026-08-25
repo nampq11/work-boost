@@ -45,6 +45,63 @@ async function waitForCompletion(service: AssistantService, responseId: string) 
       response?.status === 'failed' ||
       response?.status === 'cancelled'
     ) {
+      Deno.test('referenced @path files are inlined into the agent input, not stored history', async () => {
+        const { dataLayer } = await createService();
+        await dataLayer.fs.writeTextAtomic('daily/2025-01-15.md', '# Daily\nDid real work.');
+
+        const received: string[] = [];
+        const recordingAgent: AgentPort = {
+          stream: async (message) => {
+            received.push(message);
+            return 'ok';
+          },
+          removeSession: () => true,
+        };
+        const recordingService = new AssistantService(dataLayer, recordingAgent);
+        const thread = await recordingService.createThread();
+        const response = await recordingService.createResponse(
+          thread.id,
+          'Summarize @daily/2025-01-15.md',
+        );
+        assert(response);
+        await recordingService.waitForResponse(response.id);
+        await waitForCompletion(recordingService, response.id);
+
+        assert(received.length === 1);
+        assertStringIncludes(received[0], '[Referenced files]');
+        assertStringIncludes(received[0], 'Did real work.');
+
+        const messages = await request(
+          recordingService,
+          `/v1/threads/${thread.id}/messages`,
+          'GET',
+        );
+        const messageData = (await messages.json()).data as Array<{
+          role: string;
+          content: string;
+        }>;
+        assertEquals(messageData[0].content, 'Summarize @daily/2025-01-15.md');
+      });
+
+      Deno.test('missing referenced file yields an explicit not-found notice to the agent', async () => {
+        const { dataLayer } = await createService();
+        const received: string[] = [];
+        const recordingAgent: AgentPort = {
+          stream: async (message) => {
+            received.push(message);
+            return 'ok';
+          },
+          removeSession: () => true,
+        };
+        const recordingService = new AssistantService(dataLayer, recordingAgent);
+        const thread = await recordingService.createThread();
+        const response = await recordingService.createResponse(thread.id, 'Check @missing.md');
+        assert(response);
+        await recordingService.waitForResponse(response.id);
+        await waitForCompletion(recordingService, response.id);
+
+        assertStringIncludes(received[0], '--- missing.md ---\n(not found)');
+      });
       return response;
     }
     await new Promise((resolve) => setTimeout(resolve, 0));

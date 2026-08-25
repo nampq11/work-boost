@@ -11,6 +11,7 @@ import { Copy, PaperPlaneRight, Stop } from '@phosphor-icons/react';
 import React from 'react';
 import { useI18n } from '../../lib/i18n.tsx';
 import { AssistantMarkdown } from './AssistantMarkdown.tsx';
+import { FileMentionMenu } from './FileMentionMenu.tsx';
 import { MessagePair } from './MessagePair.tsx';
 import { ToolTimeline } from './ToolCall.tsx';
 
@@ -146,6 +147,7 @@ function CopilotComposer() {
 
   return (
     <ComposerPrimitive.Root className="copilot-composer">
+      <FileMentionMenu />
       <ComposerPrimitive.Input
         placeholder={t('thread.messagePlaceholder')}
         rows={1}
