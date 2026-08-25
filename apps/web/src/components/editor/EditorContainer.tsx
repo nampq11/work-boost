@@ -1,4 +1,4 @@
-import { useAui, useAuiState } from '@assistant-ui/react';
+import { type ThreadMessage, useAui, useAuiState } from '@assistant-ui/react';
 import { Coins, Copy, FileText, PaperPlaneRight } from '@phosphor-icons/react';
 import type { Editor } from '@tiptap/react';
 import { Button } from '@work-boost/ui';
@@ -6,7 +6,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
 import { api } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
-import { stringifyMarkdown } from '../../lib/markdown-parser.ts';
+import { parseFrontmatter, stringifyMarkdown } from '../../lib/markdown-parser.ts';
+import { filePathFromToolResult } from '../../lib/tool-result.ts';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
@@ -134,6 +135,25 @@ function getTodayLabel(): string {
   });
 }
 
+// Scan the thread from the most recent write backwards and return the last
+// file path the assistant saved via create_document, so Today can show
+// "grounded in Markdown". Default capture always goes through create_document;
+// other tools (daily_work get, debt list) read, they do not save here.
+function lastSavedPathFromThread(messages: readonly ThreadMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== 'assistant') continue;
+    const content = message.content;
+    for (let j = content.length - 1; j >= 0; j--) {
+      const part = content[j];
+      if (part.type !== 'tool-call' || part.toolName !== 'create_document') continue;
+      const path = filePathFromToolResult(part.result);
+      if (path) return path;
+    }
+  }
+  return null;
+}
+
 function TodayPanel() {
   const { t } = useI18n();
   const aui = useAui();
@@ -148,6 +168,8 @@ function TodayPanel() {
   // The capture box talks to the same thread as the Copilot workspace so both
   // surfaces share one conversation and one AI context.
   const isRunning = useAuiState((state) => state.thread.isRunning);
+  // Last file the AI wrote, so Today can prove the day is grounded in Markdown.
+  const lastSavedPath = useAuiState((state) => lastSavedPathFromThread(state.thread.messages));
   const wasRunningRef = useRef(false);
 
   const refreshToday = useCallback(async () => {
@@ -213,8 +235,11 @@ function TodayPanel() {
     setRetryCount((count) => count + 1);
   }
   async function copyReportMarkdown(): Promise<void> {
-    const markdown = daily?.rawMarkdown;
-    if (!markdown) return;
+    const rawMarkdown = daily?.rawMarkdown;
+    if (!rawMarkdown) return;
+    // Copy the report body only; the YAML frontmatter is internal bookkeeping
+    // (id, date, status, updatedAt, updatedBy) and would be noise in a paste.
+    const markdown = parseFrontmatter(rawMarkdown).body;
     try {
       await navigator.clipboard.writeText(markdown);
       useUiStore.getState().showToast(t('editor.todayCopyMarkdownDone'));
@@ -278,7 +303,11 @@ function TodayPanel() {
         />
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] text-[var(--text-muted)] m-0">
-            {isRunning ? t('editor.todayCaptureSending') : t('editor.todayPromptHint')}
+            {isRunning
+              ? t('editor.todayCaptureSending')
+              : lastSavedPath
+                ? t('editor.todaySavedTo', { path: lastSavedPath })
+                : t('editor.todayPromptHint')}
           </p>
           <Button
             variant="default"
