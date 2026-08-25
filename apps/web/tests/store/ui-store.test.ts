@@ -40,7 +40,9 @@ Deno.test('autosave defaults to on when no preference is stored', async () => {
     configurable: true,
   });
   try {
-    const mod = (await import(`./ui-store.ts?t=default-${Date.now()}`)) as StoreModule;
+    const mod = (await import(
+      `../../src/store/ui-store.ts?t=default-${Date.now()}`
+    )) as StoreModule;
     assertEqual(mod.useUiStore.getState().isAutosaveEnabled, true, 'Autosave should default to on');
   } finally {
     if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
@@ -55,7 +57,9 @@ Deno.test('setAutosaveEnabled updates and persists the preference', async () => 
     configurable: true,
   });
   try {
-    const mod = (await import(`./ui-store.ts?t=persist-${Date.now()}`)) as StoreModule;
+    const mod = (await import(
+      `../../src/store/ui-store.ts?t=persist-${Date.now()}`
+    )) as StoreModule;
     const store = mod.useUiStore;
 
     store.getState().setAutosaveEnabled(false);

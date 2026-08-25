@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert';
-import { loadUserPlugins } from '../../extensions/loader.ts';
-import { ExtensionManager } from '../../extensions/manager.ts';
-import type { ExtensionContext } from '../../extensions/types.ts';
+import { loadUserPlugins } from '../loader.ts';
+import { ExtensionManager } from '../manager.ts';
+import type { ExtensionContext } from '../types.ts';
 
 function createContext(): ExtensionContext {
   const logger = {

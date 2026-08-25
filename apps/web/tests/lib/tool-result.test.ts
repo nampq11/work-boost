@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 import { assertEquals } from '@std/assert';
-import { filePathFromToolResult, lastSavedDailyPathFromThread } from './tool-result.ts';
+import { filePathFromToolResult, lastSavedDailyPathFromThread } from '../../src/lib/tool-result.ts';
 
 Deno.test('filePathFromToolResult reads the path from details.data.path', () => {
   const result = {

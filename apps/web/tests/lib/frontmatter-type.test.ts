@@ -1,5 +1,5 @@
 import { assert, assertFalse } from '@std/assert';
-import { isDebtFrontmatter } from '../../apps/web/src/lib/markdown-parser.ts';
+import { isDebtFrontmatter } from '../../src/lib/markdown-parser.ts';
 
 Deno.test('isDebtFrontmatter does not misclassify a daily note as a debt', () => {
   // A daily note carries a `status` field ('draft' | 'completed'). That field

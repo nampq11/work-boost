@@ -1,12 +1,12 @@
 /// <reference lib="deno.ns" />
 import { assertEquals } from '@std/assert';
-import type { FileNode } from '../lib/types.ts';
 import {
   applyMention,
   fileMentionItems,
   filterMentionItems,
   findMentionQuery,
-} from './file-mention.ts';
+} from '../../src/lib/file-mention.ts';
+import type { FileNode } from '../../src/lib/types.ts';
 
 Deno.test('findMentionQuery returns the trailing query after @', () => {
   assertEquals(findMentionQuery('check @daily/2025'), 'daily/2025');

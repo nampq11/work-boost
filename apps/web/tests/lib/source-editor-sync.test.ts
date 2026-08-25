@@ -2,7 +2,7 @@ import { assert, assertFalse } from '@std/assert';
 import {
   shouldApplyDeferredExternal,
   shouldReplaceExternally,
-} from '../../apps/web/src/lib/source-editor-sync.ts';
+} from '../../src/lib/source-editor-sync.ts';
 
 Deno.test('shouldReplaceExternally returns false when doc already matches value', () => {
   // Echo of a user edit: no external dispatch must happen.

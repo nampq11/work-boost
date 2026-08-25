@@ -149,6 +149,32 @@ function sampleDebts(): DebtDocument[] {
   ];
 }
 
+function makeDebt(
+  id: string,
+  personName: string,
+  amount: number,
+  direction: DebtDirection = DebtDirection.LENT,
+  status: DebtStatus = DebtStatus.PENDING,
+): DebtDocument {
+  return {
+    frontmatter: {
+      id,
+      direction,
+      amount,
+      currency: 'VND',
+      personName,
+      status,
+      debtDate: '2025-01-15',
+      createdAt: '2025-01-15T00:00:00Z',
+      updatedAt: '2025-01-15T00:00:00Z',
+      paidAt: null,
+      updatedBy: 'agent',
+    },
+    reason: '',
+    filePath: `debts/${id}.md`,
+  };
+}
+
 Deno.test('debt list returns all debts without filters', async () => {
   const repo = createFakeDebtRepository(sampleDebts());
   const tool = createDebtTool(repo);
@@ -249,6 +275,73 @@ Deno.test('debt delete throws when debt not found', async () => {
     () => tool.execute('call_1', { action: 'delete', debtId: 'nonexistent' }),
     Error,
     'not found',
+  );
+});
+
+Deno.test('debt settle resolves a single pending debt by personName', async () => {
+  const debts = [
+    makeDebt('debt-1', 'Charlie', 100000),
+    makeDebt('debt-2', 'Alice', 50000, DebtDirection.BORROWED),
+  ];
+  const repo = createFakeDebtRepository(debts);
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'settle', personName: 'Charlie' });
+  assertEquals(textOf(result).includes('Marked debt'), true);
+  const data = (result.details as { data: DebtDocument }).data;
+  assertEquals(data.frontmatter.status, DebtStatus.PAID);
+});
+
+Deno.test('debt settle disambiguates matching debts by amount', async () => {
+  const debts = [makeDebt('debt-1', 'Bob', 100000), makeDebt('debt-2', 'Bob', 50000)];
+  const repo = createFakeDebtRepository(debts);
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', {
+    action: 'settle',
+    personName: 'Bob',
+    amount: 50000,
+  });
+  const data = (result.details as { data: DebtDocument }).data;
+  assertEquals(data.frontmatter.id, 'debt-2');
+  assertEquals(data.frontmatter.status, DebtStatus.PAID);
+});
+
+Deno.test('debt settle throws when a person has multiple matching debts', async () => {
+  const debts = [makeDebt('debt-1', 'Bob', 100000), makeDebt('debt-2', 'Bob', 50000)];
+  const repo = createFakeDebtRepository(debts);
+  const tool = createDebtTool(repo);
+  await assertRejects(
+    () => tool.execute('call_1', { action: 'settle', personName: 'Bob' }),
+    Error,
+    'Multiple debts',
+  );
+});
+
+Deno.test('debt settle throws when no pending debt matches personName', async () => {
+  const repo = createFakeDebtRepository([makeDebt('debt-1', 'Charlie', 100000)]);
+  const tool = createDebtTool(repo);
+  await assertRejects(
+    () => tool.execute('call_1', { action: 'settle', personName: 'Nobody' }),
+    Error,
+  );
+});
+
+Deno.test('debt delete resolves a single debt by personName', async () => {
+  const debts = [makeDebt('debt-1', 'Charlie', 100000)];
+  const repo = createFakeDebtRepository(debts);
+  const tool = createDebtTool(repo);
+  const result = await tool.execute('call_1', { action: 'delete', personName: 'Charlie' });
+  assertEquals(textOf(result).includes('Deleted debt'), true);
+  assertEquals(debts.length, 0);
+});
+
+Deno.test('debt delete throws when a person has multiple debts', async () => {
+  const debts = [makeDebt('debt-1', 'Bob', 100000), makeDebt('debt-2', 'Bob', 50000)];
+  const repo = createFakeDebtRepository(debts);
+  const tool = createDebtTool(repo);
+  await assertRejects(
+    () => tool.execute('call_1', { action: 'delete', personName: 'Bob' }),
+    Error,
+    'Multiple debts',
   );
 });
 
