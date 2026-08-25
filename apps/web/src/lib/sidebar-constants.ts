@@ -47,7 +47,7 @@ export const SIDEBAR_ITEM_CONFIG: Record<FileNode['kind'], SidebarItemConfig> = 
     colorClass: 'text-[var(--text-muted)]',
     getLabel: () => SidebarItemType.ARCHIVED,
   },
-  'html-app': {
+  htmlApp: {
     type: SidebarItemType.BOARD_VIEW,
     colorClass: 'text-[var(--accent-orange)]',
     getLabel: () => SidebarItemType.BOARD_VIEW,

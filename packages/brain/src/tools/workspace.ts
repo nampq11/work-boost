@@ -10,11 +10,11 @@ const MAX_SNIPPET_LENGTH = 120;
 
 const workspaceParams = Type.Object({
   action: StringEnum(['read', 'list', 'search'], {
-    description: 'Hành động cần thực hiện trên workspace',
+    description: 'Action to perform on the workspace',
   }),
-  path: Type.Optional(Type.String({ description: 'Đường dẫn file (ví dụ: daily/2025-01-15.md)' })),
-  folder: Type.Optional(Type.String({ description: 'Thư mục con (mặc định: workspace root)' })),
-  query: Type.Optional(Type.String({ description: 'Từ khóa cần tìm trong các file Markdown' })),
+  path: Type.Optional(Type.String({ description: 'File path (e.g., daily/2025-01-15.md)' })),
+  folder: Type.Optional(Type.String({ description: 'Subfolder (default: workspace root)' })),
+  query: Type.Optional(Type.String({ description: 'Keyword to search across Markdown files' })),
 });
 
 /**
@@ -29,7 +29,7 @@ export function createWorkspaceTool(fs: WorkspaceFS): AgentTool<typeof workspace
     name: 'workspace',
     label: 'Workspace',
     description:
-      'Đọc, liệt kê và tìm kiếm file trong workspace Markdown (notes, daily, debts). Dùng cho các câu hỏi cần xem nội dung hoặc tìm thông tin trong workspace.',
+      'Read, list, and search files in the Markdown workspace (notes, daily, debts). Use for questions that require viewing content or finding information in the workspace.',
     parameters: workspaceParams,
     execute: async (_toolCallId, params) => {
       switch (params.action) {
@@ -47,7 +47,7 @@ export function createWorkspaceTool(fs: WorkspaceFS): AgentTool<typeof workspace
 }
 
 async function readFile(fs: WorkspaceFS, path?: string): Promise<AgentToolResult<unknown>> {
-  if (!path) throw new Error('Thiếu path để đọc file.');
+  if (!path) throw new Error('Missing path to read the file.');
 
   const ext = path.toLowerCase().match(/\.[^.]+$/)?.[0] ?? '';
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
@@ -74,7 +74,7 @@ async function listFiles(fs: WorkspaceFS, folder?: string): Promise<AgentToolRes
   const files = folder ? await fs.listFiles(folder) : await fs.listFiles('');
 
   if (files.length === 0) {
-    return successResult([], `📭 Thư mục "${folder || '.'}" trống.`);
+    return successResult([], `📭 Folder "${folder || '.'}" is empty.`);
   }
 
   const summary = files.map((f) => `  - ${f}`).join('\n');
@@ -87,7 +87,7 @@ async function searchFiles(
   folder?: string,
 ): Promise<AgentToolResult<unknown>> {
   const searchQuery = query?.trim().toLowerCase();
-  if (!searchQuery) throw new Error('Thiếu query để tìm kiếm trong workspace.');
+  if (!searchQuery) throw new Error('Missing query to search the workspace.');
 
   const pattern = folder ? `${folder}/**/*.md` : '**/*.md';
   const files = await fs.listByGlob(pattern);
@@ -107,14 +107,14 @@ async function searchFiles(
   }
 
   if (hits.length === 0) {
-    return successResult([], `🔍 Không tìm thấy "${searchQuery}".`);
+    return successResult([], `🔍 No results for "${searchQuery}".`);
   }
 
   const shown = hits.slice(0, MAX_SEARCH_RESULTS);
   const summary = shown.map((h) => `${h.path}:${h.line} - ${h.snippet}`).join('\n');
   const extra =
     hits.length > MAX_SEARCH_RESULTS
-      ? `\n... và ${hits.length - MAX_SEARCH_RESULTS} kết quả khác`
+      ? `\n... and ${hits.length - MAX_SEARCH_RESULTS} more results`
       : '';
-  return successResult(hits, `🔍 ${hits.length} kết quả cho "${searchQuery}":\n${summary}${extra}`);
+  return successResult(hits, `🔍 ${hits.length} results for "${searchQuery}":\n${summary}${extra}`);
 }

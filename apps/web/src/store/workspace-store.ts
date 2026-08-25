@@ -69,12 +69,33 @@ function addToRecentFiles(recentFiles: Map<string, Date>, path: string): Map<str
   return updated;
 }
 
-function classify(path: string): FileNode['kind'] {
-  if (path.toLowerCase().endsWith('.html')) return 'html-app';
+function classifyFilePath(path: string): FileNode['kind'] {
+  if (path.toLowerCase().endsWith('.html')) return 'htmlApp';
   if (path.startsWith('daily/')) return 'daily';
   if (path.startsWith('archive/')) return 'archived';
   if (path.startsWith('debts/')) return 'debt';
   return 'markdown';
+}
+
+// Sidebar tree order: primary data folders (daily, debts, notes) first, then
+// custom folders and top-level views/files, with the archive sink always last.
+const PRIMARY_FOLDER_ORDER = ['daily', 'debts', 'notes'];
+const CUSTOM_FOLDER_RANK = 3;
+const FILE_RANK = 4;
+const ARCHIVE_RANK = 5;
+
+function nodeRank(node: FileNode): number {
+  if (node.kind !== 'folder') return FILE_RANK;
+  if (node.name === 'archive') return ARCHIVE_RANK;
+  const primary = PRIMARY_FOLDER_ORDER.indexOf(node.name);
+  return primary >= 0 ? primary : CUSTOM_FOLDER_RANK;
+}
+
+function sortTree(nodes: FileNode[]): void {
+  nodes.sort((a, b) => nodeRank(a) - nodeRank(b) || a.path.localeCompare(b.path));
+  for (const node of nodes) {
+    if (node.children) sortTree(node.children);
+  }
 }
 
 export function buildFileTree(paths: string[], directories: string[] = []): FileNode[] {
@@ -107,10 +128,11 @@ export function buildFileTree(paths: string[], directories: string[] = []): File
       path,
       relativePath: path,
       name: parts.at(-1)!,
-      kind: classify(path),
+      kind: classifyFilePath(path),
       isArchived: path.startsWith('archive/'),
     });
   }
+  sortTree(root);
   return root;
 }
 

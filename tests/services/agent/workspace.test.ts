@@ -114,7 +114,7 @@ Deno.test('workspace list shows empty state', async () => {
   const fs = createFakeFS({});
   const tool = createWorkspaceTool(fs);
   const result = await tool.execute('call_1', { action: 'list', folder: 'daily' });
-  assertEquals(textOf(result).includes('trống'), true);
+  assertEquals(textOf(result).includes('is empty'), true);
 });
 
 Deno.test('workspace list defaults to root', async () => {
@@ -134,7 +134,7 @@ Deno.test('workspace search finds matching lines', async () => {
   });
   const tool = createWorkspaceTool(fs);
   const result = await tool.execute('call_1', { action: 'search', query: 'debt tracker' });
-  assertEquals(textOf(result).includes('2 kết quả'), true);
+  assertEquals(textOf(result).includes('2 results for'), true);
   assertEquals(textOf(result).includes('notes/idea.md:2'), true);
   assertEquals(textOf(result).includes('daily/2025-01-15.md:1'), true);
 });
@@ -145,7 +145,7 @@ Deno.test('workspace search shows empty state when no match', async () => {
   });
   const tool = createWorkspaceTool(fs);
   const result = await tool.execute('call_1', { action: 'search', query: 'zzz-not-found' });
-  assertEquals(textOf(result).includes('Không tìm thấy'), true);
+  assertEquals(textOf(result).includes('No results for'), true);
 });
 
 Deno.test('workspace search throws when query is missing', async () => {

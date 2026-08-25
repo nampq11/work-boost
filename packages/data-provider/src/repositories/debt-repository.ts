@@ -174,13 +174,13 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
       const all = await this.listAll(
         options.status !== undefined && archivedStatuses.includes(options.status),
       );
-      const filtered = all.filter((doc) => {
-        const fm = doc.frontmatter;
-        if (options.status && fm.status !== options.status) return false;
-        if (options.direction && fm.direction !== options.direction) return false;
+      const filtered = all.filter((document) => {
+        const frontmatter = document.frontmatter;
+        if (options.status && frontmatter.status !== options.status) return false;
+        if (options.direction && frontmatter.direction !== options.direction) return false;
         if (
           options.personName &&
-          !fm.personName.toLowerCase().includes(options.personName.toLowerCase())
+          !frontmatter.personName.toLowerCase().includes(options.personName.toLowerCase())
         ) {
           return false;
         }
