@@ -41,6 +41,7 @@ export const en = {
   'editor.todayPrompt': 'What did you do today? Work, money, anything.',
   'editor.todayPromptHint': 'Enter to capture, Shift+Enter for a new line.',
   'editor.todayCaptureSending': 'Capturing your day...',
+  'editor.todaySavedTo': 'Saved to {{path}}',
   'editor.todayCaptureAction': 'Capture',
   'editor.todayCaptureFailed': 'Unable to capture. Check the connection and try again.',
   'editor.todaySummaryTitle': 'Today\u2019s summary',

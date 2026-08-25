@@ -7,6 +7,7 @@ import { useAutosave } from '../../hooks/useAutosave.ts';
 import { api } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
 import { parseFrontmatter, stringifyMarkdown } from '../../lib/markdown-parser.ts';
+import { lastSavedDailyPathFromThread } from '../../lib/tool-result.ts';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
@@ -145,10 +146,18 @@ function TodayPanel() {
   // Bumping this counter reruns the Today load effect (retry button).
   const [retryCount, setRetryCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Last daily report file the AI wrote, so Today can prove the day is
+  // grounded in Markdown. Computed on mount and when a run finishes instead of
+  // in a state selector, so streaming updates never rescan the whole thread.
+  const [lastSavedPath, setLastSavedPath] = useState<string | null>(null);
   // The capture box talks to the same thread as the Copilot workspace so both
   // surfaces share one conversation and one AI context.
   const isRunning = useAuiState((state) => state.thread.isRunning);
   const wasRunningRef = useRef(false);
+
+  useEffect(() => {
+    setLastSavedPath(lastSavedDailyPathFromThread(aui.thread.getState().messages));
+  }, [aui]);
 
   const refreshToday = useCallback(async () => {
     const [todayDoc, pendingDebts] = await Promise.all([
@@ -185,8 +194,10 @@ function TodayPanel() {
   useEffect(() => {
     const finished = wasRunningRef.current && !isRunning;
     wasRunningRef.current = isRunning;
-    if (finished) void refreshToday().catch(() => setLoadFailed(true));
-  }, [isRunning, refreshToday]);
+    if (!finished) return;
+    setLastSavedPath(lastSavedDailyPathFromThread(aui.thread.getState().messages));
+    void refreshToday().catch(() => setLoadFailed(true));
+  }, [isRunning, refreshToday, aui]);
 
   // Auto-grow the capture textarea as the user types.
   useEffect(() => {
@@ -231,6 +242,12 @@ function TodayPanel() {
       event.preventDefault();
       void submitCapture();
     }
+  }
+
+  function captureHint(): string {
+    if (isRunning) return t('editor.todayCaptureSending');
+    if (lastSavedPath) return t('editor.todaySavedTo', { path: lastSavedPath });
+    return t('editor.todayPromptHint');
   }
 
   const report = daily?.report ?? null;
@@ -280,9 +297,7 @@ function TodayPanel() {
           className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-[15px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent-blue)] disabled:opacity-60"
         />
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] text-[var(--text-muted)] m-0">
-            {isRunning ? t('editor.todayCaptureSending') : t('editor.todayPromptHint')}
-          </p>
+          <p className="text-[11px] text-[var(--text-muted)] m-0">{captureHint()}</p>
           <Button
             variant="default"
             size="sm"

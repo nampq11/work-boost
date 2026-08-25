@@ -41,7 +41,9 @@ function TreeNode({
   depth = 0,
   isLast = false,
 }: { node: FileNode; depth?: number; isLast?: boolean }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(
+    () => !(node.kind === 'folder' && node.name === 'daily'),
+  );
   const activePath = useWorkspaceStore((state) => state.activePath);
   const selectFile = useWorkspaceStore((state) => state.selectFile);
   const closeCopilot = useUiStore((state) => state.closeCopilot);
