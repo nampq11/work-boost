@@ -1,8 +1,11 @@
 import type { ChatModelRunOptions, ThreadMessage } from '@assistant-ui/react';
 /// <reference lib="deno.ns" />
 import { assertEquals, assertRejects } from '@std/assert';
-import { ApiError } from '../../lib/api-client.ts';
-import { createCopilotAdapter, getLatestUserText } from './copilot-adapter.ts';
+import {
+  createCopilotAdapter,
+  getLatestUserText,
+} from '../../../src/components/ai/copilot-adapter.ts';
+import { ApiError } from '../../../src/lib/api-client.ts';
 
 const userMessage = (text: string): ThreadMessage =>
   ({

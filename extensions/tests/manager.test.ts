@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert';
-import { ExtensionManager } from '../../extensions/manager.ts';
-import type { ExtensionContext, WorkBoostExtension } from '../../extensions/types.ts';
+import { ExtensionManager } from '../manager.ts';
+import type { ExtensionContext, WorkBoostExtension } from '../types.ts';
 
 function createContext(): ExtensionContext {
   const logger = {

@@ -1,8 +1,8 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert';
 import type { AgentPort } from '@work-boost/brain';
 import { type DataLayer, createDataLayer } from '@work-boost/data-provider';
-import { handleAssistantRequest } from '../../apps/api/src/routes/assistant.ts';
-import { AssistantService } from '../../apps/api/src/services/assistant-service.ts';
+import { handleAssistantRequest } from '../../src/routes/assistant.ts';
+import { AssistantService } from '../../src/services/assistant-service.ts';
 
 async function createService(): Promise<{ service: AssistantService; dataLayer: DataLayer }> {
   const root = await Deno.makeTempDir({ prefix: 'work-boost-assistant-test-' });

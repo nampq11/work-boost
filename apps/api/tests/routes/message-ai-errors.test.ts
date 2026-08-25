@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert';
 import { AIUnavailableError } from '@work-boost/brain';
-import { handleMessageSync } from '../../apps/api/src/routes/message.ts';
+import { handleMessageSync } from '../../src/routes/message.ts';
 
 Deno.test('AI provider failures map to a stable 503 response', async () => {
   const agent = {

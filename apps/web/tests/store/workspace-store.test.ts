@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-import { useWorkspaceStore } from './workspace-store.ts';
+import { useWorkspaceStore } from '../../src/store/workspace-store.ts';
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   if (actual !== expected) {

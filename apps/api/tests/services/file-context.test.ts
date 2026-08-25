@@ -1,9 +1,6 @@
 import { assert, assertEquals } from '@std/assert';
 import type { WorkspaceFS } from '@work-boost/data-provider';
-import {
-  buildReferencedFileBlock,
-  parseFileReferences,
-} from '../../apps/api/src/services/file-context.ts';
+import { buildReferencedFileBlock, parseFileReferences } from '../../src/services/file-context.ts';
 
 function fakeFs(
   files: Record<string, string>,

@@ -5,7 +5,7 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   defaultSidebarWidth,
-} from './sidebar-constants.ts';
+} from '../../src/lib/sidebar-constants.ts';
 
 Deno.test('defaultSidebarWidth keeps the classic width on small windows', () => {
   assertEquals(defaultSidebarWidth(1280), SIDEBAR_BASE_WIDTH);
