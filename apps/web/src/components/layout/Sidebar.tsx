@@ -1,4 +1,4 @@
-import { ArrowsClockwise, FolderPlus, MagnifyingGlass } from '@phosphor-icons/react';
+import { ArrowsClockwise, FolderPlus, House, MagnifyingGlass } from '@phosphor-icons/react';
 import { Button } from '@work-boost/ui';
 import React, { useMemo, useState } from 'react';
 import { useI18n } from '../../lib/i18n.tsx';
@@ -16,6 +16,7 @@ export function Sidebar() {
   const [folderName, setFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const openPalette = useUiStore((state) => state.openPalette);
+  const goHome = useWorkspaceStore((state) => state.goHome);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return nodes;
@@ -100,6 +101,18 @@ export function Sidebar() {
           />
         </div>
       )}
+
+      {/* Pinned hero: Today front door (always visible) */}
+      <div className="p-2 border-b border-[var(--border)]">
+        <button
+          type="button"
+          onClick={() => void goHome()}
+          className="w-full flex items-center gap-1.5 py-1.5 px-2.5 rounded text-sm transition-colors cursor-pointer select-none text-left text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+        >
+          <House size={16} className="text-[var(--accent-blue)]" />
+          <span className="truncate flex-1">{t('sidebar.today')}</span>
+        </button>
+      </div>
 
       {/* Tree Section */}
       <div className="flex-1 overflow-y-auto p-2">

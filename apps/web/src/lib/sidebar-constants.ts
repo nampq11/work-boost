@@ -5,7 +5,7 @@ export const SidebarItemType = {
   ARCHIVE: 'Archive',
   DEBT: 'Debt',
   ARCHIVED: 'Archived',
-  BOARD_VIEW: 'Board view',
+  HTML_APP: 'HTML app',
   NOTE: 'Note',
   DAILY: 'Daily note',
 } as const;
@@ -48,9 +48,9 @@ export const SIDEBAR_ITEM_CONFIG: Record<FileNode['kind'], SidebarItemConfig> = 
     getLabel: () => SidebarItemType.ARCHIVED,
   },
   htmlApp: {
-    type: SidebarItemType.BOARD_VIEW,
+    type: SidebarItemType.HTML_APP,
     colorClass: 'text-[var(--accent-orange)]',
-    getLabel: () => SidebarItemType.BOARD_VIEW,
+    getLabel: () => SidebarItemType.HTML_APP,
   },
 };
 

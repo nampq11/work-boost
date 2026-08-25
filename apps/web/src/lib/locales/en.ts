@@ -44,6 +44,9 @@ export const en = {
   'editor.todaySummaryTitle': 'Today\u2019s summary',
   'editor.todaySummaryEmpty':
     'Nothing captured yet. Dump your day above and the AI organizes it here.',
+  'editor.todayCopyMarkdown': 'Copy Markdown',
+  'editor.todayCopyMarkdownDone': 'Report copied to clipboard.',
+  'editor.todayCopyMarkdownFailed': 'Unable to copy the report.',
   'editor.todayCompletedTitle': 'Done',
   'editor.todayIncompleteTitle': 'Incomplete',
   'editor.todayPlannedTitle': 'Planned',
@@ -87,6 +90,7 @@ export const en = {
   'sidebar.refresh': 'Refresh workspace',
   'sidebar.folderName': 'Folder name...',
   'sidebar.workspace': 'Workspace',
+  'sidebar.today': 'Today',
   'statusBar.words': '{{count}} words',
   'statusBar.chars': '({{count}} chars)',
   'statusBar.unsaved': '● Unsaved changes',

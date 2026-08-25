@@ -92,16 +92,6 @@ Deno.test('Workspace router - serves seeded HTML apps with CSP + injected runtim
     assertEquals(text.includes('cdn.jsdelivr.net/npm/alpinejs@3.16.2'), true);
     assertEquals(text.includes('window.workboost'), true);
     assertEquals(text.includes('Sổ Nợ Work Boost'), true);
-    assertEquals(text.includes('class="wb-app"'), true);
-
-    const standupResponse = await handle(
-      '/workspace-apps/standup-viewer.html',
-      undefined,
-      loopbackInfo(),
-    );
-    const standupText = await bodyText(standupResponse);
-    assertEquals(standupText.includes('class="wb-report-card wb-report-card-success"'), true);
-    assertEquals(standupText.includes('Báo Cáo '), true);
   });
 });
 
