@@ -42,52 +42,43 @@ export function EditorContainer() {
     return <TodayPanel />;
   }
 
-  const title =
-    document.path
-      .split('/')
-      .pop()
-      ?.replace(/\.(md|html)$/, '') ?? '';
-
   return (
     <div className="flex h-full min-w-0 flex-col">
       {/* Document toolbar: view tabs on the left (GitHub pattern); the save
           shortcut lives in the AppHeader breadcrumb and the status bar shows
           the save state */}
       <div className="flex h-11 shrink-0 items-center gap-4 border-b border-[var(--border)] px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <div
-            role="tablist"
-            aria-label={t('editor.viewMode')}
-            className="flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-hover)] p-0.5"
+        <div
+          role="tablist"
+          aria-label={t('editor.viewMode')}
+          className="flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-hover)] p-0.5"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!sourceMode}
+            onClick={() => setSourceMode(false)}
+            className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
+              sourceMode
+                ? 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                : 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+            }`}
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!sourceMode}
-              onClick={() => setSourceMode(false)}
-              className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
-                sourceMode
-                  ? 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  : 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
-              }`}
-            >
-              {t('editor.previewTab')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={sourceMode}
-              onClick={() => setSourceMode(true)}
-              className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
-                sourceMode
-                  ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              {t('editor.sourceTab')}
-            </button>
-          </div>
-          <span className="truncate text-sm font-semibold text-[var(--text-primary)]">{title}</span>
+            {t('editor.previewTab')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sourceMode}
+            onClick={() => setSourceMode(true)}
+            className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
+              sourceMode
+                ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {t('editor.sourceTab')}
+          </button>
         </div>
         {/* Formatting toolbar shares the header row, right-aligned; only
             relevant in Preview mode */}
