@@ -6,7 +6,7 @@ import { successResult } from './result.ts';
 /**
  * Get the current date and time in the workspace's configured timezone.
  */
-export function createTimeTool(configMgr: ConfigManager): AgentTool<any> {
+export function createTimeTool(configManager: ConfigManager): AgentTool<any> {
   return {
     name: 'get_current_time',
     label: 'Get Current Time',
@@ -14,7 +14,7 @@ export function createTimeTool(configMgr: ConfigManager): AgentTool<any> {
       'Get the current date and time in the Workspace configured timezone. Call this tool when you need to determine today date or resolve relative time words like "today", "yesterday", "this week".',
     parameters: Type.Object({}),
     execute: async () => {
-      const config = await configMgr.load();
+      const config = await configManager.load();
       const timezone = config.timezone || 'Asia/Ho_Chi_Minh';
       const now = new Date();
 

@@ -29,7 +29,7 @@ function NodeIcon({ node, isExpanded }: { node: FileNode; isExpanded?: boolean }
       <Folder size={16} className={colorClass} />
     );
   }
-  if (node.kind === 'html-app') return <Browser size={16} className={colorClass} />;
+  if (node.kind === 'htmlApp') return <Browser size={16} className={colorClass} />;
   if (node.kind === 'debt') {
     return <Coins size={16} className={colorClass} />;
   }

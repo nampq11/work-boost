@@ -48,16 +48,16 @@ async function getDailyWork(
   const { date, includeRaw } = params;
   if (!date) throw new Error('Missing date to view the daily work report.');
 
-  const doc = await dailyWork.get(date);
+  const document = await dailyWork.get(date);
 
-  if (!doc) {
+  if (!document) {
     return successResult(null, `❌ No daily work report found for ${date}.`);
   }
 
-  const summary = formatDailyReport(doc.report, doc.customSections);
-  const details = includeRaw ? { ...doc, rawMarkdown: doc.rawMarkdown } : doc;
+  const summary = formatDailyReport(document.report, document.customSections);
+  const details = includeRaw ? { ...document, rawMarkdown: document.rawMarkdown } : document;
 
-  return successResult(details, `📅 ${date}\n\n${summary}\n📄 File: ${doc.filePath}`);
+  return successResult(details, `📅 ${date}\n\n${summary}\n📄 File: ${document.filePath}`);
 }
 
 async function listDailyDates(dailyWork: DailyWorkRepository): Promise<AgentToolResult<unknown>> {

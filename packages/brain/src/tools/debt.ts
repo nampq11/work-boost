@@ -60,18 +60,18 @@ async function listDebts(
   params: { personName?: string; status?: string; direction?: string },
 ): Promise<AgentToolResult<unknown>> {
   const { personName, status, direction } = params;
-  const docs = await debts.filter({
+  const documents = await debts.filter({
     status: status as DebtStatus | undefined,
     direction: direction as DebtDirection | undefined,
     personName,
   });
 
-  if (docs.length === 0) {
+  if (documents.length === 0) {
     return successResult([], '📭 No debts.');
   }
 
-  const summary = docs.map((doc) => formatDebtSummary(doc)).join('\n\n');
-  return successResult(docs, summary);
+  const summary = documents.map((document) => formatDebtSummary(document)).join('\n\n');
+  return successResult(documents, summary);
 }
 
 async function settleDebt(
@@ -80,13 +80,13 @@ async function settleDebt(
 ): Promise<AgentToolResult<unknown>> {
   const { debtId } = params;
   if (!debtId) throw new Error('Missing debtId to settle the debt.');
-  const doc = await debts.getById(debtId);
+  const document = await debts.getById(debtId);
 
-  if (!doc) {
+  if (!document) {
     throw new Error(`Debt ${debtId} not found`);
   }
 
-  if (doc.frontmatter.status === DebtStatus.PAID) {
+  if (document.frontmatter.status === DebtStatus.PAID) {
     return successResult(null, `✅ Debt ${debtId.slice(0, 8)} is already settled.`);
   }
 

@@ -2,7 +2,7 @@ export interface FileNode {
   path: string;
   name: string;
   relativePath: string;
-  kind: 'daily' | 'debt' | 'archived' | 'html-app' | 'markdown' | 'folder';
+  kind: 'daily' | 'debt' | 'archived' | 'htmlApp' | 'markdown' | 'folder';
   isArchived?: boolean;
   modifiedAt?: string;
   children?: FileNode[];
