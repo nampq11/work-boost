@@ -1,5 +1,6 @@
 import { useAui, useAuiState } from '@assistant-ui/react';
-import { Coins, FileText, FloppyDisk, PaperPlaneRight } from '@phosphor-icons/react';
+import { Coins, FileText, PaperPlaneRight } from '@phosphor-icons/react';
+import type { Editor } from '@tiptap/react';
 import { Button } from '@work-boost/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutosave } from '../../hooks/useAutosave.ts';
@@ -12,15 +13,16 @@ import { FrontmatterInspector } from './FrontmatterInspector.tsx';
 const SourceEditor = React.lazy(() =>
   import('./SourceEditor.tsx').then((m) => ({ default: m.SourceEditor })),
 );
-import { TiptapEditor } from './TiptapEditor.tsx';
+import { EditorToolbar, TiptapEditor } from './TiptapEditor.tsx';
 
 export function EditorContainer() {
   const { t } = useI18n();
   const document = useWorkspaceStore((state) => state.activeDocument);
   const draft = useWorkspaceStore((state) => state.draft);
   const updateBody = useWorkspaceStore((state) => state.updateBody);
-  const save = useWorkspaceStore((state) => state.save);
   const [sourceMode, setSourceMode] = useState(false);
+  // Editor instance is owned by TiptapEditor; the header only hosts its toolbar
+  const [editor, setEditor] = useState<Editor | null>(null);
 
   useAutosave();
 
@@ -48,21 +50,22 @@ export function EditorContainer() {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {/* Document toolbar: view tabs on the left (GitHub pattern), actions on the right;
-          the AppHeader breadcrumb already shows the full path */}
-      <div className="flex h-11 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] px-6">
+      {/* Document toolbar: view tabs on the left (GitHub pattern); the save
+          shortcut lives in the AppHeader breadcrumb and the status bar shows
+          the save state */}
+      <div className="flex h-11 shrink-0 items-center gap-4 border-b border-[var(--border)] px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div
             role="tablist"
             aria-label={t('editor.viewMode')}
-            className="flex items-center rounded-md border border-[var(--border)] p-0.5"
+            className="flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-hover)] p-0.5"
           >
             <button
               type="button"
               role="tab"
               aria-selected={!sourceMode}
               onClick={() => setSourceMode(false)}
-              className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
                 sourceMode
                   ? 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   : 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
@@ -75,7 +78,7 @@ export function EditorContainer() {
               role="tab"
               aria-selected={sourceMode}
               onClick={() => setSourceMode(true)}
-              className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`rounded-[4px] px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface-hover)] ${
                 sourceMode
                   ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -86,17 +89,9 @@ export function EditorContainer() {
           </div>
           <span className="truncate text-sm font-semibold text-[var(--text-primary)]">{title}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => void save().catch(() => undefined)}
-            className="gap-1.5 bg-[var(--text-primary)] text-[var(--text-inverse)] hover:opacity-90"
-          >
-            <FloppyDisk size={14} />
-            <span>{t('editor.save')}</span>
-          </Button>
-        </div>
+        {/* Formatting toolbar shares the header row, right-aligned; only
+            relevant in Preview mode */}
+        {!sourceMode && editor && <EditorToolbar editor={editor} />}
       </div>
 
       {/* Frontmatter Inspector */}
@@ -113,7 +108,7 @@ export function EditorContainer() {
             <SourceEditor value={draft} onChange={updateBody} />
           </React.Suspense>
         ) : (
-          <TiptapEditor value={draft} onChange={updateBody} />
+          <TiptapEditor value={draft} onChange={updateBody} onEditorReady={setEditor} />
         )}
       </div>
     </div>

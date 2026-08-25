@@ -1,12 +1,15 @@
 import { useEffect } from 'react';
 import { ApiError } from '../lib/api-client.ts';
+import { useUiStore } from '../store/ui-store.ts';
 import { useWorkspaceStore } from '../store/workspace-store.ts';
 
 export function useAutosave() {
   const isDirty = useWorkspaceStore((state) => state.isDirty);
   const documentRevision = useWorkspaceStore((state) => state.documentRevision);
   const save = useWorkspaceStore((state) => state.save);
+  const isAutosaveEnabled = useUiStore((state) => state.isAutosaveEnabled);
   useEffect(() => {
+    if (!isAutosaveEnabled) return;
     if (!isDirty) return;
     let timer: number | undefined;
     let cancelled = false;
@@ -25,5 +28,5 @@ export function useAutosave() {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [documentRevision, isDirty, save]);
+  }, [documentRevision, isDirty, isAutosaveEnabled, save]);
 }

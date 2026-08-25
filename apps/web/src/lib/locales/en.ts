@@ -24,7 +24,11 @@ export const en = {
   'editor.viewMode': 'View mode',
   'editor.previewTab': 'Preview',
   'editor.sourceTab': 'Source',
-  'editor.save': 'Save',
+  // Settings menu
+  'settings.title': 'Settings',
+  'settings.autosave': 'Auto-save',
+  'settings.autosaveHint': 'Save automatically as you type',
+  'settings.saveShortcut': 'Cmd/Ctrl+S to save manually',
   'editor.justNow': 'Just now',
   'editor.minutesAgo': '{{count}}m ago',
   'editor.hoursAgo': '{{count}}h ago',
