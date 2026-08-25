@@ -1,4 +1,3 @@
-import { unstable_useComposerInput } from '@assistant-ui/react';
 import { FileText, Folder } from '@phosphor-icons/react';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -18,14 +17,25 @@ function kindLabel(kind: string, t: Translate): string | null {
 }
 
 /**
- * Workspace-file picker for the composer. Opens when the input ends with a
- * trailing `@query`; selecting a row replaces it with `@path `. All bridge
- * usage (`unstable_useComposerInput`) lives here and in CopilotComposer so an
- * assistant-ui upgrade is contained to these files.
+ * Workspace-file picker for a text input. Opens when the input ends with a
+ * trailing `@query`; selecting a row replaces it with `@path `.
+ *
+ * Controlled: callers pass the current text and an `onApply` callback, so the
+ * same picker works for the Copilot composer (fed by `unstable_useComposerInput`)
+ * and the Today capture box (fed by its own state). The `unstable_useComposerInput`
+ * bridge itself lives only in CopilotComposer, so an assistant-ui upgrade that
+ * renames or removes the hook stays a one-file change.
  */
-export function FileMentionMenu() {
+export function FileMentionMenu({
+  value,
+  onApply,
+  containerClass,
+}: {
+  value: string;
+  onApply: (text: string) => void;
+  containerClass: string;
+}) {
   const { t } = useI18n();
-  const { value, setText } = unstable_useComposerInput();
   const nodes = useWorkspaceStore((state) => state.nodes);
   const [activeIndex, setActiveIndex] = useState(0);
   const [dismissedQuery, setDismissedQuery] = useState<string | null>(null);
@@ -46,14 +56,15 @@ export function FileMentionMenu() {
     setActiveIndex((current) => (items.length === 0 ? 0 : Math.min(current, items.length - 1)));
   }, [items.length]);
 
-  // Key events bubble up from ComposerPrimitive.Input through the composer
-  // root, so a capture-phase document listener intercepts them before
-  // assistant-ui's Enter-to-submit handler runs.
+  // Key events bubble up from the input, so a capture-phase document listener
+  // intercepts them before any Enter-to-submit handler runs. `containerClass`
+  // scopes the listener to this picker's input so the Copilot composer and the
+  // Today capture box can both mount a picker without stealing each other's keys.
   useEffect(() => {
     if (!open || items.length === 0) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (!target?.closest('.copilot-composer')) return;
+      if (!target?.closest(containerClass)) return;
       if (event.key === 'ArrowDown') {
         event.preventDefault();
         event.stopPropagation();
@@ -65,7 +76,7 @@ export function FileMentionMenu() {
       } else if (event.key === 'Enter') {
         event.preventDefault();
         event.stopPropagation();
-        setText(applyMention(value, items[activeIndex].id));
+        onApply(applyMention(value, items[activeIndex].id));
       } else if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -74,7 +85,20 @@ export function FileMentionMenu() {
     };
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [open, items, activeIndex, value, setText, query]);
+  }, [open, items, activeIndex, value, onApply, containerClass, query]);
+
+  // The picker is driven by the input text, not focus, so a pointerdown outside
+  // its container must dismiss it (selecting an option keeps focus on the input,
+  // so that click stays inside and does not dismiss). Mirrors Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest(containerClass)) setDismissedQuery(query);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [open, containerClass, query]);
 
   if (!open) return null;
 
@@ -95,9 +119,9 @@ export function FileMentionMenu() {
               index === activeIndex ? ' file-mention-item-active' : ''
             }`}
             onMouseDown={(event) => {
-              // mousedown keeps composer focus; click would blur the input.
+              // mousedown keeps the input focused; click would blur it.
               event.preventDefault();
-              setText(applyMention(value, item.id));
+              onApply(applyMention(value, item.id));
             }}
             onMouseEnter={() => setActiveIndex(index)}
           >

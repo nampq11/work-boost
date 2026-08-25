@@ -36,11 +36,13 @@ callback, so the transport can evolve independently from the model provider.
 
 ## Amendment: @ file mentions (2026-08-25)
 
-The composer's @-mention picker uses `unstable_useComposerInput()` from assistant-ui 0.15.x to read
-the composer text and insert `@path` tokens. This bridge is deprecated-prone, so all usage is
-isolated to `CopilotComposer`/`FileMentionMenu` in `apps/web/src/components/ai/`; an upgrade that
-renames or removes the hook is a two-file change. Mention syntax is plain human-readable `@path`
-(not assistant-ui directive tokens) because the message is persisted verbatim in thread history.
+The @-mention picker (`FileMentionMenu`) is a controlled component that reads the current text and
+inserts `@path` tokens. In the Copilot composer it is fed by `unstable_useComposerInput()` from
+assistant-ui 0.15.x; the Today capture box feeds it from its own state. This bridge is
+deprecated-prone, so all of it lives in `CopilotComposer` in `apps/web/src/components/ai/`; an
+upgrade that renames or removes the hook stays a single-file change. Mention syntax is plain
+human-readable `@path` (not assistant-ui directive tokens) because the message is persisted verbatim
+in thread history.
 
 Referenced files are resolved server-side in `AssistantService.executeResponse`: the stored user
 message keeps the raw `@path` text, and only the agent turn is augmented with a `[Referenced files]`

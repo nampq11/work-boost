@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed the scheduler so the daily report runs by default without extra configuration.
 - Stabilized HTML app loading and startup in the web app.
+- The Today capture box now supports @ file mentions (files and folders) matching the Copilot composer, instead of sending raw text.
 
 ## [0.2.0] - 2026-08-20
 

@@ -11,6 +11,7 @@ import { lastSavedDailyPathFromThread } from '../../lib/tool-result.ts';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
+import { FileMentionMenu } from '../ai/FileMentionMenu.tsx';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
 import { EditorToolbar, TiptapEditor } from './TiptapEditor.tsx';
 
@@ -285,17 +286,24 @@ function TodayPanel() {
           </h1>
           <span className="text-sm text-[var(--text-muted)]">{todayLabel}</span>
         </div>
-        <textarea
-          ref={textareaRef}
-          autoFocus
-          value={captureText}
-          onChange={(event) => setCaptureText(event.target.value)}
-          onKeyDown={onKeyDown}
-          rows={3}
-          placeholder={t('editor.todayPrompt')}
-          disabled={isRunning}
-          className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-[15px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] focus:border-[var(--accent-blue)] disabled:opacity-60"
-        />
+        <div className="today-capture-anchor relative">
+          <FileMentionMenu
+            value={captureText}
+            onApply={setCaptureText}
+            containerClass=".today-capture-anchor"
+          />
+          <textarea
+            ref={textareaRef}
+            autoFocus
+            value={captureText}
+            onChange={(event) => setCaptureText(event.target.value)}
+            onKeyDown={onKeyDown}
+            rows={3}
+            placeholder={t('editor.todayPrompt')}
+            disabled={isRunning}
+            className="today-capture w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-4 py-3 text-[15px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] disabled:opacity-60"
+          />
+        </div>
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] text-[var(--text-muted)] m-0">{captureHint()}</p>
           <Button

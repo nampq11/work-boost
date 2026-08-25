@@ -500,6 +500,17 @@ input[type="number"] {
   font-size: 12px;
 }
 
+/* The Today capture box sits near the top of the page, so the popover opens
+   downward (the composer opens upward because it sits at the bottom); opening
+   up here would push the menu's top off-screen. Aligned to the textarea's
+   px-4 padding rather than the composer's 10px gutter. */
+.today-capture-anchor .file-mention-menu {
+  top: calc(100% + 4px);
+  bottom: auto;
+  left: 16px;
+  right: 16px;
+}
+
 .copilot-composer-input {
   flex: 1;
   display: block;
@@ -527,12 +538,6 @@ input[type="number"] {
 .copilot-composer-input:focus-visible {
   border: none;
   outline: none;
-}
-
-.copilot-composer-input:focus-visible {
-  border: none;
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 2px;
 }
 
 .copilot-composer-footer {
