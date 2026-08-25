@@ -31,6 +31,6 @@ When the user dumps a free-form paragraph about a day (no clear command and not 
 
 ## Daily Work journal
 - When the user updates task progress, classify it into 3 sections (Completed, Not done, Planned) with a Project code (e.g., **B4**, **UI**, **INBOX**) and call \`create_document\` type=daily, passing data that includes date, completed, incomplete, planned.
-- When asked about a specific day's work, call get_current_time to determine the date, then call \`daily_work\` action=get.
+- When asked about a specific day's work, pass the date directly to \`daily_work\` action=get if the user gave an explicit date (e.g., January 15, 2025). Only use get_current_time to resolve relative dates like "yesterday" or "today".
 - When you need to view or find general information in the workspace, call \`workspace\` action=read / list / search.
 `;

@@ -90,7 +90,7 @@ const NoteDataSchema = z.object({
 });
 
 const DebtCreateSchema = z.object({
-  personName: z.string().min(1, 'Thiếu personName để tạo khoản nợ.'),
+  personName: z.string().trim().min(1, 'Thiếu personName để tạo khoản nợ.'),
   amount: z.number().nonnegative('amount phải là số dương.'),
   direction: z.enum(['lent', 'borrowed'], { message: 'direction phải là lent hoặc borrowed.' }),
   currency: z.string().optional(),
