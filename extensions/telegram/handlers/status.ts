@@ -1,4 +1,4 @@
-import type { Database } from '@work-boost/data-provider/database.ts';
+import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import type { Context } from 'grammy';
 import { mainMenuKeyboard } from '../keyboards.ts';
 
@@ -15,14 +15,8 @@ export async function handleStatus(ctx: Context, deps: StatusHandlerDeps): Promi
     await ctx.answerCallbackQuery();
   }
 
-  const fromId = ctx.from?.id.toString();
-
-  if (!fromId) {
-    await ctx.reply('Unable to identify user. Please try again.');
-    return;
-  }
-
-  const subscription = await deps.db.getSubscriptionByUserId(fromId);
+  // Single-user system: all subscription methods operate on the workspace user.
+  const subscription = await deps.db.getSubscriptionByUserId(SINGLE_USER_ID);
 
   if (!subscription) {
     await ctx.reply(
@@ -48,12 +42,4 @@ export async function handleStatus(ctx: Context, deps: StatusHandlerDeps): Promi
     parse_mode: 'HTML',
     reply_markup: mainMenuKeyboard(),
   });
-}
-
-/**
- * @deprecated Use handleStatus directly - it now handles both commands and callbacks
- * Kept for backwards compatibility
- */
-export async function handleStatusCallback(ctx: Context, deps: StatusHandlerDeps): Promise<void> {
-  await handleStatus(ctx, deps);
 }

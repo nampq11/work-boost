@@ -32,11 +32,3 @@ export async function handleHelp(ctx: Context): Promise<void> {
     reply_markup: mainMenuKeyboard(),
   });
 }
-
-/**
- * @deprecated Use handleHelp directly - it now handles both commands and callbacks
- * Kept for backwards compatibility
- */
-export async function handleHelpCallback(ctx: Context): Promise<void> {
-  await handleHelp(ctx);
-}

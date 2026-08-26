@@ -46,7 +46,10 @@ export async function handleDebt(ctx: Context, deps: DebtHandlerDeps): Promise<v
     await ctx.reply('🤖 Processing...');
 
     const sessionId = `telegram_${userId}`;
-    const response = await deps.agent.stream(inputText, { sessionId });
+    const response = await deps.agent.stream(inputText, {
+      sessionId,
+      signal: AbortSignal.timeout(60_000),
+    });
 
     await safeReplyHtml(ctx, response || 'Done.');
   } else {

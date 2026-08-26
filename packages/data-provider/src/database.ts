@@ -201,7 +201,14 @@ export class Database {
   async storeDailyWorkMessage(message: Message): Promise<void> {
     const dateStr = message.date.toISOString().split('T')[0]; // YYYY-MM-DD
 
-    await this.dailyWork.saveContent(dateStr, message.content);
+    // Append instead of overwrite: saveContent replaces the whole day file,
+    // so multiple messages sent in one day would clobber each other and the
+    // daily summary would only ever see the latest one.
+    const existing = await this.dailyWork.get(dateStr);
+    const content = existing
+      ? `${getDailyWorkContent(existing)}\n${message.content}`
+      : message.content;
+    await this.dailyWork.saveContent(dateStr, content);
   }
 
   /**

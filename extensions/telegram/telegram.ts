@@ -5,7 +5,7 @@ import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import { SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import { env, timingSafeEqual } from '@work-boost/shared';
-import { redactRecursively } from '@work-boost/shared/logger/logger.ts';
+import { logger, redactRecursively } from '@work-boost/shared/logger/logger.ts';
 import { Bot, type Context, GrammyError } from 'grammy';
 import { webhookCallback } from 'grammy';
 import type { BotService, Platform, SendOptions } from '../bot/bot-service.ts';
@@ -22,8 +22,8 @@ export type TelegramContext = StreamFlavor<Context>;
  * middleware, not an object with control().
  */
 class BulkLimiter {
-  private maxRequests: number;
-  private timeFrame: number;
+  private readonly maxRequests: number;
+  private readonly timeFrame: number;
   private timestamps: number[] = [];
 
   constructor(maxRequests: number, timeFrame: number) {
@@ -88,7 +88,7 @@ export class TelegramService implements BotService {
     this.bot.use(async (ctx, next) => {
       const senderId = ctx.from?.id.toString();
       if (!ownerId || !senderId || !timingSafeEqual(senderId, ownerId)) {
-        console.warn('Rejected unauthorized Telegram update');
+        logger.warn('Rejected unauthorized Telegram update');
         return;
       }
       await next();
@@ -126,17 +126,13 @@ export class TelegramService implements BotService {
 
     this.bot.on('message:text', (ctx) => handlers.handleMessage(ctx, deps));
 
-    this.bot.callbackQuery('action:subscribe', (ctx) =>
-      handlers.handleSubscribeCallback(ctx, deps),
-    );
-    this.bot.callbackQuery('action:unsubscribe', (ctx) =>
-      handlers.handleUnsubscribeCallback(ctx, deps),
-    );
+    this.bot.callbackQuery('action:subscribe', (ctx) => handlers.handleSubscribe(ctx, deps));
+    this.bot.callbackQuery('action:unsubscribe', (ctx) => handlers.handleUnsubscribe(ctx, deps));
     this.bot.callbackQuery('action:unsubscribe_confirm', (ctx) =>
       handlers.handleUnsubscribeConfirm(ctx, deps),
     );
-    this.bot.callbackQuery('action:status', (ctx) => handlers.handleStatusCallback(ctx, deps));
-    this.bot.callbackQuery('action:help', (ctx) => handlers.handleHelpCallback(ctx));
+    this.bot.callbackQuery('action:status', (ctx) => handlers.handleStatus(ctx, deps));
+    this.bot.callbackQuery('action:help', (ctx) => handlers.handleHelp(ctx));
     this.bot.callbackQuery('action:cancel', async (ctx) => {
       await ctx.answerCallbackQuery();
       await ctx.editMessageText('Cancelled.', {
@@ -150,22 +146,19 @@ export class TelegramService implements BotService {
       const ctx = err.ctx;
       const e = err.error;
 
-      console.error(
-        'Telegram bot error:',
-        redactRecursively({
+      logger.error('Telegram bot error', {
+        details: redactRecursively({
           errorMessage: e instanceof Error ? e.message : String(e),
           errorCode: e instanceof GrammyError ? e.error_code : undefined,
           userId: ctx.from?.id,
           chatId: ctx.chat?.id,
         }),
-      );
+      });
 
-      if (e instanceof GrammyError) {
-        if (e.error_code === 403) {
-          if (ctx.from?.id) {
-            this.db.disablePlatform(SINGLE_USER_ID, 'telegram').catch(console.error);
-          }
-        }
+      if (e instanceof GrammyError && e.error_code === 403 && ctx.from?.id) {
+        this.db
+          .disablePlatform(SINGLE_USER_ID, 'telegram')
+          .catch((error) => logger.error('Failed to disable telegram platform', { error }));
       }
     });
   }
@@ -176,13 +169,12 @@ export class TelegramService implements BotService {
         parse_mode: options?.parseMode === 'None' ? undefined : options?.parseMode || 'HTML',
       });
     } catch (error) {
-      console.error(
-        'Failed to send Telegram message:',
-        redactRecursively({
+      logger.error('Failed to send Telegram message', {
+        details: redactRecursively({
           errorMessage: error instanceof Error ? error.message : String(error),
           chatId,
         }),
-      );
+      });
       throw error;
     }
   }
