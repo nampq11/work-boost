@@ -2,7 +2,6 @@ import { create } from 'zustand';
 
 export interface UpdateInfo {
   version: string;
-  title: string;
 }
 
 // Check errors are swallowed by Rust as `null` and never become `error`; `error` is set only by an

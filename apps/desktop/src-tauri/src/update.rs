@@ -1,7 +1,7 @@
 //! Desktop self-update: a read-only release check plus a single elevated install action.
 //!
 //! The webview never supplies a URL to Rust. Rust owns the GitHub API endpoint and the asset-free
-//! version logic; the webview only receives `{ version, title }` for display. The actual install is
+//! version logic; the webview only receives `{ version }` for display. The actual install is
 //! delegated to `scripts/install.sh` (the canonical installer), run by a single hardcoded, elevated
 //! command - not implemented here.
 
@@ -21,7 +21,6 @@ pub const RELEASES_API_URL: &str =
 #[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct UpdateInfo {
     pub version: String,
-    pub title: String,
 }
 
 /// Windows only ships a manual `.msi`, so it is never auto-updated in-app.
@@ -167,8 +166,6 @@ pub fn parse_latest_release(body: &str) -> Option<UpdateInfo> {
     #[derive(serde::Deserialize)]
     struct Release {
         tag_name: String,
-        #[serde(default)]
-        name: String,
     }
 
     let release: Release = serde_json::from_str(body).ok()?;
@@ -177,12 +174,7 @@ pub fn parse_latest_release(body: &str) -> Option<UpdateInfo> {
         .strip_prefix('v')
         .unwrap_or(&release.tag_name)
         .to_string();
-    let title = if release.name.trim().is_empty() {
-        version.clone()
-    } else {
-        release.name
-    };
-    Some(UpdateInfo { version, title })
+    Some(UpdateInfo { version })
 }
 
 /// Fetch the latest release from GitHub. Returns `Ok(None)` on any network, HTTP, or parse error
@@ -275,16 +267,13 @@ mod tests {
         let body = r#"{ "tag_name": "v0.4.0", "name": "Work Boost 0.4.0", "draft": false, "prerelease": false }"#;
         let info = parse_latest_release(body).expect("should parse");
         assert_eq!(info.version, "0.4.0");
-        assert_eq!(info.title, "Work Boost 0.4.0");
     }
 
     #[test]
     fn parses_latest_release_without_v_prefix() {
-        let body = r#"{ "tag_name": "0.4.0", "name": "" }"#;
+        let body = r#"{ "tag_name": "0.4.0" }"#;
         let info = parse_latest_release(body).expect("should parse");
         assert_eq!(info.version, "0.4.0");
-        // Falls back to the version when the release name is empty.
-        assert_eq!(info.title, "0.4.0");
     }
 
     #[test]

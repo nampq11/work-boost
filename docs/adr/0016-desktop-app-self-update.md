@@ -26,7 +26,7 @@ runs the existing `scripts/install.sh` with appropriate elevation and then relau
 not adopt the Tauri updater plugin and do not reimplement download/install logic in Rust.**
 
 - On desktop launch, the Rust shell fetches `releases/latest` from the GitHub API, compares the tag
-  to the running app's version, and returns the newer `{ version, title }` (display only) when one
+  to the running app's version, and returns the newer `{ version }` (display only) when one
   exists.
 - The webview shows a banner with an `Update now` button when an update is available; no manual
   "check for updates" step.
