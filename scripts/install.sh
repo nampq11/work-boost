@@ -44,7 +44,14 @@ DOWNLOAD_URL=$(printf '%s' "$RELEASE_JSON" | grep -o '"browser_download_url": *"
 CHECKSUM_URL="$DOWNLOAD_URL.sha256"
 
 TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+MOUNT_DIR=""
+# Clean up on every exit path (success or failure): detach any mounted .dmg and remove the temp
+# dir. A cancelled/failed install must never leave a volume mounted or temp files behind.
+cleanup() {
+  hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
 ARTIFACT="$TMP_DIR/${DOWNLOAD_URL##*/}"
 CHECKSUM_FILE="$ARTIFACT.sha256"
 
@@ -69,7 +76,7 @@ if curl -fsL "$CHECKSUM_URL" -o "$CHECKSUM_FILE"; then
     fail "checksum mismatch for $(basename "$ARTIFACT")"
   fi
 else
-  log "WARNING: no checksum file published for this release, skipping verification"
+  fail "no checksum published for $(basename "$ARTIFACT"); refusing to install unverified build"
 fi
 
 case "$OS" in
@@ -89,7 +96,7 @@ case "$OS" in
     MOUNT_DIR="$TMP_DIR/mount"
     hdiutil attach "$ARTIFACT" -mountpoint "$MOUNT_DIR" -quiet || fail "could not mount .dmg"
     APP_PATH=$(find "$MOUNT_DIR" -maxdepth 1 -name '*.app' | head -1)
-    [ -n "$APP_PATH" ] || { hdiutil detach "$MOUNT_DIR" -quiet; fail "no .app found inside .dmg"; }
+    [ -n "$APP_PATH" ] || fail "no .app found inside .dmg"
     log "copying $(basename "$APP_PATH") to /Applications"
     rm -rf "/Applications/$(basename "$APP_PATH")"
     cp -R "$APP_PATH" /Applications/

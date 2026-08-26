@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Desktop self-update banner** - The desktop app checks for a newer release on launch and shows a slim banner with an `Update now` button that runs the existing installer elevated and relaunches; no manual shell command needed.
+
+### Fixed
+
+- The desktop bundle version is now derived from the release tag at build time, so the reported version matches the tag instead of the hardcoded `0.1.0`.
+
 ## [0.3.1] - 2026-08-26
 
 ### Changed

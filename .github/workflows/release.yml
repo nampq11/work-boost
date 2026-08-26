@@ -71,6 +71,29 @@ jobs:
         working-directory: apps/desktop
         run: npm ci --no-fund --no-audit
 
+      - name: Set desktop version from tag
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node -e '
+            const fs = require("fs");
+            const version = process.argv[1];
+            for (const f of ["package.json", "src-tauri/tauri.conf.json"]) {
+              const p = JSON.parse(fs.readFileSync(f, "utf8"));
+              p.version = version;
+              fs.writeFileSync(f, JSON.stringify(p, null, 2) + "\n");
+            }
+            // Cargo.toml is TOML, not JSON. Bump only the top-level [package] version line so the
+            // crate version matches the tag too; dependency versions are indented and never match.
+            const cargoPath = "src-tauri/Cargo.toml";
+            const cargo = fs.readFileSync(cargoPath, "utf8").replace(
+              /^version = ".*"$/m,
+              `version = "${version}"`,
+            );
+            fs.writeFileSync(cargoPath, cargo);
+          ' "$VERSION"
+          echo "desktop version set to $VERSION"
       - name: Build desktop bundle
         working-directory: apps/desktop
         shell: bash

@@ -10,6 +10,7 @@ import { EditorContainer } from './components/editor/EditorContainer.tsx';
 import { AppHeader } from './components/layout/AppHeader.tsx';
 import { Sidebar } from './components/layout/Sidebar.tsx';
 import { StatusBar } from './components/layout/StatusBar.tsx';
+import { UpdateBanner } from './components/layout/UpdateBanner.tsx';
 import { CommandPalette } from './components/palette/CommandPalette.tsx';
 import { Toast } from './components/ui/Toast.tsx';
 import { HtmlAppViewer } from './components/viewer/HtmlAppViewer.tsx';
@@ -21,6 +22,7 @@ import {
   SIDEBAR_MIN_WIDTH,
   defaultSidebarWidth,
 } from './lib/sidebar-constants.ts';
+import { useUpdateChecker } from './lib/update.ts';
 import { useUiStore } from './store/ui-store.ts';
 import { useWorkspaceStore } from './store/workspace-store.ts';
 
@@ -28,6 +30,7 @@ export function App() {
   const { t } = useI18n();
   useWorkspaceSync();
   useKeyboardShortcuts();
+  useUpdateChecker();
   const activePath = useWorkspaceStore((state) => state.activePath);
   const error = useWorkspaceStore((state) => state.error);
   const trash = useWorkspaceStore((state) => state.trash);
@@ -92,6 +95,7 @@ export function App() {
   return (
     <div className="app-shell">
       <AppHeader />
+      <UpdateBanner />
       <div className="app-body">
         <ResizablePanelGroup
           id="workboost-workspace"
