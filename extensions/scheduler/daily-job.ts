@@ -2,12 +2,14 @@
 
 import type { AgentPort } from '@work-boost/brain';
 import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
-import type { ExtensionContext, ExtensionCronJob, ExtensionMessageSender } from '../types.ts';
+import type { Logger } from '@work-boost/shared';
+import type { ExtensionContext, ExtensionCronJob } from '../types.ts';
 
 export interface SchedulerDependencies {
   db: Database;
   agent: AgentPort;
   messaging?: ExtensionContext['messaging'];
+  logger: Logger;
 }
 
 interface ProcessResult {
@@ -32,6 +34,7 @@ export function createDailySummaryJob(ctx: ExtensionContext): ExtensionCronJob {
         db: ctx.db,
         agent: ctx.agent,
         messaging: ctx.messaging,
+        logger: ctx.logger,
       });
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
       ctx.logger.info(`[Scheduler] Daily summary completed in ${elapsed}s`, {
@@ -78,13 +81,15 @@ export async function processDailySummary(
         await sender.sendMessage(chatId, response, { parseMode: 'None' });
         delivered++;
       } catch (error) {
-        console.error(`[Scheduler] Failed to send daily summary to ${platform}`, error);
+        dependencies.logger.error(`[Scheduler] Failed to send daily summary to ${platform}`, {
+          error,
+        });
       }
     }
 
     return delivered > 0 ? { success: true } : { success: false, reason: 'all_platforms_failed' };
   } catch (error) {
-    console.error('[Scheduler] Failed to process daily summary', error);
+    dependencies.logger.error('[Scheduler] Failed to process daily summary', { error });
     return { success: false, reason: 'error' };
   }
 }
@@ -92,6 +97,7 @@ export async function processDailySummary(
 export function createPlatformSender(
   db: Database,
   messaging: ExtensionContext['messaging'],
+  logger: Logger,
 ): (message: string) => Promise<void> {
   return async (message) => {
     const subscription = await db.getSubscriptionByUserId(SINGLE_USER_ID);
@@ -102,19 +108,12 @@ export function createPlatformSender(
       const chatId = subscription.platforms[platform];
       if (!sender || !chatId) continue;
       try {
-        await sendToPlatform(sender, chatId, message, platform === 'telegram' ? 'HTML' : 'None');
+        await sender.sendMessage(chatId, message, {
+          parseMode: platform === 'telegram' ? 'HTML' : 'None',
+        });
       } catch (error) {
-        console.error(`[Scheduler] Failed to send reminder to ${platform}`, error);
+        logger.error(`[Scheduler] Failed to send reminder to ${platform}`, { error });
       }
     }
   };
-}
-
-async function sendToPlatform(
-  sender: ExtensionMessageSender,
-  chatId: string,
-  message: string,
-  parseMode: 'HTML' | 'None',
-): Promise<void> {
-  await sender.sendMessage(chatId, message, { parseMode });
 }

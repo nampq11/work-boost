@@ -15,19 +15,23 @@ export function schedulerExtension(): WorkBoostExtension {
 
     registerJobs() {
       if (!context) return [];
-      const sendReminder = createPlatformSender(context.db, context.messaging);
+      const ctx = context;
+
+      // Sender is built at fire time so jobs pick up messaging platforms that
+      // were initialized after this extension.
+      const createSender = () => createPlatformSender(ctx.db, ctx.messaging, ctx.logger);
 
       return [
         createDailySummaryJob(context),
         {
           name: 'weekly-debt-reminders',
           schedule: '0 9 * * 1',
-          handler: () => sendWeeklyDebtReminders(context!.db, sendReminder),
+          handler: () => sendWeeklyDebtReminders(ctx.db, ctx.logger, createSender()),
         },
         {
           name: 'monthly-debt-reminders',
           schedule: '0 9 1 * *',
-          handler: () => sendMonthlyDebtReminders(context!.db, sendReminder),
+          handler: () => sendMonthlyDebtReminders(ctx.db, ctx.logger, createSender()),
         },
       ];
     },

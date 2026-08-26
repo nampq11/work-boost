@@ -1,6 +1,7 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import type { Message } from '@work-boost/data-schemas';
+import { logger } from '@work-boost/shared/logger/logger.ts';
 import type { Context } from 'grammy';
 import { splitMessage } from '../../formatters/telegram-formatter.ts';
 
@@ -32,7 +33,10 @@ export async function handleMessage(ctx: Context, deps: MessageHandlerDeps): Pro
 
   try {
     const sessionId = `telegram_${fromId}`;
-    const response = await deps.agent.stream(text, { sessionId });
+    const response = await deps.agent.stream(text, {
+      sessionId,
+      signal: AbortSignal.timeout(60_000),
+    });
 
     if (response) {
       const parts = splitMessage(response);
@@ -46,6 +50,6 @@ export async function handleMessage(ctx: Context, deps: MessageHandlerDeps): Pro
     }
   } catch (error) {
     await ctx.reply('Sorry, there was an error processing your request. Please try again later.');
-    console.error('Error processing message:', error);
+    logger.error('Failed to process Telegram message', { error });
   }
 }

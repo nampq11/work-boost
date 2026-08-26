@@ -27,7 +27,8 @@ export async function handleStart(ctx: Context, deps: StartHandlerDeps): Promise
 
   const welcomeMessage =
     `<b>Welcome to Work Boost!</b>\n\n` +
-    `I'll send you a daily work summary around 6pm - use /unsubscribe to stop.\n\n` +
+    // Keep the schedule vague: the actual time is configurable via DAILY_SUMMARY_SCHEDULE.
+    `I'll send you a daily work summary once a day - use /unsubscribe to stop.\n\n` +
     `Choose an option below:`;
 
   await ctx.reply(welcomeMessage, {

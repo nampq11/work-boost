@@ -4,6 +4,7 @@
  */
 
 import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
+import type { Logger } from '@work-boost/shared';
 import { formatCurrency } from '../formatters/debt-formatting.ts';
 
 /**
@@ -12,6 +13,7 @@ import { formatCurrency } from '../formatters/debt-formatting.ts';
  */
 export async function sendWeeklyDebtReminders(
   db: Database,
+  logger: Logger,
   sendFn: (message: string) => Promise<void>,
 ): Promise<void> {
   const settings = await db.getAllDebtReminderUsers();
@@ -35,7 +37,7 @@ export async function sendWeeklyDebtReminders(
       if (daysSinceLastSent < 7) continue;
     }
 
-    await sendDebtReminder(db, sendFn);
+    await sendDebtReminder(db, logger, sendFn);
   }
 }
 
@@ -45,6 +47,7 @@ export async function sendWeeklyDebtReminders(
  */
 export async function sendMonthlyDebtReminders(
   db: Database,
+  logger: Logger,
   sendFn: (message: string) => Promise<void>,
 ): Promise<void> {
   const settings = await db.getAllDebtReminderUsers();
@@ -68,7 +71,7 @@ export async function sendMonthlyDebtReminders(
       if (daysSinceLastSent < 25) continue; // At least 25 days since last reminder
     }
 
-    await sendDebtReminder(db, sendFn);
+    await sendDebtReminder(db, logger, sendFn);
   }
 }
 
@@ -78,6 +81,7 @@ export async function sendMonthlyDebtReminders(
  */
 async function sendDebtReminder(
   db: Database,
+  logger: Logger,
   sendFn: (message: string) => Promise<void>,
 ): Promise<void> {
   // Get unpaid debts for workspace user
@@ -126,14 +130,14 @@ async function sendDebtReminder(
   try {
     await sendFn(message);
   } catch (error) {
-    console.error('Failed to send debt reminder:', error);
+    logger.error('Failed to send debt reminder', { error });
     throw error;
   }
 
   try {
     await db.updateDebtReminderLastSent(SINGLE_USER_ID);
   } catch (error) {
-    console.error('Sent debt reminder but failed to record the timestamp:', error);
+    logger.error('Sent debt reminder but failed to record the timestamp', { error });
   }
 }
 
@@ -143,10 +147,11 @@ async function sendDebtReminder(
  */
 export async function triggerAllDebtReminders(
   db: Database,
+  logger: Logger,
   sendFn: (message: string) => Promise<void>,
 ): Promise<void> {
   const settings = await db.getAllDebtReminderUsers();
 
   if (settings.length === 0) return;
-  await sendDebtReminder(db, sendFn);
+  await sendDebtReminder(db, logger, sendFn);
 }

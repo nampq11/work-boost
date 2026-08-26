@@ -46,14 +46,3 @@ export async function handleSubscribe(ctx: Context, deps: SubscribeHandlerDeps):
     { reply_markup: mainMenuKeyboard() },
   );
 }
-
-/**
- * @deprecated Use handleSubscribe directly - it now handles both commands and callbacks
- * Kept for backwards compatibility
- */
-export async function handleSubscribeCallback(
-  ctx: Context,
-  deps: SubscribeHandlerDeps,
-): Promise<void> {
-  await handleSubscribe(ctx, deps);
-}

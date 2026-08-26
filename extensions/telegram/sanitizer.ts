@@ -1,3 +1,5 @@
+import type { Context } from 'grammy';
+
 /**
  * Input sanitization utilities for Telegram bot
  */
@@ -65,7 +67,7 @@ export function isValidTelegramChatId(chatId: string): boolean {
  * Sanitizes message text and callback data before handlers process them
  */
 export function createSanitizationMiddleware() {
-  return async (ctx: any, next: () => Promise<void>) => {
+  return async (ctx: Context, next: () => Promise<void>) => {
     // Sanitize message text
     if (ctx.message?.text) {
       ctx.message.text = sanitizeUserInput(ctx.message.text);

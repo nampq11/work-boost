@@ -49,7 +49,15 @@ export function formatCurrency(amount: number, currency: string): string {
     VND: '₫',
   };
   const symbol = symbols[currency] || currency + ' ';
-  return `${symbol}${amount.toLocaleString('vi-VN')}`;
+  // Match the grouping locale to the currency symbol ($1,000 not $1.000).
+  const locales: Record<string, string> = {
+    USD: 'en-US',
+    EUR: 'de-DE',
+    GBP: 'en-GB',
+    JPY: 'ja-JP',
+    VND: 'vi-VN',
+  };
+  return `${symbol}${amount.toLocaleString(locales[currency] || 'en-US')}`;
 }
 
 export function resolveDebtCurrencies(summary: DebtSummaryInput): DebtCurrencies {

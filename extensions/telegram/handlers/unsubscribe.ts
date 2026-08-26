@@ -1,4 +1,4 @@
-import type { Database } from '@work-boost/data-provider/database.ts';
+import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import type { Context } from 'grammy';
 import { mainMenuKeyboard, unsubscribeConfirmKeyboard } from '../keyboards.ts';
 
@@ -15,14 +15,8 @@ export async function handleUnsubscribe(ctx: Context, deps: UnsubscribeHandlerDe
     await ctx.answerCallbackQuery();
   }
 
-  const fromId = ctx.from?.id.toString();
-
-  if (!fromId) {
-    await ctx.reply('Unable to identify user. Please try again.');
-    return;
-  }
-
-  const existing = await deps.db.getSubscriptionByUserId(fromId);
+  // Single-user system: all subscription methods operate on the workspace user.
+  const existing = await deps.db.getSubscriptionByUserId(SINGLE_USER_ID);
 
   if (!existing || !existing.enabled.includes('telegram')) {
     await ctx.reply("You're not subscribed to daily summaries.", {
@@ -55,14 +49,8 @@ export async function handleUnsubscribeConfirm(
     await ctx.answerCallbackQuery();
   }
 
-  const fromId = ctx.from?.id.toString();
-
-  if (!fromId) {
-    await ctx.reply('Unable to identify user. Please try again.');
-    return;
-  }
-
-  const existing = await deps.db.getSubscriptionByUserId(fromId);
+  // Single-user system: all subscription methods operate on the workspace user.
+  const existing = await deps.db.getSubscriptionByUserId(SINGLE_USER_ID);
 
   if (existing) {
     // Remove only telegram from enabled platforms
@@ -77,15 +65,4 @@ export async function handleUnsubscribeConfirm(
     "Oke rồi, mình sẽ không thông báo cho bạn nữa! 😊\n\nYou've been unsubscribed from Telegram notifications.",
     { reply_markup: mainMenuKeyboard() },
   );
-}
-
-/**
- * @deprecated Use handleUnsubscribe directly - it now handles both commands and callbacks
- * Kept for backwards compatibility
- */
-export async function handleUnsubscribeCallback(
-  ctx: Context,
-  deps: UnsubscribeHandlerDeps,
-): Promise<void> {
-  await handleUnsubscribe(ctx, deps);
 }

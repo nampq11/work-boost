@@ -8,6 +8,16 @@ interface RemindHandlerDeps {
   agent: AgentPort;
 }
 
+const WEEKDAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
+
 function getCurrentFrequencyText(
   frequency: string,
   weeklyDay?: number,
@@ -15,8 +25,8 @@ function getCurrentFrequencyText(
 ): string {
   switch (frequency) {
     case 'weekly': {
-      const day = weeklyDay || 1;
-      return `Weekly (every ${day}${getOrdinal(day)} day of the week)`;
+      const day = (weeklyDay || 1) % 7;
+      return `Weekly (every ${WEEKDAY_NAMES[day]})`;
     }
     case 'monthly': {
       const day = monthlyDay || 1;
