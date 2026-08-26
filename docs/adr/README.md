@@ -71,4 +71,4 @@ proposed → active → superseded
 | [0013](0013-editor-fills-viewport-height.md) | Editor fills viewport height with slim document toolbar | active |
 | [0014](0014-extension-public-surface.md) | Narrow the extensions public surface to contract plus factories | active |
 | [0014](0014-extension-public-surface.md) | Narrow the extensions public surface to contract plus factories | active |
-| [0015](0015-distribute-desktop-via-github-releases.md) | Distribute desktop installers as prebuilt GitHub Releases artifacts | proposed |
+| [0015](0015-distribute-desktop-via-github-releases.md) | Distribute desktop installers as prebuilt GitHub Releases artifacts | active |

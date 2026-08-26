@@ -2,7 +2,7 @@
 type: ADR
 id: "0015"
 title: "Distribute desktop installers as prebuilt GitHub Releases artifacts"
-status: proposed
+status: active
 date: 2026-08-26
 ---
 
