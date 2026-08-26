@@ -16,6 +16,10 @@
 * Use full words for variable names (no abbreviations like "q" for "queue")
 * Prefer iteration and modularization over code duplication.
 
+## Build guidelines
+
+- Use `./scripts/clippy` instead of `deno task lint`, `deno task check:ci`
+
 # Pull request hygiene
 
 When an agent opens or updates a pull request, it must:
@@ -58,7 +62,7 @@ Editing or clarifying existing rules is always welcome. New rules must meet **al
 Rules that apply to a single module belong in that module's own `.rules` file, not the repo root.
 
 ## What NOT to put in `.rules`
-Avoid architectural descriptions of a codebase(data flow, key types). There go stale fast and the agent can gather them by reading the code. Rules should be **traps to avoid**, not **maps to follow**.
+Avoid architectural descriptions of a codebase(module layout, data flow, key types). There go stale fast and the agent can gather them by reading the code. Rules should be **traps to avoid**, not **maps to follow**.
 
 ## No drive-by additions
 Rules emerge from validated patterns, not one-off observations. The workflow is:

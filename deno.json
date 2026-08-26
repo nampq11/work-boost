@@ -23,7 +23,8 @@
     "format": "deno run -A npm:@biomejs/biome format --write .",
     "format:check": "deno run -A npm:@biomejs/biome format .",
     "check": "deno run -A npm:@biomejs/biome check --write .",
-    "check:ci": "deno run -A npm:@biomejs/biome check . && deno task lint"
+    "check:ci": "deno run -A npm:@biomejs/biome check . && deno task lint",
+    "clippy": "bash scripts/clippy"
   },
   "imports": {
     "@codemirror/state": "npm:@codemirror/state@6.7.1",

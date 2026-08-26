@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CHECK_ONLY=false
+if [[ " $* " == *" --check "* ]]; then
+    CHECK_ONLY=true
+fi
+
+set -x
+
+# Pipeline defaults to auto-fix when running locally: apply formatter,
+# biome linter rules, import organizing, and oxlint fixes.
+# CI never mutates code; it verifies only.
+if [[ -z "${GITHUB_ACTIONS+x}" && "$CHECK_ONLY" == false ]]; then
+    deno run -A npm:@biomejs/biome check --write .
+    deno task lint:fix
+fi
+
+# Verify everything is clean after fixing.
+deno task check:ci
+
+# Main workspace tasks run with --no-check, so type-check explicitly.
+deno task --cwd apps/web check
+
+# If local, run other checks if we have the tools installed.
+if [[ -z "${GITHUB_ACTIONS+x}" ]]; then
+    which typos >/dev/null 2>&1 || exit 0
+    typos
+fi;
