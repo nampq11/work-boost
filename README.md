@@ -45,22 +45,39 @@ Slack / Telegram ───────┼── API composition ── Data laye
                         └── HTTP and SSE
 ```
 
-![Work Boost architecture](./assets/work-boost.png)
-
 The Deno API is the composition root: the browser workspace, the AI Brain, and the Slack/Telegram
 integrations all reach your Markdown workspace through it. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 
 ## Installation
 
-1. Clone the repository:
-    ```sh
-    git clone https://github.com/nampq11/work-boost.git
-    ```
-2. Navigate to the project directory:
-    ```sh
-    cd work-boost
-    ```
+### Desktop app (recommended)
+
+Install the native desktop app with a single command (Linux and macOS):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nampq11/work-boost/main/scripts/install.sh | sh
+```
+
+The script downloads the latest release from GitHub Releases, verifies its SHA256 checksum, and installs it natively:
+
+- **Linux** - `.deb` package installed via `dpkg` (non-debian systems fall back to placing the bundle in `~/Applications`)
+- **macOS** - `.dmg` mounted and the app copied to `/Applications`
+
+Windows users should download the `.msi` from the [releases page](https://github.com/nampq11/work-boost/releases/latest) and run it directly. The macOS bundle is currently unsigned; if macOS blocks the first launch, right-click the app and choose Open.
+
+### Run from source
+
+Requires [Deno](https://deno.com) 2.x:
+
+```sh
+git clone https://github.com/nampq11/work-boost.git
+cd work-boost
+deno task start   # production server on http://localhost:3001
+deno task dev     # development server with hot reload
+```
+
+On first run, copy `.env.example` to `.env` and adjust provider keys as needed - see [Configuration](#configuration).
 
 ## Desktop App
 
