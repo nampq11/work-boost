@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  desktop-bundles:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux webview system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libappindicator3-dev
+
+      - name: Build desktop bundle
+        working-directory: apps/desktop
+        run: npm run build
+
+      - name: Collect artifacts and checksums
+        shell: bash
+        run: |
+          mkdir -p dist
+          find apps/desktop/src-tauri/target/release/bundle \
+            \( -name '*.deb' -o -name '*.dmg' -o -name '*.msi' \) \
+            -exec cp {} dist/ \;
+          cd dist
+          for file in *; do sha256sum "$file" > "$file.sha256"; done
+          ls -la
+
+      - name: Upload bundles to the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
