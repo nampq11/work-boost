@@ -71,10 +71,15 @@ export function EditorContainer() {
       </div>
 
       {/* Frontmatter Inspector: only preview mode. In source mode the raw
-          frontmatter is part of the editable document, so the form is hidden. */}
+          frontmatter is part of the editable document, so the form is hidden.
+          It sits in the same centered readable column as the editor body
+          (max-w-3xl inside a px-8 scroll container, per ADR 0013) so the
+          property form lines up with the document content below it. */}
       {!sourceMode && (
-        <div className="shrink-0">
-          <FrontmatterInspector />
+        <div className="mt-6 shrink-0 overflow-y-scroll px-8">
+          <div className="mx-auto max-w-3xl">
+            <FrontmatterInspector />
+          </div>
         </div>
       )}
 
