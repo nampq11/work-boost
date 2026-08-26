@@ -87,6 +87,14 @@ export const en = {
   'header.returnToStart': 'Return to start page',
   'header.toggleTheme': 'Toggle theme',
   'header.copilot': 'Copilot',
+
+  // Desktop self-update banner
+  'update.available': 'Work Boost {{version}} is available',
+  'update.now': 'Update now',
+  'update.later': 'Later',
+  'update.downloading': 'Updating...',
+  'update.failed': 'Update failed: {{message}}',
+  'update.manual': 'Manual install required: {{message}}',
   'statusBar.markdown': 'Markdown',
   'sidebar.searchNotes': 'Search notes...',
   'sidebar.newFolder': 'New folder',

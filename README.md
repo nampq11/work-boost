@@ -66,6 +66,12 @@ The script downloads the latest release from GitHub Releases, verifies its SHA25
 
 Windows users should download the `.msi` from the [releases page](https://github.com/nampq11/work-boost/releases/latest) and run it directly. The macOS bundle is currently unsigned; if macOS blocks the first launch, right-click the app and choose Open.
 
+#### Updating
+
+On launch the desktop app checks for a newer release and, when one exists, shows an `Update now`
+banner that runs the same installer elevated and relaunches the app. Where an in-app install is not
+available (Windows, or a Linux system without `pkexec`), open the [releases page](https://github.com/nampq11/work-boost/releases/latest) and install manually.
+
 ### Run from source
 
 Requires [Deno](https://deno.com) 2.x:

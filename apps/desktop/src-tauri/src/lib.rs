@@ -1,6 +1,7 @@
 // Sidecar plumbing is only compiled for bundled builds: `tauri build` enables the
 // `custom-protocol` feature, `tauri dev` does not. In dev the shell points at a separately
 // started `deno task dev` API instead, so a stale sidecar binary can never break startup.
+use std::cmp::Ordering;
 #[cfg(feature = "custom-protocol")]
 use std::net::TcpStream;
 use std::sync::Mutex;
@@ -11,6 +12,92 @@ use tauri::{Manager, State};
 use tauri_plugin_shell::process::CommandChild;
 #[cfg(feature = "custom-protocol")]
 use tauri_plugin_shell::ShellExt;
+
+mod update;
+
+/// Read-only launch check: is there a newer release? Never blocks or fails launch; returns `None`
+/// on any error and never returns a URL to the webview.
+#[tauri::command]
+fn check_for_update(app: tauri::AppHandle) -> Result<Option<update::UpdateInfo>, String> {
+    if !update::auto_update_enabled() {
+        return Ok(None);
+    }
+    let current = app.package_info().version.to_string();
+    match update::latest_release() {
+        Ok(Some(info))
+            if update::compare_versions(&info.version, &current) == Ordering::Greater =>
+        {
+            Ok(Some(info))
+        }
+        // On any error, an up-to-date version, or a downgrade, report no update.
+        Ok(_) | Err(_) => Ok(None),
+    }
+}
+
+/// Run the canonical installer elevated and relaunch. Takes NO arguments from the webview; the
+/// install command is a Rust constant, so a webview XSS cannot direct the app to install anything.
+#[tauri::command]
+fn apply_update(app: tauri::AppHandle) -> Result<(), String> {
+    run_installer()?;
+    // Trigger a restart; the app relaunches into the newly installed binary on the next exit event.
+    app.request_restart();
+    Ok(())
+}
+
+fn run_installer() -> Result<(), String> {
+    match std::env::consts::OS {
+        "linux" => run_linux_installer(),
+        "macos" => run_macos_installer(),
+        "windows" => Err(manual_install_message("Windows")),
+        other => Err(manual_install_message(other)),
+    }
+}
+
+fn manual_install_message(platform: &str) -> String {
+    format!(
+        "{platform} updates are manual. Open the releases page to download the latest installer."
+    )
+}
+
+fn command_exists(command: &str) -> bool {
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("command -v {command} >/dev/null 2>&1"))
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn run_linux_installer() -> Result<(), String> {
+    if !command_exists("pkexec") {
+        return Err(manual_install_message("Linux (requires pkexec)"));
+    }
+    let script = format!("curl -fsSL {} | sh", update::INSTALL_URL);
+    match std::process::Command::new("pkexec")
+        .arg("sh")
+        .arg("-c")
+        .arg(&script)
+        .status()
+    {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(format!("installer exited with code {:?}", status.code())),
+        Err(err) => Err(format!("failed to launch pkexec: {err}")),
+    }
+}
+
+fn run_macos_installer() -> Result<(), String> {
+    let script = format!("curl -fsSL {} | sh", update::INSTALL_URL);
+    let osascript = format!("do shell script \"{script}\" with administrator privileges");
+    match std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&osascript)
+        .status()
+    {
+        Ok(status) if status.success() => Ok(()),
+        Ok(_) => Err("update cancelled or failed".into()),
+        Err(err) => Err(format!("failed to launch osascript: {err}")),
+    }
+}
 
 #[tauri::command]
 fn get_api_base(state: State<'_, ApiState>) -> String {
@@ -39,7 +126,9 @@ fn wait_for_listening(port: u16, timeout: Duration) -> Result<(), String> {
     let deadline = Instant::now() + timeout;
     loop {
         if Instant::now() > deadline {
-            return Err(format!("API sidecar did not start listening on {addr} in time"));
+            return Err(format!(
+                "API sidecar did not start listening on {addr} in time"
+            ));
         }
         if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
             return Ok(());
@@ -52,9 +141,7 @@ fn wait_for_listening(port: u16, timeout: Duration) -> Result<(), String> {
 /// The sidecar will report its bound port via stdout in the format "PORT:12345".
 /// Returns the child handle and the bound port.
 #[cfg(feature = "custom-protocol")]
-fn spawn_sidecar(
-    app: &tauri::App,
-) -> Result<(CommandChild, u16), Box<dyn std::error::Error>> {
+fn spawn_sidecar(app: &tauri::App) -> Result<(CommandChild, u16), Box<dyn std::error::Error>> {
     let (mut rx, child) = app
         .shell()
         .sidecar("workboost-api")
@@ -110,7 +197,11 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![get_api_base])
+        .invoke_handler(tauri::generate_handler![
+            get_api_base,
+            check_for_update,
+            apply_update
+        ])
         .setup(|app| {
             #[cfg(feature = "custom-protocol")]
             {

@@ -143,8 +143,9 @@ Desktop shell (Tauri 2) ──────────────────�
 
 - **HTTP:** `apps/api` converts external requests into application calls and failures into HTTP
   responses.
-- **Desktop:** `apps/desktop` is a thin shell over the web frontend; it owns only sidecar lifecycle
-  and never bypasses the HTTP API.
+- **Desktop:** `apps/desktop` is a thin shell over the web frontend; it owns only sidecar lifecycle,
+  a launch-time read-only release check, and the elevated apply-update path, and never bypasses the
+  HTTP API.
 - **AI:** `AgentPort` hides the model provider, tool loop, prompt, and transcript retention.
 - **Persistence:** `DataLayer` hides the workspace layout and Markdown serialization.
 - **Integrations:** extensions contain external protocol handling, delivery, and scheduling.
