@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-26
+
 ### Changed
 
 - Replaced the desktop app icon with the rocket logo from the brand design asset across all platforms; previous bundles shipped a placeholder icon.
@@ -14,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed the one-line installer failing checksum verification on macOS by comparing SHA256 hashes directly instead of relying on `sha256sum -c` filename parsing, which breaks on bundle names containing spaces.
+- Aligned the frontmatter inspector with the editor body column.
 
 ## [0.3.0] - 2026-08-26
 
