@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-26
+
 ### Added
 
 - **Desktop self-update banner** - The desktop app checks for a newer release on launch and shows a slim banner with an `Update now` button that runs the existing installer elevated and relaunches; no manual shell command needed.
+- Added a stacked, auto-dismissing Sonner-style toast notification with action support and both themes, replacing the previous bottom toast. #39
 
 ### Fixed
 
