@@ -15,6 +15,12 @@
 * Avoid creative additions unless explicitly requested.
 * Use full words for variable names (no abbreviations like "q" for "queue")
 * Prefer iteration and modularization over code duplication.
+* No `any` unless absolutely necessary.
+* Inline single-line helpers that have only one call site.
+* Always ask before removing functionality or code that appears intentional.
+* **No inline imports** (await import(), import("pkg").Type, dynamic type imports). Top-level imports only.
+* check node_modules for external API types; don't guess.
+* Never remove or downgrade code to fix type errors from outdated deps; upgrade the dep instead.
 
 ## Build guidelines
 
