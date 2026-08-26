@@ -1,10 +1,17 @@
 import { create } from 'zustand';
 type Theme = 'light' | 'dark';
+
+export interface ToastData {
+  id: number;
+  message: string;
+  action?: { label: string; run: () => void };
+}
+
 interface UiState {
   theme: Theme;
   copilotOpen: boolean;
   paletteOpen: boolean;
-  toast: { message: string; action?: { label: string; run: () => void } } | null;
+  toasts: ToastData[];
   // Editor save behavior: autosave is ON by default so the user never has to
   // think about saving; Cmd/Ctrl+S remains available as a manual safety net.
   isAutosaveEnabled: boolean;
@@ -16,8 +23,10 @@ interface UiState {
   closePalette: () => void;
   setAutosaveEnabled: (enabled: boolean) => void;
   showToast: (message: string, action?: { label: string; run: () => void }) => void;
-  dismissToast: () => void;
+  dismissToast: (id: number) => void;
 }
+
+let nextToastId = 0;
 
 // Autosave is ON by default; it keeps the preference across sessions so a user
 // who disables it never gets surprised by a write they didn't ask for.
@@ -41,7 +50,7 @@ export const useUiStore = create<UiState>((set) => ({
   theme: initialTheme(),
   copilotOpen: false,
   paletteOpen: false,
-  toast: null,
+  toasts: [],
   isAutosaveEnabled: initialAutosaveEnabled(),
   toggleTheme: () =>
     set((state) => {
@@ -67,6 +76,10 @@ export const useUiStore = create<UiState>((set) => ({
   closeCopilot: () => set({ copilotOpen: false }),
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),
-  showToast: (message, action) => set({ toast: { message, action } }),
-  dismissToast: () => set({ toast: null }),
+  showToast: (message, action) => {
+    const toast = { id: ++nextToastId, message, action };
+    set((state) => ({ toasts: [...state.toasts, toast] }));
+  },
+  dismissToast: (id) =>
+    set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) })),
 }));

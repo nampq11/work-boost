@@ -60,11 +60,12 @@ export function App() {
         return;
       const currentPath = useWorkspaceStore.getState().activePath;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
-        const toast = useUiStore.getState().toast;
-        if (toast?.action) {
+        const toasts = useUiStore.getState().toasts;
+        const actionToast = [...toasts].reverse().find((toast) => toast.action);
+        if (actionToast?.action) {
           event.preventDefault();
-          toast.action.run();
-          useUiStore.getState().dismissToast();
+          actionToast.action.run();
+          useUiStore.getState().dismissToast(actionToast.id);
           return;
         }
       }
