@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced the desktop app icon with the rocket logo from the brand design asset across all platforms; previous bundles shipped a placeholder icon.
+
+### Fixed
+
+- Fixed the one-line installer failing checksum verification on macOS by comparing SHA256 hashes directly instead of relying on `sha256sum -c` filename parsing, which breaks on bundle names containing spaces.
+
+## [0.3.0] - 2026-08-26
+
 ### Added
 
 - **Desktop application** (#28) - Added a Tauri 2 desktop shell wrapping the web app with a bundled Deno API sidecar.
