@@ -30,12 +30,14 @@ Specifically:
 
 - A GitHub Actions workflow triggers on version tags (`v*`), builds the Tauri bundles on macOS,
   Ubuntu, and Windows runners, and attaches all bundles plus SHA256 checksums to the release.
-- The installer detects OS/arch, resolves the latest release via the GitHub API, verifies the
-  checksum, and installs with the platform-native mechanism (package manager for `.deb`, mount/copy
-  for `.dmg`).
+- `scripts/install.sh` is desktop-only: it detects OS/arch, resolves the latest release via the
+  GitHub API, verifies the checksum, and installs with the platform-native mechanism (package manager
+  for `.deb`, mount/copy for `.dmg`). Because the sidecar embeds Deno and all npm dependencies, end
+  users need nothing installed beyond curl.
 - Windows users download the `.msi` directly; `curl | sh` does not apply there and the installer
   prints that instruction instead of attempting it.
-- The source-based CLI install remains available without any release dependency.
+- There is no scripted CLI/source install; contributors and terminal-first users clone the repository
+  and run `deno task dev`/`deno task start` directly.
 
 ## Options considered
 
