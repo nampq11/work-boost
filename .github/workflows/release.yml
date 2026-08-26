@@ -4,9 +4,19 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.4.0)"
+        required: true
 
 permissions:
   contents: write
+
+# Only one release build per ref/version at a time; a newer trigger cancels a stale one.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   desktop-bundles:
@@ -71,11 +81,18 @@ jobs:
         working-directory: apps/desktop
         run: npm ci --no-fund --no-audit
 
-      - name: Set desktop version from tag
+      - name: Set desktop version and release tag
         working-directory: apps/desktop
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+            RELEASE_TAG="v${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           node -e '
             const fs = require("fs");
             const version = process.argv[1];
@@ -115,4 +132,5 @@ jobs:
       - name: Upload bundles to the GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: dist/*

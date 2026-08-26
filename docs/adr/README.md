@@ -72,3 +72,4 @@ proposed → active → superseded
 | [0014](0014-extension-public-surface.md) | Narrow the extensions public surface to contract plus factories | active |
 | [0015](0015-distribute-desktop-via-github-releases.md) | Distribute desktop installers as prebuilt GitHub Releases artifacts | active |
 | [0016](0016-desktop-app-self-update.md) | Update the desktop app via in-app release check and native install | active |
+| [0017](0017-release-workflow-manual-trigger.md) | Make the desktop release build manually re-triggerable | active |
