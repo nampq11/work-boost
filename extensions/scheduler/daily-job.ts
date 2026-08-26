@@ -3,7 +3,7 @@
 import type { AgentPort } from '@work-boost/brain';
 import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import type { Logger } from '@work-boost/shared';
-import type { ExtensionContext, ExtensionCronJob, ExtensionMessageSender } from '../types.ts';
+import type { ExtensionContext, ExtensionCronJob } from '../types.ts';
 
 export interface SchedulerDependencies {
   db: Database;
@@ -108,42 +108,12 @@ export function createPlatformSender(
       const chatId = subscription.platforms[platform];
       if (!sender || !chatId) continue;
       try {
-        await sendToPlatform(
-          sender,
-          chatId,
-          message,
-          platform === 'telegram' ? 'HTML' : 'None',
-          logger,
-        );
+        await sender.sendMessage(chatId, message, {
+          parseMode: platform === 'telegram' ? 'HTML' : 'None',
+        });
       } catch (error) {
         logger.error(`[Scheduler] Failed to send reminder to ${platform}`, { error });
       }
     }
   };
-}
-
-async function sendToPlatform(
-  sender: ExtensionMessageSender,
-  chatId: string,
-  message: string,
-  parseMode: 'HTML' | 'None',
-  logger: Logger,
-): Promise<void> {
-  try {
-    await sender.sendMessage(chatId, message, { parseMode });
-  } catch (error) {
-    if (parseMode === 'None') throw error;
-    // HTML delivery falls back to plain text: agent output or a chunk split can
-    // produce markup Telegram rejects, which would otherwise drop the reminder.
-    logger.warn('HTML delivery failed, falling back to plain text', { error });
-    await sender.sendMessage(chatId, stripHtmlTags(message), { parseMode: 'None' });
-  }
-}
-
-function stripHtmlTags(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&');
 }

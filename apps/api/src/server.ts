@@ -2,8 +2,8 @@
 
 import type { AgentPort, AuthPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
+import type { ExtensionManager } from '@work-boost/extensions';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import type { ExtensionManager } from '../../../extensions/manager.ts';
 import {
   type RequestContext,
   createRequestContext,

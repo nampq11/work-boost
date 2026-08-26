@@ -80,14 +80,19 @@ management, and workspace-file discovery. Tools use `DataLayer` repositories.
 The integration boundary. `ExtensionManager` initializes extensions and collects their routes and
 cron jobs. `loader.ts` discovers user plugins in `~/.workboost/plugins`.
 
-- `telegram/` adapts Telegram updates and commands.
+- `telegram/` adapts Telegram updates and commands. `wiring.ts` registers middleware and handlers;
+  `telegram.ts` handles delivery and webhooks.
 - `slack/` handles Slack webhooks and delivery.
 - `scheduler/` registers daily summaries and debt reminders.
-- `formatters/` contains platform presentation logic.
-- `bot/` defines the platform-neutral bot service contract shared by Telegram and Slack.
+- `formatters/` contains presentation helpers.
+
+The public surface is the contract (`types.ts`), the engine (`manager.ts`, `loader.ts`), and the
+three built-in factories (`slackExtension`, `telegramExtension`, `schedulerExtension`). Internal
+implementations stay out of the barrel so they can evolve without breaking consumers.
 
 Extensions receive the shared `ExtensionContext`; they do not create another server, agent, or
-persistence stack.
+persistence stack. A single `ExtensionMessageSender` in `types.ts` is implemented by each platform
+service; `ExtensionContext.messaging` maps a platform to its sender.
 
 ### `apps/desktop`
 

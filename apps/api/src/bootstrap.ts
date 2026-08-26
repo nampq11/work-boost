@@ -6,15 +6,15 @@ import {
 } from '@work-boost/brain';
 import { type DataLayer, Database, createDataLayer } from '@work-boost/data-provider';
 import { resolveAIConfig } from '@work-boost/data-schemas/config.ts';
-import { env } from '@work-boost/shared';
-import { logger } from '@work-boost/shared/logger/logger.ts';
 import {
   ExtensionManager,
   loadUserPlugins,
   schedulerExtension,
   slackExtension,
   telegramExtension,
-} from '../../../extensions/mod.ts';
+} from '@work-boost/extensions';
+import { env } from '@work-boost/shared';
+import { logger } from '@work-boost/shared/logger/logger.ts';
 
 export interface Services {
   dataLayer: DataLayer;

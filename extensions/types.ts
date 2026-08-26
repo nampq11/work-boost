@@ -1,7 +1,15 @@
 import type { AgentPort } from '@work-boost/brain';
 import type { DataLayer, Database } from '@work-boost/data-provider';
+import type { Platform as EntityPlatform } from '@work-boost/data-schemas/subscription.ts';
 import type { Logger } from '@work-boost/shared';
-import type { SendOptions } from './bot/bot-service.ts';
+
+// Re-export Platform from entity for convenience.
+export type Platform = EntityPlatform;
+
+export interface SendOptions {
+  parseMode?: 'HTML' | 'Markdown' | 'None';
+  keyboard?: unknown;
+}
 
 export interface ExtensionMessageSender {
   sendMessage(chatId: string, content: string, options?: SendOptions): Promise<void>;

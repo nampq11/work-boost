@@ -1,7 +1,8 @@
 import { assertEquals, assertThrows } from '@std/assert';
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
-import { SlackService, TelegramService } from '@work-boost/extensions';
+import { SlackService } from '@work-boost/extensions/slack/slack.ts';
+import { TelegramService } from '@work-boost/extensions/telegram/telegram.ts';
 
 function createFakeDb(): Database {
   return {

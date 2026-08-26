@@ -1,18 +1,13 @@
 import { env } from '@work-boost/shared';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import type { BotService, Platform, SendOptions } from '../bot/bot-service.ts';
+import type { ExtensionMessageSender, Platform, SendOptions } from '../types.ts';
 
-export class SlackService implements BotService {
+export class SlackService implements ExtensionMessageSender {
   readonly platform: Platform = 'slack';
   private baseUrl: string = 'https://slack.com';
   private slackBotToken: string;
   constructor() {
     this.slackBotToken = env.get('SLACK_BOT_TOKEN') || '';
-  }
-
-  async sendMessageToChannel(blocks: object): Promise<void> {
-    const channelID = env.get('SLACK_CHANNEL_ID') || '';
-    await this.sendMessage(channelID, '', { keyboard: blocks });
   }
 
   async sendMessage(chatId: string, content: string, options?: SendOptions): Promise<void> {

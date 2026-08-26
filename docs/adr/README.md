@@ -69,3 +69,4 @@ proposed → active → superseded
 | [0011](0011-codemirror-theme-via-css-variables.md) | CodeMirror theme built from CSS variables | active |
 | [0012](0012-source-editor-v1-scope-search-and-markdown-extras.md) | Source editor v1 scope: no search, no markdown extras | active |
 | [0013](0013-editor-fills-viewport-height.md) | Editor fills viewport height with slim document toolbar | active |
+| [0014](0014-extension-public-surface.md) | Narrow the extensions public surface to contract plus factories | active |
