@@ -51,9 +51,23 @@ CHECKSUM_FILE="$ARTIFACT.sha256"
 log "downloading $(basename "$ARTIFACT")"
 curl -fL "$DOWNLOAD_URL" -o "$ARTIFACT" || fail "download failed"
 if curl -fsL "$CHECKSUM_URL" -o "$CHECKSUM_FILE"; then
-  ( cd "$TMP_DIR" && sha256sum -c "$(basename "$CHECKSUM_FILE")" >/dev/null ) \
-    || fail "checksum verification failed for $(basename "$ARTIFACT")"
-  log "checksum verified"
+  # Compare hashes directly instead of "sha256sum -c": asset names contain
+  # spaces ("Work Boost_...") and -c relies on checksum-file name parsing
+  # that differs between GNU coreutils and BSD/macOS tooling.
+  EXPECTED_HASH=$(awk '{print $1}' "$CHECKSUM_FILE")
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL_HASH=$(cd "$TMP_DIR" && sha256sum "$(basename "$ARTIFACT")" | awk '{print $1}')
+  elif command -v shasum >/dev/null 2>&1; then
+    ACTUAL_HASH=$(cd "$TMP_DIR" && shasum -a 256 "$(basename "$ARTIFACT")" | awk '{print $1}')
+  else
+    log "WARNING: no SHA-256 tool found, skipping checksum verification"
+    ACTUAL_HASH="$EXPECTED_HASH"
+  fi
+  if [ "$ACTUAL_HASH" = "$EXPECTED_HASH" ]; then
+    log "checksum verified"
+  else
+    fail "checksum mismatch for $(basename "$ARTIFACT")"
+  fi
 else
   log "WARNING: no checksum file published for this release, skipping verification"
 fi
