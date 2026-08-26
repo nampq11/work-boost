@@ -100,7 +100,8 @@ fn compare_prerelease(a: &Option<Vec<PrereleaseId>>, b: &Option<Vec<PrereleaseId
 /// Parse a loose version string into a comparable [`Version`]. Returns `None` when the core
 /// major/minor/patch is not fully numeric. A leading `v` is stripped and build metadata is dropped.
 fn parse_version(input: &str) -> Option<Version> {
-    let s = input.trim().strip_prefix('v').unwrap_or(input.trim());
+    let s = input.trim();
+    let s = s.strip_prefix('v').unwrap_or(s);
     // Drop build metadata after '+'.
     let s = s.split('+').next()?;
     let (core, prerelease) = match s.split_once('-') {
@@ -132,10 +133,11 @@ fn parse_prerelease_ids(segment: &str) -> Option<Vec<PrereleaseId>> {
     segment
         .split('.')
         .map(|id| {
-            if id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() {
-                id.parse::<u64>().map(PrereleaseId::Numeric).ok()
-            } else if id.is_empty() {
-                None
+            if id.is_empty() {
+                return None;
+            }
+            if id.chars().all(|c| c.is_ascii_digit()) {
+                id.parse::<u64>().ok().map(PrereleaseId::Numeric)
             } else {
                 Some(PrereleaseId::Alpha(id.to_string()))
             }
