@@ -26,6 +26,12 @@ jobs:
             target: x86_64-pc-windows-msvc
             bundles: "--bundles msi"
     runs-on: ${{ matrix.os }}
+    env:
+      # sccache caches compiled objects across runs; the GitHub Actions cache is the backend.
+      # This is the biggest win on Windows (MSVC + the large Tauri tree), and helps all platforms
+      # on a rust-cache miss. rust-cache still caches the target/ dir for unchanged crates.
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -44,18 +50,31 @@ jobs:
           workspaces: apps/desktop/src-tauri
           key: ${{ matrix.target }}
 
+      # sccache uses the GH actions cache as its backend and exposes the RUSTC_WRAPPER binary
+      - uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # cache the npm download cache keyed on the desktop lockfile; makes `npm ci` fast
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
       - name: Install Linux webview system libraries
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libappindicator3-dev
 
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: npm ci --no-fund --no-audit
+
       - name: Build desktop bundle
         working-directory: apps/desktop
         shell: bash
-        # install locally so npx uses node_modules instead of fetching the CLI ad hoc
         run: |
-          npm install --no-fund --no-audit
           npm run build:api -- --force
           npx @tauri-apps/cli build ${{ matrix.bundles }}
 

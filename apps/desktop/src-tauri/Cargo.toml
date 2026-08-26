@@ -26,9 +26,11 @@ serde_json = "1"
 custom-protocol = ["tauri/custom-protocol"]
 
 # Keep the Rust surface tiny; the API sidecar holds all business logic.
+# lto = "thin" gives most of fat LTO's binary-size benefit at a fraction of the compile cost,
+# which matters on CI (Windows release compile was the critical path). codegen-units stays at
+# the default so the final crate codegens in parallel instead of serially.
 [profile.release]
-codegen-units = 1
-lto = true
+lto = "thin"
 opt-level = "s"
 panic = "abort"
 strip = true
