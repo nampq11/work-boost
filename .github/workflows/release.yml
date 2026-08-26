@@ -16,10 +16,15 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
+            bundles: "--bundles dmg"
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            # AppImage is deliberately skipped: bundling takes ~15 minutes
+            # (squashfs-compressing the large sidecar) and we only ship .deb
+            bundles: "--bundles deb"
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            bundles: "--bundles msi"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -27,8 +32,17 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+          # cache Deno's module cache keyed on deno.lock; skips re-downloading deps each run
+          cache: true
 
       - uses: dtolnay/rust-toolchain@stable
+
+      # warm cache skips compiling the full Tauri dependency tree on repeat runs;
+      # first (cache-miss) run pays the same cold-build cost as before
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.target }}
 
       - name: Install Linux webview system libraries
         if: runner.os == 'Linux'
@@ -38,7 +52,12 @@ jobs:
 
       - name: Build desktop bundle
         working-directory: apps/desktop
-        run: npm run build
+        shell: bash
+        # install locally so npx uses node_modules instead of fetching the CLI ad hoc
+        run: |
+          npm install --no-fund --no-audit
+          npm run build:api -- --force
+          npx @tauri-apps/cli build ${{ matrix.bundles }}
 
       - name: Collect artifacts and checksums
         shell: bash
