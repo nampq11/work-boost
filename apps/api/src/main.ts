@@ -62,9 +62,9 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   const enableScheduler = options.enableScheduler !== false;
 
   logger.info('Starting API server on http://' + host + ':' + port + apiPrefix, undefined, 'green');
-  logger.debug('Environment DENO_ENV:', { DENO_ENV: env.DENO_ENV });
-  logger.debug('AI_PROVIDER:', { AI_PROVIDER: env.get('AI_PROVIDER') || 'workspace/default' });
-  logger.debug('AI_MODEL:', { AI_MODEL: env.get('AI_MODEL') || 'workspace/default' });
+  logger.debug(`Environment DENO_ENV: ${env.DENO_ENV}`);
+  logger.debug(`AI_PROVIDER: ${env.get('AI_PROVIDER') || 'workspace/default'}`);
+  logger.debug(`AI_MODEL: ${env.get('AI_MODEL') || 'workspace/default'}`);
 
   // Initialize services (validates required secrets first)
   const { db, agent, auth, extensionManager } = await initializeServices({
