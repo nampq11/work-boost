@@ -1,5 +1,5 @@
 import { assertEquals, assertExists, assertMatch } from '@std/assert';
-import { ERROR_CODES, errorResponse, successResponse } from '../../src/utils/response.ts';
+import { ERROR_CODES, errorResponse, successResponse, isAIUnavailableError } from '../../src/utils/response.ts';
 
 Deno.test('successResponse', async (t) => {
   await t.step('formats a basic success response correctly', async () => {
@@ -8,11 +8,14 @@ Deno.test('successResponse', async (t) => {
 
     assertEquals(response.status, 200);
     assertEquals(response.headers.get('content-type'), 'application/json');
+    // Ensure X-Request-ID is not set when omitted
+    assertEquals(response.headers.has('X-Request-ID'), false);
 
     const body = await response.json();
     assertEquals(body.success, true);
     assertEquals(body.data, data);
     assertExists(body.meta.timestamp);
+    assertEquals(body.meta.requestId, undefined);
   });
 
   await t.step('includes requestId if provided', async () => {
@@ -23,6 +26,16 @@ Deno.test('successResponse', async (t) => {
 
     const body = await response.json();
     assertEquals(body.meta.requestId, 'req-123');
+  });
+
+  await t.step('handles empty requestId provided as empty string', async () => {
+    const response = successResponse({ ok: true }, 200, '');
+
+    assertEquals(response.status, 200);
+    assertEquals(response.headers.has('X-Request-ID'), false);
+
+    const body = await response.json();
+    assertEquals(body.meta.requestId, undefined);
   });
 });
 
@@ -134,5 +147,34 @@ Deno.test('errorResponse', async (t) => {
 
     const body = await response.json();
     assertEquals(body.error.details, 'Just a string detail');
+  });
+});
+
+Deno.test('isAIUnavailableError', async (t) => {
+  await t.step('returns true for AI_UNAVAILABLE error', () => {
+    const error = new Error('AI service down');
+    (error as any).code = ERROR_CODES.AI_UNAVAILABLE;
+
+    assertEquals(isAIUnavailableError(error), true);
+  });
+
+  await t.step('returns false for other error codes', () => {
+    const error = new Error('Not found');
+    (error as any).code = ERROR_CODES.NOT_FOUND;
+
+    assertEquals(isAIUnavailableError(error), false);
+  });
+
+  await t.step('returns false for errors without code', () => {
+    const error = new Error('Generic error');
+
+    assertEquals(isAIUnavailableError(error), false);
+  });
+
+  await t.step('returns false for non-Error instances', () => {
+    assertEquals(isAIUnavailableError({ code: ERROR_CODES.AI_UNAVAILABLE }), false);
+    assertEquals(isAIUnavailableError('error string'), false);
+    assertEquals(isAIUnavailableError(null), false);
+    assertEquals(isAIUnavailableError(undefined), false);
   });
 });
