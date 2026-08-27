@@ -22,9 +22,10 @@ reqwest = { version = "0.13", default-features = false, features = ["blocking", 
 notify = "6"
 
 [features]
-# Enabled by the Tauri CLI for `tauri build` (production, bundled frontend) and disabled for
-# `tauri dev`. Drives whether the shell spawns the API sidecar (release) or points at a separately
-# started `deno task dev` API (dev).
+# Must be enabled explicitly with `--features custom-protocol`; the Tauri CLI no longer turns it on
+# automatically. The build entrypoints (`apps/desktop/package.json` and `.github/workflows/release.yml`)
+# pass it, while `tauri dev` omits it. Drives whether the shell spawns the API sidecar (release) or
+# points at a separately started `deno task dev` API (dev).
 custom-protocol = ["tauri/custom-protocol"]
 
 # Keep the Rust surface tiny; the API sidecar holds all business logic.

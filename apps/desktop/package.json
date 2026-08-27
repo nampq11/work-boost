@@ -6,7 +6,7 @@
   "scripts": {
     "build:api": "deno run --allow-all scripts/build-api-sidecar.ts",
     "dev": "npx @tauri-apps/cli dev",
-    "build": "npm run build:api -- --force && npx @tauri-apps/cli build",
+    "build": "npm run build:api -- --force && npx @tauri-apps/cli build --features custom-protocol",
     "check": "cd src-tauri && cargo check"
   },
   "devDependencies": {

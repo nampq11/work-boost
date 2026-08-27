@@ -116,7 +116,7 @@ jobs:
         shell: bash
         run: |
           npm run build:api -- --force
-          npx @tauri-apps/cli build ${{ matrix.bundles }}
+          npx @tauri-apps/cli build --features custom-protocol ${{ matrix.bundles }}
 
       - name: Collect artifacts and checksums
         shell: bash
