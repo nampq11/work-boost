@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-27
+
+### Fixed
+
+- Bundled desktop daily data and the copilot now load: sidecar HTTP is routed through the Rust shell so the webview's cross-origin, CSP, and mixed-content restrictions no longer block it. #65
+- Enforced a stricter minimum length for session IDs, closing a security hole where weak identifiers were accepted. #55
+- Fixed `successResponse` crashing on a `204` status with a body by returning a null body. #62
+
+### Changed
+
+- Improved daily-scheduler messaging by sending concurrently with `Promise.allSettled`, so slow deliveries no longer block the rest. #59
+
 ## [0.4.1] - 2026-08-27
 
 ### Added
