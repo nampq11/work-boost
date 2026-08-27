@@ -1,10 +1,13 @@
-import { create } from 'zustand';
-import { ApiError, api } from '../lib/api-client.ts';
+import { createContext, createElement, useContext, useMemo } from 'react';
+import { createStore, useStore } from 'zustand';
+import type { StoreApi } from 'zustand';
+import { ApiError } from '../lib/api-client.ts';
+import type { DataPort } from '../lib/data-port.ts';
 import { t } from '../lib/i18n.tsx';
 import { parseFrontmatter, stringifyMarkdown } from '../lib/markdown-parser.ts';
 import type { ActiveDocument, FileNode, SyncStatus, WorkspaceEvent } from '../lib/types.ts';
 
-interface WorkspaceState {
+export interface WorkspaceState {
   nodes: FileNode[];
   activePath: string | null;
   activeDocument: ActiveDocument | null;
@@ -193,255 +196,308 @@ function clearDraft(path: string): void {
   }
 }
 
-let selectionToken = 0;
-let inFlightSave: { path: string; revision: number; promise: Promise<void> } | null = null;
-export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
-  nodes: [],
-  activePath: null,
-  activeDocument: null,
-  isLoading: false,
-  syncStatus: 'reconnecting',
-  error: null,
-  draft: '',
-  isDirty: false,
-  documentRevision: 0,
-  recentFiles: loadRecentFiles(),
-  async loadFiles() {
-    set({ isLoading: true, error: null });
-    try {
-      set({
-        nodes: buildFileTree(await api.listFiles()),
-        isLoading: false,
-        syncStatus: 'connected',
-      });
-    } catch (error) {
-      set({
-        isLoading: false,
-        syncStatus: 'offline',
-        error: error instanceof Error ? error.message : 'Unable to load workspace',
-      });
-    }
-  },
-  async selectFile(path, force = false) {
-    const requestToken = ++selectionToken;
-    const state = get();
-    const previousPath = state.activePath;
-    if (state.isDirty && !force) await state.save();
-    if (!force && get().activePath !== previousPath) return false;
-    if (requestToken !== selectionToken) return false;
+// =========================================================================
+// Store factory
+// =========================================================================
 
-    // Track recent file access
-    set({ recentFiles: addToRecentFiles(get().recentFiles, path) });
+/**
+ * Create the workspace store bound to a DataPort. Module-level state like the
+ * selection token and in-flight save tracker live per store so that tests can
+ * create independent instances.
+ */
+export function createWorkspaceStore(port: DataPort): StoreApi<WorkspaceState> {
+  let selectionToken = 0;
+  let inFlightSave: { path: string; revision: number; promise: Promise<void> } | null = null;
 
-    if (path.toLowerCase().endsWith('.html')) {
+  return createStore<WorkspaceState>((set, get) => ({
+    nodes: [],
+    activePath: null,
+    activeDocument: null,
+    isLoading: false,
+    syncStatus: 'reconnecting',
+    error: null,
+    draft: '',
+    isDirty: false,
+    documentRevision: 0,
+    recentFiles: loadRecentFiles(),
+    async loadFiles() {
+      set({ isLoading: true, error: null });
+      try {
+        set({
+          nodes: buildFileTree(await port.listFiles()),
+          isLoading: false,
+          syncStatus: 'connected',
+        });
+      } catch (error) {
+        set({
+          isLoading: false,
+          syncStatus: 'offline',
+          error: error instanceof Error ? error.message : 'Unable to load workspace',
+        });
+      }
+    },
+    async selectFile(path, force = false) {
+      const requestToken = ++selectionToken;
+      const state = get();
+      const previousPath = state.activePath;
+      if (state.isDirty && !force) await state.save();
+      if (!force && get().activePath !== previousPath) return false;
+      if (requestToken !== selectionToken) return false;
+
+      // Track recent file access
+      set({ recentFiles: addToRecentFiles(get().recentFiles, path) });
+
+      if (path.toLowerCase().endsWith('.html')) {
+        set((current) => ({
+          activePath: path,
+          activeDocument: null,
+          draft: '',
+          isDirty: false,
+          documentRevision: current.documentRevision + 1,
+        }));
+        return true;
+      }
+      try {
+        const document = await port.readFile(path);
+        if (requestToken !== selectionToken) return false;
+        const raw = stringifyMarkdown(document.frontmatter, document.body);
+        const cachedDraft = getDraft(path);
+        const frontmatter = cachedDraft?.frontmatter ?? document.frontmatter;
+        set((current) => ({
+          activePath: path,
+          activeDocument: {
+            ...document,
+            frontmatter,
+            rawMarkdown: raw,
+            isDirty: Boolean(cachedDraft),
+            lastSavedAt: new Date(document.modifiedAt),
+          },
+          draft: cachedDraft?.body ?? document.body,
+          isDirty: Boolean(cachedDraft),
+          documentRevision: current.documentRevision + 1,
+          error: null,
+        }));
+        return true;
+      } catch (error) {
+        if (requestToken !== selectionToken) return false;
+        set({ error: error instanceof Error ? error.message : 'Unable to read file' });
+        return false;
+      }
+    },
+    async goHome() {
+      const path = get().activePath;
+      if (!path) return true;
+      const requestToken = ++selectionToken;
+      if (get().isDirty) {
+        try {
+          await get().save();
+        } catch {
+          return false;
+        }
+      }
+      if (requestToken !== selectionToken || get().activePath !== path) return false;
       set((current) => ({
-        activePath: path,
+        activePath: null,
         activeDocument: null,
         draft: '',
         isDirty: false,
         documentRevision: current.documentRevision + 1,
-      }));
-      return true;
-    }
-    try {
-      const document = await api.readFile(path);
-      if (requestToken !== selectionToken) return false;
-      const raw = stringifyMarkdown(document.frontmatter, document.body);
-      const cachedDraft = getDraft(path);
-      const frontmatter = cachedDraft?.frontmatter ?? document.frontmatter;
-      set((current) => ({
-        activePath: path,
-        activeDocument: {
-          ...document,
-          frontmatter,
-          rawMarkdown: raw,
-          isDirty: Boolean(cachedDraft),
-          lastSavedAt: new Date(document.modifiedAt),
-        },
-        draft: cachedDraft?.body ?? document.body,
-        isDirty: Boolean(cachedDraft),
-        documentRevision: current.documentRevision + 1,
         error: null,
       }));
       return true;
-    } catch (error) {
-      if (requestToken !== selectionToken) return false;
-      set({ error: error instanceof Error ? error.message : 'Unable to read file' });
-      return false;
-    }
-  },
-  async goHome() {
-    const path = get().activePath;
-    if (!path) return true;
-    const requestToken = ++selectionToken;
-    if (get().isDirty) {
+    },
+    updateBody(body) {
+      const { activeDocument, activePath } = get();
+      if (!activeDocument || !activePath) return;
+      setDraft(activePath, { body, frontmatter: activeDocument.frontmatter });
+      set((current) => ({
+        draft: body,
+        isDirty: true,
+        documentRevision: current.documentRevision + 1,
+        activeDocument: { ...activeDocument, body, isDirty: true },
+      }));
+    },
+    updateFrontmatter(frontmatter) {
+      const { activeDocument, activePath, draft } = get();
+      if (!activeDocument || !activePath) return;
+      setDraft(activePath, { body: draft, frontmatter });
+      set((current) => ({
+        activeDocument: { ...activeDocument, frontmatter, isDirty: true },
+        isDirty: true,
+        documentRevision: current.documentRevision + 1,
+      }));
+    },
+    // Source mode edits the whole markdown document (frontmatter + body), so we
+    // split it back into the store's separate body/frontmatter slices.
+    updateSource(raw) {
+      const { activeDocument, activePath } = get();
+      if (!activeDocument || !activePath) return;
+      const { frontmatter, body } = parseFrontmatter(raw);
+      setDraft(activePath, { body, frontmatter });
+      set((current) => ({
+        activeDocument: { ...activeDocument, body, frontmatter, isDirty: true },
+        draft: body,
+        isDirty: true,
+        documentRevision: current.documentRevision + 1,
+      }));
+    },
+    save() {
+      const current = get();
+      if (!current.activeDocument || !current.activePath || !current.isDirty) {
+        return Promise.resolve();
+      }
+      const savePath = current.activePath;
+      const saveRevision = current.documentRevision;
+      const saveDocument = current.activeDocument;
+      const saveDraft = current.draft;
+      if (inFlightSave) {
+        if (inFlightSave.path === savePath && inFlightSave.revision === saveRevision) {
+          return inFlightSave.promise;
+        }
+        return inFlightSave.promise.then(
+          () => (get().isDirty ? get().save() : undefined),
+          () => (get().isDirty ? get().save() : undefined),
+        );
+      }
+
+      const promise = (async () => {
+        set({ syncStatus: 'saving' });
+        try {
+          const saved = await port.patchFile(
+            savePath,
+            { body: saveDraft, frontmatter: saveDocument.frontmatter },
+            saveDocument.modifiedAt,
+          );
+          const latest = get();
+          if (latest.activePath !== savePath || latest.documentRevision !== saveRevision) return;
+          clearDraft(savePath);
+          set({
+            activeDocument: {
+              ...saved,
+              rawMarkdown: stringifyMarkdown(saved.frontmatter, saved.body),
+              isDirty: false,
+              lastSavedAt: new Date(),
+            },
+            draft: saved.body,
+            isDirty: false,
+            syncStatus: 'connected',
+            error: null,
+          });
+        } catch (error) {
+          const latest = get();
+          if (latest.activePath !== savePath || latest.documentRevision !== saveRevision) return;
+          const message =
+            error instanceof ApiError && error.code === 'CONFLICT'
+              ? t('workspace.fileChangedOutside')
+              : error instanceof Error
+                ? error.message
+                : t('workspace.saveFailed');
+          set({ syncStatus: 'offline', error: message });
+          throw error;
+        }
+      })();
+      inFlightSave = { path: savePath, revision: saveRevision, promise };
+      void promise.then(
+        () => {
+          if (inFlightSave?.promise === promise) inFlightSave = null;
+        },
+        () => {
+          if (inFlightSave?.promise === promise) inFlightSave = null;
+        },
+      );
+      return promise;
+    },
+    async handleEvent(event) {
+      await get().loadFiles();
+      const current = get();
+      const activePath = current.activePath;
+      const changed = activePath !== null && event.paths.some((path) => path === activePath);
+      if (!changed || activePath.toLowerCase().endsWith('.html')) return;
+      if (current.isDirty) {
+        set({ error: 'This file changed on disk while you were editing.' });
+        return;
+      }
+      await current.selectFile(activePath, true);
+    },
+    async moveFile(fromPath, targetDir) {
+      const fileName = fromPath.split('/').at(-1) ?? fromPath;
+      const targetPath = `${targetDir}/${fileName}`;
+      if (targetPath === fromPath) return false;
       try {
-        await get().save();
-      } catch {
+        await port.moveFile(fromPath, targetPath);
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Unable to move file' });
         return false;
       }
-    }
-    if (requestToken !== selectionToken || get().activePath !== path) return false;
-    set((current) => ({
-      activePath: null,
-      activeDocument: null,
-      draft: '',
-      isDirty: false,
-      documentRevision: current.documentRevision + 1,
-      error: null,
-    }));
-    return true;
-  },
-  updateBody(body) {
-    const { activeDocument, activePath } = get();
-    if (!activeDocument || !activePath) return;
-    setDraft(activePath, { body, frontmatter: activeDocument.frontmatter });
-    set((current) => ({
-      draft: body,
-      isDirty: true,
-      documentRevision: current.documentRevision + 1,
-      activeDocument: { ...activeDocument, body, isDirty: true },
-    }));
-  },
-  updateFrontmatter(frontmatter) {
-    const { activeDocument, activePath, draft } = get();
-    if (!activeDocument || !activePath) return;
-    setDraft(activePath, { body: draft, frontmatter });
-    set((current) => ({
-      activeDocument: { ...activeDocument, frontmatter, isDirty: true },
-      isDirty: true,
-      documentRevision: current.documentRevision + 1,
-    }));
-  },
-  // Source mode edits the whole markdown document (frontmatter + body), so we
-  // split it back into the store's separate body/frontmatter slices.
-  updateSource(raw) {
-    const { activeDocument, activePath } = get();
-    if (!activeDocument || !activePath) return;
-    const { frontmatter, body } = parseFrontmatter(raw);
-    setDraft(activePath, { body, frontmatter });
-    set((current) => ({
-      activeDocument: { ...activeDocument, body, frontmatter, isDirty: true },
-      draft: body,
-      isDirty: true,
-      documentRevision: current.documentRevision + 1,
-    }));
-  },
-  save() {
-    const current = get();
-    if (!current.activeDocument || !current.activePath || !current.isDirty) {
-      return Promise.resolve();
-    }
-    const savePath = current.activePath;
-    const saveRevision = current.documentRevision;
-    const saveDocument = current.activeDocument;
-    const saveDraft = current.draft;
-    if (inFlightSave) {
-      if (inFlightSave.path === savePath && inFlightSave.revision === saveRevision) {
-        return inFlightSave.promise;
+      // Keep the editor open on the file's new location instead of closing it.
+      if (get().activePath === fromPath) {
+        set((current) => ({
+          activePath: targetPath,
+          activeDocument: current.activeDocument
+            ? { ...current.activeDocument, path: targetPath }
+            : current.activeDocument,
+        }));
       }
-      return inFlightSave.promise.then(
-        () => (get().isDirty ? get().save() : undefined),
-        () => (get().isDirty ? get().save() : undefined),
-      );
-    }
+      await get().loadFiles();
+      return true;
+    },
+    async trash(path) {
+      const result = await port.trashFile(path);
+      if (get().activePath === path) {
+        set({ activePath: null, activeDocument: null, draft: '', isDirty: false });
+      }
+      await get().loadFiles();
+      return result;
+    },
+    async restore(trashId) {
+      await port.restoreFile(trashId);
+      await get().loadFiles();
+    },
+    async createFolder(path) {
+      await port.createFolder(path);
+      const nodes = get().nodes;
+      set({ nodes: buildFileTree(flattenFilePaths(nodes), [...flattenFolderPaths(nodes), path]) });
+    },
+  }));
+}
 
-    const promise = (async () => {
-      set({ syncStatus: 'saving' });
-      try {
-        const saved = await api.patchFile(
-          savePath,
-          { body: saveDraft, frontmatter: saveDocument.frontmatter },
-          saveDocument.modifiedAt,
-        );
-        const latest = get();
-        if (latest.activePath !== savePath || latest.documentRevision !== saveRevision) return;
-        clearDraft(savePath);
-        set({
-          activeDocument: {
-            ...saved,
-            rawMarkdown: stringifyMarkdown(saved.frontmatter, saved.body),
-            isDirty: false,
-            lastSavedAt: new Date(),
-          },
-          draft: saved.body,
-          isDirty: false,
-          syncStatus: 'connected',
-          error: null,
-        });
-      } catch (error) {
-        const latest = get();
-        if (latest.activePath !== savePath || latest.documentRevision !== saveRevision) return;
-        const message =
-          error instanceof ApiError && error.code === 'CONFLICT'
-            ? t('workspace.fileChangedOutside')
-            : error instanceof Error
-              ? error.message
-              : t('workspace.saveFailed');
-        set({ syncStatus: 'offline', error: message });
-        throw error;
-      }
-    })();
-    inFlightSave = { path: savePath, revision: saveRevision, promise };
-    void promise.then(
-      () => {
-        if (inFlightSave?.promise === promise) inFlightSave = null;
-      },
-      () => {
-        if (inFlightSave?.promise === promise) inFlightSave = null;
-      },
-    );
-    return promise;
-  },
-  async handleEvent(event) {
-    await get().loadFiles();
-    const current = get();
-    const activePath = current.activePath;
-    const changed = activePath !== null && event.paths.some((path) => path === activePath);
-    if (!changed || activePath.toLowerCase().endsWith('.html')) return;
-    if (current.isDirty) {
-      set({ error: 'This file changed on disk while you were editing.' });
-      return;
-    }
-    await current.selectFile(activePath, true);
-  },
-  async moveFile(fromPath, targetDir) {
-    const fileName = fromPath.split('/').at(-1) ?? fromPath;
-    const targetPath = `${targetDir}/${fileName}`;
-    if (targetPath === fromPath) return false;
-    try {
-      await api.moveFile(fromPath, targetPath);
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Unable to move file' });
-      return false;
-    }
-    // Keep the editor open on the file's new location instead of closing it.
-    if (get().activePath === fromPath) {
-      set((current) => ({
-        activePath: targetPath,
-        activeDocument: current.activeDocument
-          ? { ...current.activeDocument, path: targetPath }
-          : current.activeDocument,
-      }));
-    }
-    await get().loadFiles();
-    return true;
-  },
-  async trash(path) {
-    const result = await api.trashFile(path);
-    if (get().activePath === path) {
-      set({ activePath: null, activeDocument: null, draft: '', isDirty: false });
-    }
-    await get().loadFiles();
-    return result;
-  },
-  async restore(trashId) {
-    await api.restoreFile(trashId);
-    await get().loadFiles();
-  },
-  async createFolder(path) {
-    await api.createFolder(path);
-    const nodes = get().nodes;
-    set({ nodes: buildFileTree(flattenFilePaths(nodes), [...flattenFolderPaths(nodes), path]) });
-  },
-}));
+// =========================================================================
+// React context + hook
+// =========================================================================
+
+const WorkspaceStoreContext = createContext<StoreApi<WorkspaceState> | null>(null);
+
+interface WorkspaceStoreProviderProps {
+  port: DataPort;
+  children: React.ReactNode;
+}
+
+/**
+ * Creates the workspace store bound to the given DataPort and provides it
+ * through context. Wrap at the app root (inside DataPortProvider).
+ */
+export function WorkspaceStoreProvider({ port, children }: WorkspaceStoreProviderProps) {
+  const store = useMemo(() => createWorkspaceStore(port), [port]);
+  return createElement(WorkspaceStoreContext.Provider, { value: store }, children);
+}
+
+/**
+ * Selector-based hook over the workspace store. Same API as the previous
+ * singleton `useWorkspaceStore` — all existing consumers keep working.
+ */
+export function useWorkspaceStore<T>(selector: (state: WorkspaceState) => T): T {
+  const store = useContext(WorkspaceStoreContext);
+  if (!store) {
+    throw new Error('useWorkspaceStore must be used within a WorkspaceStoreProvider');
+  }
+  return useStore(store, selector);
+}
+
+/** Access the raw store (for imperative use outside components). */
+export function useWorkspaceStoreApi(): StoreApi<WorkspaceState> {
+  const store = useContext(WorkspaceStoreContext);
+  if (!store) {
+    throw new Error('useWorkspaceStoreApi must be used within a WorkspaceStoreProvider');
+  }
+  return store;
+}

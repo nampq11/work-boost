@@ -5,7 +5,9 @@ import type {
   ToolCallMessagePart,
 } from '@assistant-ui/react';
 import type { AssistantResponseEvent } from '../../lib/api-client.ts';
-import { ApiError, api } from '../../lib/api-client.ts';
+import { ApiError } from '../../lib/api-client.ts';
+import { DataPortUnavailableError } from '../../lib/data-port.ts';
+import type { DataPort } from '../../lib/data-port.ts';
 
 export interface CopilotApiClient {
   sendMessage?: (
@@ -91,8 +93,8 @@ export function getLatestUserText(messages: readonly ThreadMessage[]): string {
 }
 
 export function createCopilotAdapter(
-  threadId: string | Promise<string>,
-  client: CopilotApiClient = api,
+  threadId: string | Promise<string> | null,
+  client: CopilotApiClient,
 ): ChatModelAdapter {
   function run({ messages, abortSignal }: Parameters<ChatModelAdapter['run']>[0]) {
     const text = getLatestUserText(messages);
@@ -100,6 +102,9 @@ export function createCopilotAdapter(
     if (createResponse && streamResponse) {
       return (async function* () {
         try {
+          if (!threadId) {
+            throw new DataPortUnavailableError();
+          }
           const response = await createResponse(await threadId, text, abortSignal);
           let outputText = '';
           const content: ThreadAssistantMessagePart[] = [];
@@ -142,16 +147,34 @@ export function createCopilotAdapter(
         if (!sendMessage) {
           throw new Error('No AI transport is configured for this session.');
         }
+        if (!threadId) {
+          throw new DataPortUnavailableError();
+        }
         const result = await sendMessage(text, await threadId, abortSignal);
         return { content: [{ type: 'text' as const, text: result.response }] };
       } catch (error) {
         // assistant-ui treats an AbortError as cancellation. Keep ApiError intact so its
         // stable API message and code remain available to the error renderer.
-        if (isAbortError(error) || error instanceof ApiError) throw error;
+        if (
+          isAbortError(error) ||
+          error instanceof ApiError ||
+          error instanceof DataPortUnavailableError
+        )
+          throw error;
         throw error instanceof Error ? error : new Error('The assistant is unavailable.');
       }
     })();
   }
 
   return { run };
+}
+
+/** Build the CopilotApiClient from a DataPort's AI surface. */
+export function dataPortToCopilotClient(port: DataPort): CopilotApiClient {
+  return {
+    sendMessage: (message, sessionId, signal) => port.sendMessage(message, sessionId, signal),
+    createThread: () => port.createThread(),
+    createResponse: (threadId, input, signal) => port.createResponse(threadId, input, signal),
+    streamResponse: (responseId, signal) => port.streamResponse(responseId, signal),
+  };
 }

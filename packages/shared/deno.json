@@ -4,6 +4,10 @@
   "exports": {
     ".": "./mod.ts",
     "./logger": "./src/logger/index.ts",
-    "./logger/logger.ts": "./src/logger/logger.ts"
+    "./logger/logger.ts": "./src/logger/logger.ts",
+    "./workspace-path": "./src/workspace-path.ts",
+    "./workspace-path.ts": "./src/workspace-path.ts",
+    "./trash-record": "./src/trash-record.ts",
+    "./trash-record.ts": "./src/trash-record.ts"
   }
 }

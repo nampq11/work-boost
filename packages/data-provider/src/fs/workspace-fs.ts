@@ -3,6 +3,7 @@
 import { ensureDir, exists } from '@std/fs';
 import { basename, dirname, globToRegExp, isAbsolute, join, relative, resolve } from '@std/path';
 import { logger } from '@work-boost/shared/logger/logger.ts';
+import { hasAllowedExtension } from '@work-boost/shared/workspace-path.ts';
 
 /**
  * Workspace file system abstraction with safety features
@@ -265,7 +266,7 @@ export function createWorkspaceFS(customRoot?: string): WorkspaceFS {
       try {
         const files: string[] = [];
         for await (const entry of Deno.readDir(fullDir)) {
-          if (entry.isFile && /\.(md|json|txt|html)$/i.test(entry.name)) {
+          if (entry.isFile && hasAllowedExtension(entry.name)) {
             files.push(join(relDir, entry.name));
           }
         }
