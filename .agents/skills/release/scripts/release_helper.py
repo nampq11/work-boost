@@ -92,7 +92,10 @@ def latest_tag(repo_root: Path) -> str | None:
 
 
 def changed_paths(repo_root: Path) -> list[str]:
-    status = git_output(repo_root, "status", "--porcelain=v1")
+    # Use the raw output (no strip): `git_output` strips leading whitespace,
+    # which drops the leading status column of worktree-modified entries like
+    # " M CHANGELOG.md" and makes line[3:] slice the path one char too early.
+    status = run_command(["git", "status", "--porcelain=v1"], cwd=repo_root).stdout
     paths: list[str] = []
     for line in status.splitlines():
         if len(line) < 4:
