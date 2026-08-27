@@ -40,11 +40,15 @@ HTTP request and response details end here. Use package APIs and ports below thi
 
 The Vite and React workspace editor. `App` assembles the editor, file tree, HTML-app viewer, and
 copilot. The Zustand workspace store owns browser state, drafts, optimistic-concurrency revisions,
-and SSE synchronization. `api-client.ts` is its HTTP boundary. The Copilot uses an assistant-ui
-local runtime for the current page only: on mount it creates a server-side assistant thread
-(`POST /api/v1/threads`), sends turns through `/api/v1/threads/:id/responses`, and streams response
-events over SSE, falling back to `/api/message/sync` when the thread API is unavailable. The Brain
-remains the server-side transcript owner, and closing the drawer does not destroy the runtime.
+and workspace change synchronization. The store is created by `createWorkspaceStore(port)` bound to
+the active `DataPort` (see the DataPort section below); `api-client.ts` is the HTTP boundary used by
+`HttpDataPort`. The Copilot uses an assistant-ui local runtime for the current page only: on mount
+it creates a server-side assistant thread (`POST /api/v1/threads`), sends turns through
+`/api/v1/threads/:id/responses`, and streams response events over SSE, falling back to
+`/api/message/sync` when the thread API is unavailable. The Brain remains the server-side transcript
+owner, and closing the drawer does not destroy the runtime. When the sidecar is starting or failed
+(bundled desktop), the copilot drawer and Today debt/daily sections show a graceful unavailable
+state instead of erroring.
 
 ### `packages/data-schemas`
 
@@ -94,13 +98,42 @@ Extensions receive the shared `ExtensionContext`; they do not create another ser
 persistence stack. A single `ExtensionMessageSender` in `types.ts` is implemented by each platform
 service; `ExtensionContext.messaging` maps a platform to its sender.
 
+### `apps/web` — DataPort abstraction
+
+The frontend no longer imports the `api` client directly. All data access (workspace FS, AI, auth,
+domain operations) goes through a `DataPort` interface. Two implementations exist:
+
+- **`HttpDataPort`** — delegates every method to the existing HTTP `api` client. Used by the
+  browser shell, cloud deployments, and dev-mode desktop builds.
+- **`TauriDataPort`** — workspace FS operations (list, read, write, create, move, trash, restore,
+  mkdir) go through Tauri IPC commands backed by Rust raw file I/O on `~/.workboost/workspace/`.
+  AI, auth, and domain operations (debts, daily) go through HTTP to the sidecar when available, or
+  throw a typed `DataPortUnavailableError` when not.
+
+The workspace store exports a `createWorkspaceStore(port: DataPort)` factory and a
+`WorkspaceStoreProvider` React context. The `DataPortProvider` is the root context that determines
+which implementation to use based on the runtime environment.
+
 ### `apps/desktop`
 
 The Tauri 2 native shell. It embeds the built `apps/web` frontend and talks to the same loopback API
-as the browser. In bundled builds it spawns a compiled Deno API sidecar bound to `127.0.0.1:0`,
-reads the assigned port from the sidecar's `PORT:<n>` stdout line, exposes it to the frontend
-through a `get_api_base` command, and kills the child on exit. In dev it points at a separately
-started API (`deno task dev`, port 3001) so a stale sidecar binary cannot break startup.
+as the browser. The sidecar lifecycle is now non-blocking:
+
+- **Bundled builds** (`custom-protocol` feature): the workspace init (directory creation) and file
+  watcher start synchronously, then the webview loads immediately. The Deno API sidecar is spawned
+  in a background thread with `SidecarManager`; it reports `starting` -> `ready` or `failed` via
+  Tauri events (`sidecar-ready`, `sidecar-failed`). The frontend's `TauriDataPort` queries the
+  initial state via `get_sidecar_status` before subscribing to events, preventing the startup race.
+  AI features activate when the sidecar is ready; the editor works immediately.
+- **Dev builds** (no `custom-protocol`): `SidecarState` is set to `Ready` with base
+  `http://127.0.0.1:3001/api` immediately. No sidecar spawned. The frontend uses `HttpDataPort`
+  and works exactly as before.
+
+The Rust shell exposes raw file I/O commands (`workspace_read_file`, `workspace_write_file`,
+`workspace_create_file`, `workspace_list_files`, `workspace_stat`, `workspace_move`,
+`workspace_remove`, `workspace_mkdir`, `workspace_exists`, `workspace_init`) with path containment
+via `std::fs::canonicalize` and compare-and-swap on `write_file`. The `notify`-based file watcher
+emits `workspace-changed` events matching the server's event semantics.
 
 ### `packages/runtime` and `packages/shared`
 
@@ -112,8 +145,10 @@ holds environment access, logging, and security helpers.
 
 1. **Markdown is authoritative.** Configuration, daily work, and debts are workspace files. Do not
    introduce a second persistent source of truth.
-2. **Workspace files are accessed through `WorkspaceFS` or repositories.** Direct workspace I/O
-   bypasses path containment, locks, atomic writes, and conditional-update semantics.
+2. **Workspace files are accessed through `WorkspaceFS`/repositories or the Rust IPC commands.**
+   Direct workspace I/O bypasses path containment, locks, atomic writes, and conditional-update
+   semantics. The Rust `workspace_*` commands replicate those guarantees (canonicalize-based
+   containment, atomic create, compare-and-swap).
 3. **The browser and HTML apps are clients, not filesystem peers.** They use the localhost-only
    workspace API. HTML apps are sandboxed and get only the broker API.
 4. **The model changes data only through declared tools.** Add an atomic tool for a new agent
@@ -143,9 +178,13 @@ Desktop shell (Tauri 2) ──────────────────�
 
 - **HTTP:** `apps/api` converts external requests into application calls and failures into HTTP
   responses.
-- **Desktop:** `apps/desktop` is a thin shell over the web frontend; it owns only sidecar lifecycle,
-  a launch-time read-only release check, and the elevated apply-update path, and never bypasses the
-  HTTP API.
+- **Desktop:** `apps/desktop` is a thin shell over the web frontend. In bundled builds it owns
+  non-blocking sidecar lifecycle, raw workspace file I/O commands, a launch-time read-only release
+  check, and the elevated apply-update path. Workspace editing works without the sidecar via the
+  Rust commands; AI and domain features use the sidecar when it is ready.
+- **DataPort:** the frontend programs against the `DataPort` interface. `HttpDataPort` (browser,
+  dev desktop) and `TauriDataPort` (bundled desktop) implement it; the workspace store and copilot
+  adapter never touch a concrete transport.
 - **AI:** `AgentPort` hides the model provider, tool loop, prompt, and transcript retention.
 - **Persistence:** `DataLayer` hides the workspace layout and Markdown serialization.
 - **Integrations:** extensions contain external protocol handling, delivery, and scheduling.

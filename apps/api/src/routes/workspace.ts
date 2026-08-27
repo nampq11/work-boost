@@ -14,6 +14,8 @@ import type { DailyWorkReport } from '@work-boost/data-schemas/agent.ts';
 import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import { readBrokerRuntime } from '@work-boost/runtime';
 import { logger } from '@work-boost/shared/logger/logger.ts';
+import type { TrashRecord } from '@work-boost/shared/trash-record.ts';
+import { hasAllowedExtension, isPathForbidden } from '@work-boost/shared/workspace-path.ts';
 import { injectHtmlAppRuntime } from '../utils/html-injector.ts';
 import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
 import { isValidUUID } from '../utils/security.ts';
@@ -29,8 +31,6 @@ export interface WorkspaceRouterDeps {
 // ============================================================================
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '::ffff:127.0.0.1']);
-const SENSITIVE_SEGMENTS = new Set(['..', '.env', '.git']);
-const ALLOWED_EXTENSIONS = ['.md', '.json', '.txt', '.html'];
 const APPS_BASE = '/workspace-apps';
 const CSP_POLICY = [
   'sandbox allow-scripts allow-forms allow-same-origin',
@@ -44,18 +44,6 @@ const CSP_POLICY = [
   "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*",
   "base-uri 'none'",
 ].join('; ');
-
-function isPathForbidden(path: string): boolean {
-  const segments = path.split(/[\\/]+/).filter(Boolean);
-  if (segments.some((segment) => SENSITIVE_SEGMENTS.has(segment))) return true;
-  if (segments.at(-1) === 'config.json' && segments.at(-2) === '.workboost') return true;
-  return false;
-}
-
-function hasAllowedExtension(path: string): boolean {
-  const extension = path.toLowerCase().match(/\.[^.]+$/)?.[0] ?? '';
-  return ALLOWED_EXTENSIONS.includes(extension);
-}
 
 function isLoopback(info?: Deno.ServeHandlerInfo): boolean {
   const hostname = (info as unknown as { remote?: { hostname?: string } })?.remote?.hostname;
@@ -411,13 +399,6 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
       undefined,
       { path, modifiedAt: result.modifiedAt },
     );
-  }
-
-  interface TrashRecord {
-    trashId: string;
-    originalPath: string;
-    trashPath: string;
-    deletedAt: string;
   }
 
   async function moveToTrash(path: string): Promise<{ trashId: string; originalPath: string }> {

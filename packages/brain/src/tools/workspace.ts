@@ -1,10 +1,10 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { StringEnum, Type } from '@earendil-works/pi-ai';
 import type { WorkspaceFS } from '@work-boost/data-provider';
+import { ALLOWED_EXTENSIONS } from '@work-boost/shared';
 import { successResult } from './result.ts';
 
 const MAX_FILE_SIZE = 1000000; // 1 MB
-const ALLOWED_EXTENSIONS = ['.md', '.json', '.txt'];
 const MAX_SEARCH_RESULTS = 30;
 const MAX_SNIPPET_LENGTH = 120;
 

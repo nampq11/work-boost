@@ -1,12 +1,13 @@
 import React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../../lib/api-client.ts';
+import { useDataPort } from '../../contexts/DataPortContext.tsx';
 import { useI18n } from '../../lib/i18n.tsx';
 import { useUiStore } from '../../store/ui-store.ts';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 
 export function CommandPalette() {
   const { t } = useI18n();
+  const port = useDataPort();
   const open = useUiStore((state) => state.paletteOpen);
   const close = useUiStore((state) => state.closePalette);
   const closeCopilot = useUiStore((state) => state.closeCopilot);
@@ -49,7 +50,7 @@ export function CommandPalette() {
     ].join('-');
     const path = `daily/${date}.md`;
     try {
-      await api.createFile(path, '', { date, type: 'daily' });
+      await port.createFile(path, '', { date, type: 'daily' });
       await loadFiles();
       openFile(path, true);
     } catch (error) {
@@ -62,7 +63,7 @@ export function CommandPalette() {
     const amount = Number(window.prompt(t('commandPalette.amountPrompt')));
     if (!Number.isFinite(amount) || amount <= 0) return;
     try {
-      const result = (await api.createDebt({ personName, amount, direction: 'lent' })) as {
+      const result = (await port.createDebt({ personName, amount, direction: 'lent' })) as {
         filePath?: string;
       };
       await loadFiles();

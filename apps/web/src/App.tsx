@@ -24,13 +24,14 @@ import {
 } from './lib/sidebar-constants.ts';
 import { useUpdateChecker } from './lib/update.ts';
 import { useUiStore } from './store/ui-store.ts';
-import { useWorkspaceStore } from './store/workspace-store.ts';
+import { useWorkspaceStore, useWorkspaceStoreApi } from './store/workspace-store.ts';
 
 export function App() {
   const { t } = useI18n();
   useWorkspaceSync();
   useKeyboardShortcuts();
   useUpdateChecker();
+  const storeApi = useWorkspaceStoreApi();
   const activePath = useWorkspaceStore((state) => state.activePath);
   const error = useWorkspaceStore((state) => state.error);
   const trash = useWorkspaceStore((state) => state.trash);
@@ -61,7 +62,7 @@ export function App() {
         (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
       )
         return;
-      const currentPath = useWorkspaceStore.getState().activePath;
+      const currentPath = storeApi.getState().activePath;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
         const toasts = useUiStore.getState().toasts;
         const actionToast = [...toasts].reverse().find((toast) => toast.action);
@@ -123,7 +124,7 @@ export function App() {
                     <span>{error}</span>
                   </div>
                   <button
-                    onClick={() => void useWorkspaceStore.getState().loadFiles()}
+                    onClick={() => void storeApi.getState().loadFiles()}
                     className="underline font-medium hover:opacity-80"
                   >
                     {t('app.retry')}
