@@ -116,6 +116,8 @@ pub fn run() {
             apply_update,
             sidecar::get_sidecar_status,
             sidecar::retry_sidecar,
+            sidecar::sidecar_request,
+            sidecar::sidecar_stream,
             workspace::workspace_init,
             workspace::workspace_read_file,
             workspace::workspace_write_file,

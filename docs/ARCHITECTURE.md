@@ -108,7 +108,11 @@ domain operations) goes through a `DataPort` interface. Two implementations exis
 - **`TauriDataPort`** — workspace FS operations (list, read, write, create, move, trash, restore,
   mkdir) go through Tauri IPC commands backed by Rust raw file I/O on `~/.workboost/workspace/`.
   AI, auth, and domain operations (debts, daily) go through HTTP to the sidecar when available, or
-  throw a typed `DataPortUnavailableError` when not.
+  throw a typed `DataPortUnavailableError` when not. That HTTP leg is proxied through the Rust
+  shell (`sidecar_request` / `sidecar_stream` commands using `reqwest`): the bundled webview
+  cannot reliably fetch the cross-origin loopback sidecar on its random port (webview CSP, CORS,
+  and macOS mixed-content rules all apply), so `TauriDataPort` swaps the renderer `fetch` for the
+  proxy, which resolves the sidecar URL from Rust state. See ADR 0019.
 
 The workspace store exports a `createWorkspaceStore(port: DataPort)` factory and a
 `WorkspaceStoreProvider` React context. The `DataPortProvider` is the root context that determines

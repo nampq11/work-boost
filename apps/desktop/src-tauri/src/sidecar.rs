@@ -254,3 +254,125 @@ pub fn retry_sidecar(
         _ => Ok(()),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Sidecar HTTP proxy
+//
+// The bundled webview cannot reliably `fetch` the loopback sidecar directly:
+// the webview origin is `http(s)://tauri.localhost`, the sidecar is at
+// `http://127.0.0.1:<random-port>`, so the request is cross-origin and is
+// subject to the webview's CSP `connect-src`, CORS, and (on macOS, where the
+// webview is https) mixed-content rules. Routing these requests through Rust
+// (`reqwest`) bypasses all of that, and lets the proxy resolve the sidecar URL
+// from the authoritative `SidecarManager` state instead of the renderer.
+use tauri::ipc::Channel;
+
+/// An API request to forward to the sidecar. `path` is the full path including
+/// the `/api` prefix (e.g. `/api/workspace/daily/today`); the command combines
+/// it with the sidecar origin it derives from the managed state.
+#[derive(serde::Deserialize)]
+pub struct SidecarRequest {
+    pub method: String,
+    pub path: String,
+    #[serde(default)]
+    pub body: Option<serde_json::Value>,
+}
+
+#[derive(serde::Serialize)]
+pub struct SidecarResponse {
+    pub status: u16,
+    pub body: String,
+}
+
+/// The sidecar `base` has the form `http://127.0.0.1:<port>/api`; the frontend
+/// paths already include `/api`, so the proxy must combine the *origin* (no
+/// `/api`) with the request path to avoid a double `/api` prefix.
+fn sidecar_origin(base: &str) -> &str {
+    base.strip_suffix("/api").unwrap_or(base)
+}
+
+/// Combine the sidecar origin (its `/api` suffix stripped) with a request path
+/// that already includes `/api`.
+fn sidecar_url(base: &str, path: &str) -> String {
+    format!("{}{}", sidecar_origin(base), path)
+}
+
+fn sidecar_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        // The sidecar can take a while on a cold start; keep a generous cap.
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// Forward a JSON (or plain) request to the sidecar and return the raw body.
+#[tauri::command]
+pub async fn sidecar_request(
+    request: SidecarRequest,
+    state: tauri::State<'_, Arc<SidecarManager>>,
+) -> Result<SidecarResponse, String> {
+    let base = state.inner().base().ok_or("sidecar not ready")?;
+    let url = sidecar_url(&base, &request.path);
+    let client = sidecar_client()?;
+
+    let mut req = match request.method.as_str() {
+        "GET" => client.get(&url),
+        "POST" => client.post(&url),
+        "PUT" => client.put(&url),
+        "DELETE" => client.delete(&url),
+        other => return Err(format!("unsupported method: {other}")),
+    };
+    if let Some(body) = request.body {
+        req = req
+            .header("Content-Type", "application/json")
+            .body(body.to_string());
+    }
+
+    let response = req
+        .send()
+        .await
+        .map_err(|e| format!("sidecar request failed: {e}"))?;
+    let status = response.status().as_u16();
+    let body = response
+        .text()
+        .await
+        .map_err(|e| format!("read sidecar response failed: {e}"))?;
+    Ok(SidecarResponse { status, body })
+}
+
+/// Forward an SSE request and stream the raw text chunks back to the renderer
+/// over a Tauri `Channel`, so the copilot keeps real-time deltas (this is the
+/// `/v1/responses/:id` stream and the auth-login event stream).
+#[tauri::command]
+pub async fn sidecar_stream(
+    request: SidecarRequest,
+    on_event: Channel<String>,
+    state: tauri::State<'_, Arc<SidecarManager>>,
+) -> Result<(), String> {
+    let base = state.inner().base().ok_or("sidecar not ready")?;
+    let url = sidecar_url(&base, &request.path);
+    let client = sidecar_client()?;
+
+    let mut response = client
+        .get(&url)
+        .header("Accept", "text/event-stream")
+        .send()
+        .await
+        .map_err(|e| format!("sidecar stream failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "sidecar stream returned status {}",
+            response.status()
+        ));
+    }
+
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| format!("read sidecar stream failed: {e}"))?
+    {
+        let text = String::from_utf8_lossy(&chunk).to_string();
+        on_event.send(text).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
