@@ -1,10 +1,10 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { StringEnum, Type } from '@earendil-works/pi-ai';
 import type { WorkspaceFS } from '@work-boost/data-provider';
+import { ALLOWED_EXTENSIONS } from '@work-boost/shared';
 import { successResult } from './result.ts';
 
 const MAX_FILE_SIZE = 1000000; // 1 MB
-const ALLOWED_EXTENSIONS = ['.md', '.json', '.txt'];
 const MAX_SEARCH_RESULTS = 30;
 const MAX_SNIPPET_LENGTH = 120;
 
@@ -92,19 +92,22 @@ async function searchFiles(
   const pattern = folder ? `${folder}/**/*.md` : '**/*.md';
   const files = await fs.listByGlob(pattern);
 
-  const hits: { path: string; line: number; snippet: string }[] = [];
-  for (const file of files) {
+  const filePromises = files.map(async (file) => {
+    const fileHits: { path: string; line: number; snippet: string }[] = [];
     const lines = (await fs.readText(file)).split('\n');
     lines.forEach((line, index) => {
       if (line.toLowerCase().includes(searchQuery)) {
-        hits.push({
+        fileHits.push({
           path: file,
           line: index + 1,
           snippet: line.trim().slice(0, MAX_SNIPPET_LENGTH),
         });
       }
     });
-  }
+    return fileHits;
+  });
+
+  const hits = (await Promise.all(filePromises)).flat();
 
   if (hits.length === 0) {
     return successResult([], `🔍 No results for "${searchQuery}".`);

@@ -3,14 +3,16 @@ import { Coins, Copy, FileText, PaperPlaneRight } from '@phosphor-icons/react';
 import type { Editor } from '@tiptap/react';
 import { Button } from '@work-boost/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useDataPort } from '../../contexts/DataPortContext.tsx';
 import { useAutosave } from '../../hooks/useAutosave.ts';
-import { api } from '../../lib/api-client.ts';
+import { useSidecarStatus } from '../../hooks/useSidecarStatus.ts';
+import { DataPortUnavailableError } from '../../lib/data-port.ts';
 import { useI18n } from '../../lib/i18n.tsx';
 import { parseFrontmatter, stringifyMarkdown } from '../../lib/markdown-parser.ts';
 import { lastSavedDailyPathFromThread } from '../../lib/tool-result.ts';
 import type { DebtDocument, TodayDailyDocument } from '../../lib/types.ts';
 import { useUiStore } from '../../store/ui-store.ts';
-import { useWorkspaceStore } from '../../store/workspace-store.ts';
+import { useWorkspaceStore, useWorkspaceStoreApi } from '../../store/workspace-store.ts';
 import { FileMentionMenu } from '../ai/FileMentionMenu.tsx';
 import { FrontmatterInspector } from './FrontmatterInspector.tsx';
 import { EditorToolbar, TiptapEditor } from './TiptapEditor.tsx';
@@ -143,12 +145,16 @@ function getTodayLabel(): string {
 
 function TodayPanel() {
   const { t } = useI18n();
+  const port = useDataPort();
+  const sidecarStatus = useSidecarStatus();
+  const storeApi = useWorkspaceStoreApi();
   const aui = useAui();
   const [captureText, setCaptureText] = useState('');
   const [daily, setDaily] = useState<TodayDailyDocument | null>(null);
   const [debts, setDebts] = useState<DebtDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [sidecarUnavailable, setSidecarUnavailable] = useState(false);
   // Bumping this counter reruns the Today load effect (retry button).
   const [retryCount, setRetryCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -166,27 +172,35 @@ function TodayPanel() {
   }, [aui]);
 
   const refreshToday = useCallback(async () => {
+    setSidecarUnavailable(false);
     const [todayDoc, pendingDebts] = await Promise.all([
-      api.getDailyToday(),
-      api.listDebts({ status: 'pending' }),
+      port.getDailyToday(),
+      port.listDebts({ status: 'pending' }),
     ]);
     setDaily(todayDoc);
     setDebts(pendingDebts);
     // The panel data is already committed, so a sidebar refresh failure must
     // not surface as a Today load error; keep it best-effort.
-    await useWorkspaceStore
+    await storeApi
       .getState()
       .loadFiles()
       .catch(() => undefined);
-  }, []);
+  }, [port]);
 
+  // Reload when the sidecar transitions to ready/browser so the summary and
+  // debts appear without requiring a manual action after AI comes back.
   useEffect(() => {
     let active = true;
     setLoading(true);
     setLoadFailed(false);
     refreshToday()
-      .catch(() => {
-        if (active) setLoadFailed(true);
+      .catch((error) => {
+        if (!active) return;
+        if (error instanceof DataPortUnavailableError) {
+          setSidecarUnavailable(true);
+        } else {
+          setLoadFailed(true);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -194,7 +208,7 @@ function TodayPanel() {
     return () => {
       active = false;
     };
-  }, [refreshToday, retryCount]);
+  }, [refreshToday, retryCount, sidecarStatus]);
 
   // Refresh summary and debts once a run on the shared thread finishes.
   useEffect(() => {
@@ -202,8 +216,22 @@ function TodayPanel() {
     wasRunningRef.current = isRunning;
     if (!finished) return;
     setLastSavedPath(lastSavedDailyPathFromThread(aui.thread.getState().messages));
-    void refreshToday().catch(() => setLoadFailed(true));
+    void refreshToday().catch((error) => {
+      if (error instanceof DataPortUnavailableError) {
+        setSidecarUnavailable(true);
+      } else {
+        setLoadFailed(true);
+      }
+    });
   }, [isRunning, refreshToday, aui]);
+
+  // Once the sidecar becomes available, clear the unavailable flag so the panel
+  // refetches on the next load.
+  useEffect(() => {
+    if (sidecarStatus === 'ready' || sidecarStatus === 'browser') {
+      setSidecarUnavailable(false);
+    }
+  }, [sidecarStatus]);
 
   // Auto-grow the capture textarea as the user types.
   useEffect(() => {
@@ -324,6 +352,24 @@ function TodayPanel() {
         </div>
       </section>
 
+      {/* Today data failed to load: keep whatever data we have and offer a retry */}
+      {sidecarUnavailable && (
+        <div className="p-3 rounded-lg border border-[var(--border)] bg-[var(--surface-card)] text-xs text-[var(--text-muted)] flex items-center justify-between">
+          <span>
+            <span className="font-medium text-[var(--text-primary)]">
+              {t('copilot.sidecar.requiresSidecar')}
+            </span>
+            <span className="ml-2">{t('copilot.sidecar.requiresSidecarHint')}</span>
+          </span>
+          <button
+            type="button"
+            onClick={retryLoad}
+            className="shrink-0 underline font-medium hover:opacity-80"
+          >
+            {t('editor.todayRetry')}
+          </button>
+        </div>
+      )}
       {/* Today data failed to load: keep whatever data we have and offer a retry */}
       {!loading && loadFailed && (
         <div className="p-3 rounded-lg border border-[var(--accent-red)] bg-[#fee2e2] text-[#991b1b] text-xs flex items-center justify-between">

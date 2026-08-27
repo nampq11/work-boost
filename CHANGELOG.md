@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-27
+
+### Added
+
+- **Dual-port data access** (#41) - Bundled desktop workspaces now open instantly via Tauri IPC raw file I/O instead of waiting on the sidecar, backed by a new `DataPort` abstraction used by the workspace store and copilot adapter. AI, auth, and domain operations continue over HTTP when the sidecar is ready, or degrade with typed unavailable errors.
+
+### Fixed
+
+- Fixed an XSS vulnerability in the Assistant Markdown renderer by sanitizing the HTML output with DOMPurify. #57
+- Improved performance of workspace search by reading files concurrently. #48
+- Improved performance of debt listing by loading entries concurrently. #49
+- Fixed an N+1 query performance bottleneck in message retrieval. #50
+
 ## [0.4.0] - 2026-08-26
 
 ### Added

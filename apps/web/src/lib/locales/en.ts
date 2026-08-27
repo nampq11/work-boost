@@ -128,6 +128,12 @@ export const en = {
 
   // Copilot / assistant thread
   'copilot.workspace': 'Copilot Workspace',
+  'copilot.sidecar.starting': 'AI assistant starting...',
+  'copilot.sidecar.unavailable': 'AI assistant unavailable. The editor works without it.',
+  'copilot.sidecar.retry': 'Retry',
+  'copilot.sidecar.requiresSidecar': 'Requires AI sidecar',
+  'copilot.sidecar.requiresSidecarHint':
+    'Debts and daily reports are served by the AI sidecar. Start it to use them.',
   'copilot.auth.checkingConnection': 'Checking provider connection...',
   'copilot.auth.retry': 'Retry',
   'copilot.auth.noBrowserLogin': 'This provider does not support browser login.',

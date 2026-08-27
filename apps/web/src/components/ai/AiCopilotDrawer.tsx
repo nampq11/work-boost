@@ -1,12 +1,9 @@
 import { Sparkle, X } from '@phosphor-icons/react';
+import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
 import { Button, ResizablePanel, usePanelRef } from '@work-boost/ui';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  type AuthLoginEvent,
-  type AuthLoginSession,
-  type AuthStatus,
-  api,
-} from '../../lib/api-client.ts';
+import { useDataPort } from '../../contexts/DataPortContext.tsx';
+import { useSidecarStatus } from '../../hooks/useSidecarStatus.ts';
 import { openExternalUrl } from '../../lib/external-url.ts';
 import { useI18n } from '../../lib/i18n.tsx';
 import { isTauri } from '../../lib/tauri.ts';
@@ -16,6 +13,8 @@ import { WorkBoostThread } from './WorkBoostThread.tsx';
 
 export function AiCopilotDrawer() {
   const { t } = useI18n();
+  const port = useDataPort();
+  const sidecarStatus = useSidecarStatus();
   const open = useUiStore((state) => state.copilotOpen);
   const panelRef = usePanelRef();
   const lastWidthRef = useRef(320);
@@ -48,7 +47,7 @@ export function AiCopilotDrawer() {
     setAuthLoading(true);
     setAuthError('');
     try {
-      const status = await api.getAuthStatus();
+      const status = await port.getAuthStatus();
       if (requestId === authRequestRef.current) setAuthStatus(status);
     } catch (error) {
       if (requestId === authRequestRef.current) {
@@ -73,9 +72,18 @@ export function AiCopilotDrawer() {
       unsubscribeRef.current = null;
       loginSessionRef.current = null;
       setLoginSession(null);
-      if (session) void api.cancelAuthLogin(session.loginId).catch(() => undefined);
+      if (session) void port.cancelAuthLogin(session.loginId).catch(() => undefined);
     };
   }, [open]);
+
+  // The auth status is only meaningful once the sidecar is reachable. When the
+  // drawer is open and the sidecar transitions starting -> ready, fetch it so
+  // the panel does not sit on a blank state.
+  const sidecarReady = sidecarStatus === 'ready' || sidecarStatus === 'browser';
+  useEffect(() => {
+    if (!open || !sidecarReady) return;
+    void refreshAuthStatus();
+  }, [open, sidecarReady]);
 
   // The panel stays mounted and collapses instead of unmounting, so the
   // panel set never changes and sibling sizes (e.g. a widened sidebar)
@@ -142,18 +150,18 @@ export function AiCopilotDrawer() {
     setDeviceCode(null);
     setAuthProgress(t('copilot.auth.startingLogin'));
     try {
-      const session = await api.startAuthLogin(
+      const session = await port.startAuthLogin(
         authStatus?.provider ?? '',
         authStatus?.auth.status === 'refresh_failed',
       );
       if (requestId !== loginRequestRef.current) {
-        void api.cancelAuthLogin(session.loginId).catch(() => undefined);
+        void port.cancelAuthLogin(session.loginId).catch(() => undefined);
         return;
       }
       clearLoginSession();
       loginSessionRef.current = session;
       setLoginSession(session);
-      unsubscribeRef.current = api.subscribeAuthLogin(session.loginId, handleAuthEvent, () => {
+      unsubscribeRef.current = port.subscribeAuthLogin(session.loginId, handleAuthEvent, () => {
         setAuthError(t('copilot.auth.progressInterrupted'));
       });
     } catch (error) {
@@ -170,7 +178,7 @@ export function AiCopilotDrawer() {
     setDeviceCode(null);
     setAuthProgress('');
     try {
-      await api.cancelAuthLogin(session.loginId);
+      await port.cancelAuthLogin(session.loginId);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : t('copilot.auth.unableCancelLogin'));
     }
@@ -210,7 +218,23 @@ export function AiCopilotDrawer() {
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col">
-            {isConnected ? (
+            {sidecarStatus === 'starting' ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm text-[var(--text-muted)]">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--accent-blue)]" />
+                <p>{t('copilot.sidecar.starting')}</p>
+              </div>
+            ) : sidecarStatus === 'failed' ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm">
+                <p className="text-[var(--text-primary)]">{t('copilot.sidecar.unavailable')}</p>
+                <Button
+                  variant="secondary"
+                  onClick={() => void port.retrySidecar?.()}
+                  className="mt-1"
+                >
+                  {t('copilot.sidecar.retry')}
+                </Button>
+              </div>
+            ) : isConnected ? (
               <WorkBoostThread />
             ) : (
               <CopilotAuthPanel
