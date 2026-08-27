@@ -1,19 +1,19 @@
 /// <reference lib="deno.unstable" />
 
-import { DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
+import { type DebtDirection, DebtStatus } from '@work-boost/data-schemas/debt.ts';
 import type { Debt, DebtReminderSettings } from '@work-boost/data-schemas/debt.ts';
 import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import type { Subscription } from '@work-boost/data-schemas/subscription.ts';
 import type { Message } from '@work-boost/data-schemas/task.ts';
 import type { User } from '@work-boost/data-schemas/user.ts';
-import { type WorkspaceFS, createWorkspaceFS } from './fs/workspace-fs.ts';
+import { createWorkspaceFS, type WorkspaceFS } from './fs/workspace-fs.ts';
 import { parseMarkdown } from './markdown/markdown-engine.ts';
 import { type ConfigManager, createConfigManager } from './repositories/config-manager.ts';
 import {
-  type DailyWorkRepository,
   createDailyWorkRepository,
+  type DailyWorkRepository,
 } from './repositories/daily-work-repository.ts';
-import { type DebtRepository, createDebtRepository } from './repositories/debt-repository.ts';
+import { createDebtRepository, type DebtRepository } from './repositories/debt-repository.ts';
 
 /**
  * Single-user workspace user ID for backward compatibility
@@ -337,8 +337,11 @@ export class Database {
     const dateStrings = await this.dailyWork.listDates();
     const messages: Message[] = [];
 
-    for (const dateStr of dateStrings) {
-      const doc = await this.dailyWork.get(dateStr);
+    const docs = await Promise.all(
+      dateStrings.map((dateStr) => this.dailyWork.get(dateStr)),
+    );
+
+    for (const doc of docs) {
       if (doc) {
         messages.push({
           id: doc.frontmatter.id,
