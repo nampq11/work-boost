@@ -1,4 +1,5 @@
 import { cn } from '@work-boost/ui';
+import DOMPurify from 'dompurify';
 import React, { useMemo } from 'react';
 import { useWorkspaceStore } from '../../store/workspace-store.ts';
 
@@ -105,7 +106,12 @@ export function AssistantMarkdown({ content, className }: AssistantMarkdownProps
     });
   }
 
-  const htmlContent = useMemo(() => convertMarkdownToHtml(content), [content]);
+  const htmlContent = useMemo(() => {
+    const html = convertMarkdownToHtml(content);
+    return DOMPurify.sanitize(html, {
+      ADD_ATTR: ['data-file-path', 'data-type', 'data-checked'],
+    });
+  }, [content]);
 
   return (
     <div
