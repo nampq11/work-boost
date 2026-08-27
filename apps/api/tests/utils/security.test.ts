@@ -27,13 +27,15 @@ Deno.test('isValidUUID', async (t) => {
 Deno.test('isValidSessionId', async (t) => {
   await t.step('returns true for valid session IDs', () => {
     assert(isValidSessionId('123e4567-e89b-12d3-a456-426614174000')); // valid UUID
-    assert(isValidSessionId('a')); // min length
-    assert(isValidSessionId('a-b_c')); // allowed chars
+    assert(isValidSessionId('abcdefgh')); // min length 8
+    assert(isValidSessionId('abcdefgh-ijklmnop_qrs')); // allowed chars
     assert(isValidSessionId('12345678901234567890123456789012345678901234567890')); // max length 50
   });
 
   await t.step('returns false for invalid session IDs', () => {
     assert(!isValidSessionId('')); // empty string
+    assert(!isValidSessionId('a')); // too short (< 8)
+    assert(!isValidSessionId('a-b_c')); // too short (< 8)
     assert(!isValidSessionId('a@b')); // invalid char '@'
     assert(!isValidSessionId('a b')); // invalid char ' '
     assert(!isValidSessionId('123456789012345678901234567890123456789012345678901')); // too long > 50
@@ -41,11 +43,22 @@ Deno.test('isValidSessionId', async (t) => {
 });
 
 Deno.test('sanitizeInput', async (t) => {
-  await t.step('removes control characters', () => {
+  await t.step('leaves normal strings unchanged', () => {
+    assertEquals(sanitizeInput('hello world'), 'hello world');
+    assertEquals(sanitizeInput(''), '');
+    assertEquals(sanitizeInput('12345!@#$'), '12345!@#$');
+  });
+
+  await t.step('removes single control characters', () => {
     assertEquals(sanitizeInput('hello\x00world'), 'helloworld');
     assertEquals(sanitizeInput('hello\x01world'), 'helloworld');
     assertEquals(sanitizeInput('hello\x1Fworld'), 'helloworld');
     assertEquals(sanitizeInput('hello\x7Fworld'), 'helloworld');
+  });
+
+  await t.step('removes multiple mixed control characters', () => {
+    assertEquals(sanitizeInput('\x00hello\x0Bworld\x1F'), 'helloworld');
+    assertEquals(sanitizeInput('h\x01e\x02l\x03l\x04o'), 'hello');
   });
 
   await t.step('keeps newlines and tabs', () => {
