@@ -1,9 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
+import { Channel, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
 import type { TrashRecord } from '@work-boost/shared/trash-record.ts';
 import { guardWorkspacePath } from '@work-boost/shared/workspace-path.ts';
-import { ApiError, setApiBase } from './api-client.ts';
+import { ApiError, setApiBase, setHttpFetch } from './api-client.ts';
 import type { AssistantResponseEvent } from './api-client.ts';
 import type {
   DataPort,
@@ -53,6 +53,7 @@ export class TauriDataPort implements DataPort {
 
   /** Initialize workspace directories and capture the sidecar lifecycle state. */
   async init(): Promise<void> {
+    installSidecarHttpProxy();
     await workspaceInit();
     // Subscribe before querying: a transition that fires while the listeners
     // are being registered (or later) is captured by the events, and the query
@@ -476,4 +477,69 @@ export class TauriDataPort implements DataPort {
 /** True for markdown document paths; other extensions are stored as plain content. */
 function isMarkdownFile(path: string): boolean {
   return path.toLowerCase().endsWith('.md');
+}
+
+/**
+ * Replace the renderer's `fetch` with a Rust proxy for the sidecar. The webview
+ * cannot reliably reach `http://127.0.0.1:<random-port>` from the
+ * `http(s)://tauri.localhost` origin: the request is cross-origin and is subject
+ * to the webview's CSP `connect-src`, the API's CORS, and (on the https macOS
+ * webview) mixed-content blocking. The proxy resolves the sidecar URL from the
+ * authoritative Rust `SidecarManager` state and performs the request with
+ * `reqwest`, so none of those webview restrictions apply.
+ */
+function installSidecarHttpProxy(): void {
+  setHttpFetch(async (input, init) => {
+    const url = new URL(input, 'http://127.0.0.1');
+    const path = url.pathname + url.search;
+    const method = init?.method ?? 'GET';
+    const headers = init?.headers as Record<string, string> | undefined;
+    const acceptsStream = headers?.['Accept'] === 'text/event-stream';
+
+    let body: unknown;
+    if (typeof init?.body === 'string' && init.body.length > 0) {
+      try {
+        body = JSON.parse(init.body);
+      } catch {
+        body = init.body;
+      }
+    }
+
+    if (acceptsStream) {
+      return new Response(createSidecarStream(method, path, body), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+    }
+
+    const result = await invoke<{ status: number; body: string }>('sidecar_request', {
+      request: { method, path, body },
+    });
+    return new Response(result.body, { status: result.status });
+  });
+}
+
+/** Bridge the Rust `sidecar_stream` channel into a fetch-visible body stream. */
+function createSidecarStream(
+  method: string,
+  path: string,
+  body: unknown,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false;
+      const channel = new Channel<string>();
+      channel.onmessage = (message) => {
+        if (!closed) controller.enqueue(encoder.encode(message));
+      };
+      void invoke('sidecar_stream', { request: { method, path, body }, onEvent: channel })
+        .then(() => {
+          if (!closed) controller.close();
+        })
+        .catch((error: unknown) => {
+          if (!closed) controller.error(error instanceof Error ? error : new Error(String(error)));
+        });
+    },
+  });
 }

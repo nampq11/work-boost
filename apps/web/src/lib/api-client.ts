@@ -34,6 +34,22 @@ export function getWorkspaceBase(): string {
   return workspaceBase;
 }
 
+/**
+ * Pluggable network layer. Defaults to the browser `fetch`, which is correct for
+ * the browser shell and dev-mode desktop (same-origin `/api` in the browser, or
+ * the `127.0.0.1:3001` loopback in `tauri dev`). The bundled desktop build
+ * installs a Rust-backed proxy via {@link setHttpFetch} so sidecar calls bypass
+ * the webview's cross-origin / CSP / mixed-content restrictions.
+ */
+export type HttpFetch = (input: string, init?: RequestInit) => Promise<Response>;
+
+let httpFetch: HttpFetch = (input, init) => fetch(input, init);
+
+/** @see HttpFetch for why this exists. */
+export function setHttpFetch(fn: HttpFetch): void {
+  httpFetch = fn;
+}
+
 interface ApiEnvelope<T> {
   success: boolean;
   data?: T;
@@ -79,7 +95,7 @@ async function* readAssistantEvents(
 ): AsyncGenerator<AssistantResponseEvent> {
   let response: Response;
   try {
-    response = await fetch(`${apiBase}/v1/responses/${encodeURIComponent(responseId)}`, {
+    response = await httpFetch(`${apiBase}/v1/responses/${encodeURIComponent(responseId)}`, {
       headers: { Accept: 'text/event-stream' },
       signal,
     });
@@ -125,7 +141,7 @@ async function* readAssistantEvents(
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await httpFetch(url, {
       ...init,
       headers: { 'Content-Type': 'application/json', ...init?.headers },
     });
@@ -242,26 +258,51 @@ export const api = {
     onEvent: (event: AuthLoginEvent) => void,
     onError: () => void,
   ) => {
-    const source = new EventSource(`${apiBase}/auth/login/${encodeURIComponent(loginId)}/events`);
-    const eventTypes: AuthLoginEvent['type'][] = [
-      'started',
-      'auth_url',
-      'device_code',
-      'progress',
-      'completed',
-      'failed',
-      'cancelled',
-    ];
-    const handleEvent = (event: MessageEvent<string>) => {
+    // Fetch-based SSE instead of `EventSource`: the bundled desktop webview
+    // cannot open an `EventSource` to the loopback sidecar, and this path is
+    // routed through the Rust HTTP proxy just like the other calls. Named
+    // `event:`/`data:` frames are parsed here so browser and Tauri behave alike.
+    let cancelled = false;
+    void (async () => {
       try {
-        onEvent(JSON.parse(event.data) as AuthLoginEvent);
+        const response = await httpFetch(
+          `${apiBase}/auth/login/${encodeURIComponent(loginId)}/events`,
+          { headers: { Accept: 'text/event-stream' } },
+        );
+        if (!response.ok || !response.body) {
+          if (!cancelled) onError();
+          return;
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (!cancelled) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() ?? '';
+          for (const frame of frames) {
+            let data = '';
+            for (const line of frame.split('\n')) {
+              if (line.startsWith('data:')) data = line.slice('data:'.length).trim();
+            }
+            if (data) {
+              try {
+                onEvent(JSON.parse(data) as AuthLoginEvent);
+              } catch {
+                if (!cancelled) onError();
+              }
+            }
+          }
+        }
       } catch {
-        onError();
+        if (!cancelled) onError();
       }
+    })();
+    return () => {
+      cancelled = true;
     };
-    for (const eventType of eventTypes) source.addEventListener(eventType, handleEvent);
-    source.onerror = onError;
-    return () => source.close();
   },
   cancelAuthLogin: (loginId: string) =>
     request<{ status: 'completed' | 'failed' | 'cancelled' }>(
