@@ -337,9 +337,7 @@ export class Database {
     const dateStrings = await this.dailyWork.listDates();
     const messages: Message[] = [];
 
-    const docs = await Promise.all(
-      dateStrings.map((dateStr) => this.dailyWork.get(dateStr)),
-    );
+    const docs = await Promise.all(dateStrings.map((dateStr) => this.dailyWork.get(dateStr)));
 
     for (const doc of docs) {
       if (doc) {

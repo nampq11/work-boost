@@ -71,21 +71,26 @@ export async function processDailySummary(
       return { success: false, reason: 'no_platforms_configured' };
     }
 
-    let delivered = 0;
-    for (const platform of subscription.enabled) {
+    const promises = subscription.enabled.map(async (platform) => {
       const sender = dependencies.messaging?.[platform];
       const chatId = subscription.platforms[platform];
-      if (!sender || !chatId) continue;
+      if (!sender || !chatId) return;
 
       try {
         await sender.sendMessage(chatId, response, { parseMode: 'None' });
-        delivered++;
+        return platform;
       } catch (error) {
         dependencies.logger.error(`[Scheduler] Failed to send daily summary to ${platform}`, {
           error,
         });
+        throw error;
       }
-    }
+    });
+
+    const results = await Promise.allSettled(promises);
+    const delivered = results.filter(
+      (r) => r.status === 'fulfilled' && r.value !== undefined,
+    ).length;
 
     return delivered > 0 ? { success: true } : { success: false, reason: 'all_platforms_failed' };
   } catch (error) {
@@ -103,10 +108,10 @@ export function createPlatformSender(
     const subscription = await db.getSubscriptionByUserId(SINGLE_USER_ID);
     if (!subscription) return;
 
-    for (const platform of subscription.enabled) {
+    const promises = subscription.enabled.map(async (platform) => {
       const sender = messaging?.[platform];
       const chatId = subscription.platforms[platform];
-      if (!sender || !chatId) continue;
+      if (!sender || !chatId) return;
       try {
         await sender.sendMessage(chatId, message, {
           parseMode: platform === 'telegram' ? 'HTML' : 'None',
@@ -114,6 +119,8 @@ export function createPlatformSender(
       } catch (error) {
         logger.error(`[Scheduler] Failed to send reminder to ${platform}`, { error });
       }
-    }
+    });
+
+    await Promise.allSettled(promises);
   };
 }
