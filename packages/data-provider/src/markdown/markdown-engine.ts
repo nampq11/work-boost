@@ -33,6 +33,10 @@ export function stringifyMarkdown<T>(frontmatter: T, body: string): string {
   return `---\n${yaml}\n---\n\n${body.trim()}\n`;
 }
 
+const COMPLETED_REGEX = /^### 1\.|việc hoàn thành/i;
+const INCOMPLETE_REGEX = /^### 2\.|chưa hoàn thành/i;
+const PLANNED_REGEX = /^### 3\.|dự định làm/i;
+
 /**
  * Parse daily work report body, extracting structured sections
  * Preserves custom sections outside the main three sections
@@ -55,11 +59,11 @@ export function parseDailyReport(body: string): {
     const trimmed = line.trim();
 
     // Detect section headers
-    if (trimmed.startsWith('### 1.') || trimmed.toLowerCase().includes('việc hoàn thành')) {
+    if (COMPLETED_REGEX.test(trimmed)) {
       currentSection = 'completed';
-    } else if (trimmed.startsWith('### 2.') || trimmed.toLowerCase().includes('chưa hoàn thành')) {
+    } else if (INCOMPLETE_REGEX.test(trimmed)) {
       currentSection = 'incomplete';
-    } else if (trimmed.startsWith('### 3.') || trimmed.toLowerCase().includes('dự định làm')) {
+    } else if (PLANNED_REGEX.test(trimmed)) {
       currentSection = 'planned';
     } else if (trimmed.startsWith('###') && currentSection !== 'custom') {
       currentSection = 'custom';
