@@ -13,7 +13,6 @@ try {
   envFile = await load();
 } catch {
   // .env file doesn't exist or can't be read - that's OK in production
-  console.log('[DEBUG] No .env file found, using environment variables');
 }
 
 // Process environment always wins over .env file values (matches MCP mode behavior).
