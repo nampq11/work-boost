@@ -1,9 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { useEffect } from 'react';
-import { useUiStore } from '../store/ui-store.ts';
-import { type UpdateInfo, useUpdateStore } from '../store/update-store.ts';
+import { type UpdateInfo, type UpdatePhase, useUpdateStore } from '../store/update-store.ts';
 import { openExternalUrl } from './external-url.ts';
-import { t } from './i18n.tsx';
 import { isTauri } from './tauri.ts';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -25,8 +24,10 @@ function isSnoozed(info: UpdateInfo): boolean {
 }
 
 /**
- * Desktop-only launch check. In a plain browser it is inert and never calls `invoke`. The check runs
- * once on mount; check errors are swallowed by Rust as `null` and never become `error`.
+ * Desktop-only bootstrap and installer-event wiring. In a plain browser it is inert and never calls
+ * `invoke` or `listen`. On mount it runs the one-shot update check and subscribes to the Rust
+ * installer's `update:phase` / `update:error` events so the banner can show live install progress.
+ * Check errors are swallowed by Rust as `null` and never become `error`.
  */
 export function useUpdateChecker(): void {
   useEffect(() => {
@@ -49,33 +50,57 @@ export function useUpdateChecker(): void {
       }
     })();
 
+    // The install runs on a Rust background thread and streams these events. Failure
+    // handling is delegated here so the banner can offer a retry/manual path.
+    let unsubPhase: (() => void) | undefined;
+    let unsubError: (() => void) | undefined;
+    void listen<{ phase: UpdatePhase }>('update:phase', (event) => {
+      if (disposed) return;
+      useUpdateStore.getState().setPhase(event.payload.phase);
+    }).then((unsub) => {
+      unsubPhase = unsub;
+    });
+    void listen<{ message: string }>('update:error', (event) => {
+      if (disposed) return;
+      useUpdateStore.getState().setError(event.payload.message);
+    }).then((unsub) => {
+      unsubError = unsub;
+    });
+
     return () => {
       disposed = true;
+      unsubPhase?.();
+      unsubError?.();
     };
   }, []);
 }
 
 /**
  * Run the canonical installer elevated and relaunch. No URL is supplied: the install command is a
- * Rust constant. A failure (elevation cancelled, install.sh non-zero exit) is surfaced as `error`
- * and a toast, and opens the releases page for the manual path.
+ * Rust constant. Progress and failures are delivered as `update:phase` / `update:error` events; the
+ * command itself only fails for immediate setup problems or non-autoupdatable platforms, which are
+ * surfaced here as `error`.
  */
 export function applyUpdate(): void {
-  useUpdateStore.getState().setUpdating();
+  const store = useUpdateStore.getState();
+  // Guard against a double click / re-entry while an install is already running.
+  if (store.status !== 'available' && store.status !== 'error') return;
+  store.setUpdating();
   void (async () => {
     try {
       await invoke('apply_update');
-      // On success the app relaunches, so we stay in `updating`.
+      // The Rust command returns immediately; the app relaunches on success. phases
+      // and the terminal failure arrive via events.
     } catch (cause) {
       const message = typeof cause === 'string' ? cause : String(cause);
-      const label = /manual/i.test(message)
-        ? t('update.manual', { message })
-        : t('update.failed', { message });
-      useUiStore.getState().showToast(label);
-      void openExternalUrl(RELEASES_URL);
       useUpdateStore.getState().setError(message);
     }
   })();
+}
+
+/** Open the releases page for the manual install / recovery path. */
+export function openManualInstall(): void {
+  void openExternalUrl(RELEASES_URL);
 }
 
 export function dismissUpdate(): void {

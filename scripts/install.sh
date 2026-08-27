@@ -5,7 +5,18 @@
 #
 # Downloads the prebuilt Tauri bundle from GitHub Releases, verifies its checksum,
 # and installs it with the platform-native mechanism.
+#
+# The desktop app passes an optional scratch path as $1 and relishes `phase:`
+# / `error:` marker lines it appends, so the UI can stream install progress.
+# Manual `curl | sh` usage passes no argument and writes nothing.
 set -e
+
+PROGRESS_FILE="${1:-}"
+
+# Append a marker line for the desktop app to tail. A no-op for manual installs.
+progress() {
+  [ -n "$PROGRESS_FILE" ] && printf '%s\n' "$1" >> "$PROGRESS_FILE"
+}
 
 GITHUB_API="https://api.github.com/repos/nampq11/work-boost/releases/latest"
 RELEASES_URL="https://github.com/nampq11/work-boost/releases/latest"
@@ -15,6 +26,7 @@ log() {
 }
 
 fail() {
+  progress "error:$1"
   printf '[install] ERROR: %s\n' "$1" >&2
   exit 1
 }
@@ -55,6 +67,7 @@ trap cleanup EXIT
 ARTIFACT="$TMP_DIR/${DOWNLOAD_URL##*/}"
 CHECKSUM_FILE="$ARTIFACT.sha256"
 
+progress "phase:downloading"
 log "downloading $(basename "$ARTIFACT")"
 curl -fL "$DOWNLOAD_URL" -o "$ARTIFACT" || fail "download failed"
 if curl -fsL "$CHECKSUM_URL" -o "$CHECKSUM_FILE"; then
@@ -79,6 +92,7 @@ else
   fail "no checksum published for $(basename "$ARTIFACT"); refusing to install unverified build"
 fi
 
+progress "phase:installing"
 case "$OS" in
   Linux)
     if command -v apt-get >/dev/null 2>&1; then

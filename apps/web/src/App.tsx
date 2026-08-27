@@ -24,6 +24,7 @@ import {
 } from './lib/sidebar-constants.ts';
 import { useUpdateChecker } from './lib/update.ts';
 import { useUiStore } from './store/ui-store.ts';
+import { useUpdateStore } from './store/update-store.ts';
 import { useWorkspaceStore, useWorkspaceStoreApi } from './store/workspace-store.ts';
 
 export function App() {
@@ -74,6 +75,13 @@ export function App() {
         }
       }
       if (event.key === 'Delete' && currentPath) {
+        // Destructive file operations are blocked while an update is installing: the
+        // app is about to restart, and a delete issued mid-install could leave the
+        // workspace in a state the user did not intend.
+        if (useUpdateStore.getState().status === 'updating') {
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
         void trash(currentPath)
           .then(({ trashId, originalPath }) => {

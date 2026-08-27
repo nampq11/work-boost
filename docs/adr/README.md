@@ -75,3 +75,4 @@ proposed → active → superseded
 | [0017](0017-release-workflow-manual-trigger.md) | Make the desktop release build manually re-triggerable | active |
 | [0018](0018-data-port-dual-access.md) | DataPort abstraction for dual-port data access | active |
 | [0019](0019-proxy-sidecar-http-through-rust.md) | Proxy bundled sidecar HTTP through the Rust shell | active |
+| [0020](0020-desktop-update-progress.md) | Stream in-app update progress out-of-band via a scratch progress file | active |
