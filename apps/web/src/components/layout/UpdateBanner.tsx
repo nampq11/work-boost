@@ -20,6 +20,8 @@ function phaseMessage(phase: UpdatePhase | null, t: Translate): string {
   }
 }
 
+const BUTTON_CLASS = 'h-6 px-2.5 text-xs';
+
 /**
  * Slim update strip shown directly below the header when a newer desktop release exists.
  * It only renders inside the Tauri webview and only when the update-check surfaced an update
@@ -72,7 +74,7 @@ export function UpdateBanner() {
               variant="default"
               size="xs"
               onClick={() => applyUpdate()}
-              className="h-6 px-2.5 text-xs"
+              className={BUTTON_CLASS}
             >
               {t('update.now')}
             </Button>
@@ -80,14 +82,14 @@ export function UpdateBanner() {
               variant="ghost"
               size="xs"
               onClick={() => dismissUpdate()}
-              className="h-6 px-2.5 text-xs"
+              className={BUTTON_CLASS}
             >
               {t('update.later')}
             </Button>
           </>
         )}
         {updating && (
-          <Button variant="ghost" size="xs" disabled className="h-6 px-2.5 text-xs">
+          <Button variant="ghost" size="xs" disabled className={BUTTON_CLASS}>
             {t('update.inProgress')}
           </Button>
         )}
@@ -97,7 +99,7 @@ export function UpdateBanner() {
               variant="default"
               size="xs"
               onClick={() => applyUpdate()}
-              className="h-6 px-2.5 text-xs"
+              className={BUTTON_CLASS}
             >
               {t('update.retry')}
             </Button>
@@ -105,7 +107,7 @@ export function UpdateBanner() {
               variant="outline"
               size="xs"
               onClick={() => openManualInstall()}
-              className="h-6 px-2.5 text-xs"
+              className={BUTTON_CLASS}
             >
               {t('update.manualInstall')}
             </Button>
@@ -113,7 +115,7 @@ export function UpdateBanner() {
               variant="ghost"
               size="xs"
               onClick={() => dismissUpdate()}
-              className="h-6 px-2.5 text-xs"
+              className={BUTTON_CLASS}
             >
               {t('update.later')}
             </Button>

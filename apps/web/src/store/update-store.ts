@@ -45,7 +45,7 @@ export const useUpdateStore = create<UpdateState>((set) => ({
   setPhase: (phase) =>
     set((state) => {
       if (state.status !== 'updating') return state;
-      return { status: 'updating', phase };
+      return { phase };
     }),
   setError: (message) => set({ status: 'error', error: message, phase: 'failed' }),
   setIdle: () => set({ status: 'idle', info: null, error: null, phase: null }),

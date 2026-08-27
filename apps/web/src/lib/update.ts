@@ -93,7 +93,7 @@ export function applyUpdate(): void {
       // and the terminal failure arrive via events.
     } catch (cause) {
       const message = typeof cause === 'string' ? cause : String(cause);
-      useUpdateStore.getState().setError(message);
+      store.setError(message);
     }
   })();
 }

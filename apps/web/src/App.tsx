@@ -75,14 +75,11 @@ export function App() {
         }
       }
       if (event.key === 'Delete' && currentPath) {
+        event.preventDefault();
         // Destructive file operations are blocked while an update is installing: the
         // app is about to restart, and a delete issued mid-install could leave the
         // workspace in a state the user did not intend.
-        if (useUpdateStore.getState().status === 'updating') {
-          event.preventDefault();
-          return;
-        }
-        event.preventDefault();
+        if (useUpdateStore.getState().status === 'updating') return;
         void trash(currentPath)
           .then(({ trashId, originalPath }) => {
             showToast(t('toast.movedToTrash', { path: originalPath }), {
