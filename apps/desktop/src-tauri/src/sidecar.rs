@@ -224,8 +224,9 @@ pub fn spawn_background(app: tauri::AppHandle, manager: Arc<SidecarManager>) {
     });
 }
 
-/// Get the current sidecar state. Called by the TauriDataPort constructor before it
-/// subscribes to `sidecar-ready`/`sidecar-failed` events, preventing the startup race.
+/// Get the current sidecar state. Called by the TauriDataPort after it subscribes to
+/// `sidecar-ready`/`sidecar-failed`/`sidecar-starting` events; the query reconciles any
+/// transition that fired before the subscription was in place.
 #[tauri::command]
 pub fn get_sidecar_status(state: tauri::State<'_, Arc<SidecarManager>>) -> serde_json::Value {
     state.inner().current().to_payload()

@@ -16,34 +16,69 @@ pub fn workspace_root() -> PathBuf {
 // Path containment
 // ---------------------------------------------------------------------------
 
+/// True if any path segment is exactly `..`. Checks exact segments rather than
+/// substrings so names like `a..b.md` stay valid, matching the shared
+/// `guardWorkspacePath` (which forbids the `..` segment, not the substring).
+fn contains_parent_segment(rel_path: &str) -> bool {
+    rel_path.split(['/', '\\']).any(|segment| segment == "..")
+}
+
+/// Canonicalize `path`, walking up to the deepest ancestor that exists and
+/// returning `(canonical ancestor, missing suffix)`. Mirrors the server's
+/// `canonicalizePath`, so paths inside not-yet-created directories resolve
+/// instead of failing on the missing parent.
+fn canonicalize_deepest(path: &Path) -> Result<(PathBuf, PathBuf), String> {
+    // Components are collected while walking up (deepest first), so they are
+    // reversed before being joined back into the missing suffix.
+    let mut missing: Vec<PathBuf> = Vec::new();
+    let mut current = path.to_path_buf();
+    loop {
+        match current.canonicalize() {
+            Ok(canonical) => {
+                return Ok((canonical, missing.into_iter().rev().collect::<PathBuf>()));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let Some(filename) = current.file_name().map(PathBuf::from) else {
+                    return Err(format!("Cannot resolve path: {error}"));
+                };
+                let Some(parent) = current.parent().map(Path::to_path_buf) else {
+                    return Err(format!("Cannot resolve path: {error}"));
+                };
+                missing.push(filename);
+                current = parent;
+            }
+            Err(error) => return Err(format!("Cannot resolve path: {error}")),
+        }
+    }
+}
+
 /// Resolve a relative path inside the workspace root, with symlink-aware
-/// containment checking. For paths that may not exist yet (create, write),
-/// canonicalizes the parent directory and appends the filename.
+/// containment checking. Tolerates not-yet-existing path components (create,
+/// write) by resolving the deepest existing ancestor and rejoining the missing
+/// tail after the containment check.
 fn resolve_inside(root: &Path, rel_path: &str) -> Result<PathBuf, String> {
     // Prevent the path from escaping via root-relative segments
-    if rel_path.contains("..") {
+    if contains_parent_segment(rel_path) {
         return Err("Path may not contain '..'".into());
     }
     let path = root.join(rel_path);
-    let parent = path.parent().ok_or_else(|| "Invalid path: no parent".to_string())?;
 
-    // Canonicalize the parent (must exist) and root
-    let canonical_parent = parent
-        .canonicalize()
-        .map_err(|e| format!("Cannot resolve path: {e}"))?;
+    let (canonical, missing) = canonicalize_deepest(&path)?;
     let canonical_root = root
         .canonicalize()
         .map_err(|e| format!("Cannot resolve workspace root: {e}"))?;
 
-    if !canonical_parent.starts_with(&canonical_root) {
+    if !canonical.starts_with(&canonical_root) {
         return Err("Path traversal detected".to_string());
     }
 
-    // Reconstruct the full path from the canonical parent
-    let filename = path
-        .file_name()
-        .ok_or_else(|| "Invalid path: no filename".to_string())?;
-    Ok(canonical_parent.join(filename))
+    // Joining an empty suffix would append a trailing separator, which makes
+    // later `rename`/`stat` calls treat the file path as a directory.
+    if missing.as_os_str().is_empty() {
+        Ok(canonical)
+    } else {
+        Ok(canonical.join(missing))
+    }
 }
 
 /// Resolve a path that is expected to exist (read, stat, remove, move source).
@@ -139,13 +174,11 @@ fn has_allowed_extension(path: &Path) -> bool {
         .is_some_and(|ext| ALLOWED_EXTENSIONS.contains(&ext.as_str()))
 }
 
-/// Returns true if any path segment starts with `.` (dot directory / hidden file).
-/// Used by the file watcher module (watcher.rs) to filter events.
-#[allow(dead_code)]
-fn is_dot_segment(path: &Path) -> bool {
-    path.components()
-        .filter_map(|c| c.as_os_str().to_str())
-        .any(|s| s.starts_with('.'))
+/// Workspace-relative path rendered with `/` separators. The webview splits
+/// paths on `/` when building the file tree (buildFileTree), so Windows `\`
+/// separators would flatten the tree.
+pub(crate) fn rel_path_string(rel: &Path) -> String {
+    rel.to_string_lossy().replace('\\', "/")
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +208,7 @@ fn core_read_file(root: &Path, rel_path: &str) -> Result<RawFile, String> {
         .strip_prefix(&canonical_root)
         .map_err(|_| "Path resolution error".to_string())?;
     Ok(RawFile {
-        path: rel.to_string_lossy().to_string(),
+        path: rel_path_string(rel),
         body,
         size: metadata.len(),
         modified_at: iso_time(&metadata),
@@ -217,7 +250,7 @@ fn core_write_file(
         .strip_prefix(&canonical_root)
         .map_err(|_| "Path resolution error".to_string())?;
     Ok(WriteResult {
-        path: rel.to_string_lossy().to_string(),
+        path: rel_path_string(rel),
         size: metadata.len(),
         modified_at: iso_time(&metadata),
     })
@@ -254,7 +287,7 @@ fn core_create_file(root: &Path, rel_path: &str, content: &str) -> Result<RawFil
         .strip_prefix(&canonical_root)
         .map_err(|_| "Path resolution error".to_string())?;
     Ok(RawFile {
-        path: rel.to_string_lossy().to_string(),
+        path: rel_path_string(rel),
         body: content.to_string(),
         size: metadata.len(),
         modified_at: iso_time(&metadata),
@@ -286,7 +319,7 @@ fn collect_files(root: &Path, dir: &Path, files: &mut Vec<String>) -> std::io::R
             collect_files(root, &path, files)?;
         } else if path.is_file() && has_allowed_extension(&path) {
             if let Ok(rel) = path.strip_prefix(root) {
-                files.push(rel.to_string_lossy().to_string());
+                files.push(rel_path_string(rel));
             }
         }
     }
@@ -436,7 +469,7 @@ mod tests {
         let root = temp_root("valid");
         fs::create_dir_all(root.join("daily")).unwrap();
         let resolved = resolve_inside(&root, "daily/2026-08-21.md").unwrap();
-        assert!(resolved.starts_with(&root.canonicalize().unwrap()));
+        assert!(resolved.starts_with(root.canonicalize().unwrap()));
     }
 
     #[test]
@@ -456,7 +489,7 @@ mod tests {
         let absolute = "/etc/passwd";
         let result = resolve_inside(&root, absolute.trim_start_matches('/'));
         // `/etc` parent may not exist relative to root; either way no escape.
-        assert!(!result.map_or(false, |p| p == PathBuf::from("/etc/passwd")));
+        assert!(!result.is_ok_and(|p| p == Path::new("/etc/passwd")));
     }
 
     #[cfg(unix)]
@@ -471,7 +504,6 @@ mod tests {
         ));
         fs::create_dir_all(&outside).unwrap();
         fs::write(outside.join("secret.txt"), "top secret").unwrap();
-        #[cfg(unix)]
         std::os::unix::fs::symlink(&outside, root.join("link")).unwrap();
 
         // resolve_existing follows the symlink and must reject the escape
@@ -552,7 +584,73 @@ mod tests {
         assert!(!files.contains(&"notes/skip.txt.bak".to_string()));
         assert!(!files.iter().any(|f| f.contains(".hidden")));
         assert!(!files.iter().any(|f| f.starts_with(".workboost")));
-        assert!(!files.iter().any(|f| f.starts_with(".workboost")));
+    }
+
+    #[test]
+    fn resolve_inside_allows_double_dot_in_filename() {
+        // `..` as a substring is a valid filename; only exact `..` segments are escapes.
+        let root = temp_root("double-dot-name");
+        fs::create_dir_all(root.join("notes")).unwrap();
+        assert!(resolve_inside(&root, "notes/a..b.md").is_ok());
+    }
+
+    #[test]
+    fn resolve_inside_rejects_backslash_parent_segments() {
+        // On Windows `\` is a separator, so `..\escape.md` is a traversal there;
+        // elsewhere it is still rejected so the rule cannot silently differ by OS.
+        let root = temp_root("backslash-traversal");
+        fs::create_dir_all(&root).unwrap();
+        assert!(resolve_inside(&root, "..\\escape.md").is_err());
+    }
+
+    #[test]
+    fn resolve_inside_resolves_missing_parent_dirs() {
+        // The server's canonicalizePath resolves the deepest existing ancestor,
+        // so creating a file in a new folder works without a prior mkdir.
+        let root = temp_root("missing-parent");
+        core_init(&root).unwrap();
+        let resolved = resolve_inside(&root, "newdir/sub/a.md").unwrap();
+        assert_eq!(
+            resolved,
+            root.canonicalize().unwrap().join("newdir/sub/a.md")
+        );
+    }
+
+    #[test]
+    fn rel_path_string_normalizes_separators() {
+        // The webview builds the file tree by splitting on `/`; a Windows `\`
+        // separator would flatten the tree. On unix the `\` form is a literal
+        // filename character, and it is still normalized the same way.
+        assert_eq!(rel_path_string(Path::new("daily\\a.md")), "daily/a.md");
+        assert_eq!(rel_path_string(Path::new("daily/a.md")), "daily/a.md");
+    }
+
+    #[test]
+    fn write_file_creates_missing_parent_dirs() {
+        let root = temp_root("write-missing-parent");
+        core_init(&root).unwrap();
+        let result = core_write_file(&root, "newdir/sub/a.md", "hello", None).unwrap();
+        assert_eq!(result.path, "newdir/sub/a.md");
+        assert!(root.join("newdir/sub/a.md").is_file());
+    }
+
+    #[test]
+    fn create_file_in_missing_dir_succeeds() {
+        let root = temp_root("create-missing-dir");
+        core_init(&root).unwrap();
+        let file = core_create_file(&root, "newdir/b.md", "new").unwrap();
+        assert_eq!(file.path, "newdir/b.md");
+        assert!(root.join("newdir/b.md").is_file());
+    }
+
+    #[test]
+    fn move_file_creates_missing_destination_dir() {
+        let root = temp_root("move-missing-dir");
+        core_init(&root).unwrap();
+        core_write_file(&root, "notes/a.md", "hello", None).unwrap();
+        core_move(&root, "notes/a.md", "moved/deep/b.md").unwrap();
+        assert!(root.join("moved/deep/b.md").is_file());
+        assert!(!root.join("notes/a.md").exists());
     }
 
     #[test]

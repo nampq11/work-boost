@@ -15,7 +15,7 @@ import type {
 } from './data-port.ts';
 import { DataPortUnavailableError } from './data-port.ts';
 import { HttpDataPort } from './http-data-port.ts';
-import { parseFrontmatter, stringifyMarkdown } from './markdown-parser.ts';
+import { parseFrontmatter, stringifyMarkdown, stripFrontmatter } from './markdown-parser.ts';
 import {
   workspaceCreateFile,
   workspaceExists,
@@ -51,13 +51,13 @@ export class TauriDataPort implements DataPort {
   private statusListeners = new Set<(status: SidecarStatus) => void>();
   private unsubscribeEvents: (() => void) | null = null;
 
-  /** Initialize workspace directories and capture the initial sidecar state. */
+  /** Initialize workspace directories and capture the sidecar lifecycle state. */
   async init(): Promise<void> {
     await workspaceInit();
-    await this.refreshSidecarStatus();
-    // Subscribe to sidecar transitions that happen after construction.
-    // Events only drive transitions; the initial state came from the query above
-    // so there is no race between construction and event subscription.
+    // Subscribe before querying: a transition that fires while the listeners
+    // are being registered (or later) is captured by the events, and the query
+    // that follows reconciles any state that predates the subscription. The
+    // reverse order would miss transitions in the gap between query and listen.
     const unsubReady = await listen<{ base: string }>('sidecar-ready', (event) => {
       this.httpBase = event.payload.base;
       // Route the HTTP-backed operations (AI, auth, debts, daily) at the sidecar's
@@ -83,6 +83,7 @@ export class TauriDataPort implements DataPort {
       unsubFailed();
       unsubStarting();
     };
+    await this.refreshSidecarStatus();
   }
 
   private async refreshSidecarStatus(): Promise<void> {
@@ -330,7 +331,14 @@ export class TauriDataPort implements DataPort {
     // Write journal, move the data back, clean metadata + journal.
     await workspaceWriteFile(journalPath, JSON.stringify(record));
     await workspaceMove(record.trashPath, record.originalPath);
-    if (await workspaceExists(metaPath)) await workspaceRemove(metaPath);
+    try {
+      if (await workspaceExists(metaPath)) await workspaceRemove(metaPath);
+    } catch (error) {
+      // Compensate: move the file back so the journal + trash data stay
+      // consistent for a later restore attempt (mirrors the server's protocol).
+      await workspaceMove(record.originalPath, record.trashPath).catch(() => undefined);
+      throw error;
+    }
     await workspaceRemove(journalPath).catch(() => undefined);
     return this.readFile(record.originalPath);
   }
@@ -394,8 +402,11 @@ export class TauriDataPort implements DataPort {
   }
 
   streamResponse(responseId: string, signal?: AbortSignal): AsyncGenerator<AssistantResponseEvent> {
+    // Throwing synchronously surfaces the typed error to the copilot adapter's
+    // try/catch around the stream loop, instead of forcing it to iterate a
+    // generator before discovering the failure.
     if (this.httpBase === null) {
-      return unavailableStream();
+      throw new DataPortUnavailableError();
     }
     return this.http.streamResponse(responseId, signal);
   }
@@ -449,8 +460,15 @@ export class TauriDataPort implements DataPort {
     if (!isMarkdownFile(path)) return { frontmatter: {}, body: raw };
     try {
       return parseFrontmatter(raw);
-    } catch {
-      return { frontmatter: {}, body: raw };
+    } catch (error) {
+      // Corrupted frontmatter degrades to body-only, mirroring the server's
+      // `safeParseMarkdown` fallback (spec NFR-04). Returning `raw` here would
+      // leak the `---` block into the editor body and bake it in on save.
+      console.warn(
+        `[TauriDataPort] Corrupted markdown frontmatter, serving body only: ${path}`,
+        error instanceof Error ? error.message : error,
+      );
+      return { frontmatter: {}, body: stripFrontmatter(raw) };
     }
   }
 }
@@ -458,18 +476,4 @@ export class TauriDataPort implements DataPort {
 /** True for markdown document paths; other extensions are stored as plain content. */
 function isMarkdownFile(path: string): boolean {
   return path.toLowerCase().endsWith('.md');
-}
-
-/**
- * An async generator that immediately throws. Returned by `streamResponse` when
- * the sidecar is unavailable; iterating it surfaces the typed error to the
- * copilot adapter.
- */
-/**
- * An async generator that immediately throws. Returned by `streamResponse` when
- * the sidecar is unavailable; iterating it surfaces the typed error to the
- * copilot adapter.
- */
-async function* unavailableStream(): AsyncGenerator<AssistantResponseEvent> {
-  throw new DataPortUnavailableError();
 }

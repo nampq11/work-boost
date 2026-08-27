@@ -1,3 +1,22 @@
+/**
+ * Strip a frontmatter block from raw markdown, tolerating malformed YAML.
+ * Mirrors the server's `stripFrontmatter` fallback (workspace.ts): when
+ * frontmatter cannot be parsed, the raw `---` block must never leak into the
+ * editor body.
+ */
+export function stripFrontmatter(raw: string): string {
+  const lines = raw.split('\n');
+  if (lines[0]?.trim() !== '---') return raw.trim();
+  let close = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '---') {
+      close = i;
+      break;
+    }
+  }
+  return (close === -1 ? raw : lines.slice(close + 1).join('\n')).trim();
+}
+
 export function parseFrontmatter(raw: string): {
   frontmatter: Record<string, unknown>;
   body: string;

@@ -122,8 +122,9 @@ as the browser. The sidecar lifecycle is now non-blocking:
 - **Bundled builds** (`custom-protocol` feature): the workspace init (directory creation) and file
   watcher start synchronously, then the webview loads immediately. The Deno API sidecar is spawned
   in a background thread with `SidecarManager`; it reports `starting` -> `ready` or `failed` via
-  Tauri events (`sidecar-ready`, `sidecar-failed`). The frontend's `TauriDataPort` queries the
-  initial state via `get_sidecar_status` before subscribing to events, preventing the startup race.
+  Tauri events (`sidecar-ready`, `sidecar-failed`). The frontend's `TauriDataPort` subscribes to
+  those events before querying `get_sidecar_status`; the query reconciles any transition that
+  happened before subscription, so a `sidecar-ready` emitted during startup is never missed.
   AI features activate when the sidecar is ready; the editor works immediately.
 - **Dev builds** (no `custom-protocol`): `SidecarState` is set to `Ready` with base
   `http://127.0.0.1:3001/api` immediately. No sidecar spawned. The frontend uses `HttpDataPort`

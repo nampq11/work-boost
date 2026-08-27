@@ -6,6 +6,7 @@ import {
 import {
   parseFrontmatter,
   stringifyMarkdown as rendererStringify,
+  stripFrontmatter,
 } from '../../src/lib/markdown-parser.ts';
 
 /**
@@ -147,4 +148,91 @@ Deno.test('markdown conformance: stringify produces frontmatter-delimited docume
       assertEquals(raw.includes('\n---\n'), true, `${fixture.name}: has closing ---`);
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// Malformed frontmatter degradation
+// ---------------------------------------------------------------------------
+
+/**
+ * Raw documents whose frontmatter delimiters are well-formed but whose YAML is
+ * invalid, so the server parser (full YAML) throws and its boundary
+ * (`safeParseMarkdown` in workspace.ts) degrades to body-only.
+ */
+const MALFORMED_FIXTURES: { name: string; raw: string; body: string }[] = [
+  {
+    name: 'unclosed yaml flow sequence',
+    raw: '---\nkey: [unclosed\n---\nbody text',
+    body: 'body text',
+  },
+  {
+    name: 'unclosed yaml flow mapping',
+    raw: '---\nkey: {unclosed\n---\nbody text',
+    body: 'body text',
+  },
+  {
+    name: 'tab-indented yaml value',
+    raw: '---\nkey:\n\tvalue\n---\nbody text',
+    body: 'body text',
+  },
+];
+
+/** Mirrors the server's `safeParseMarkdown` boundary (workspace.ts), minus logging. */
+function serverSafeParse(raw: string): { frontmatter: Record<string, unknown>; body: string } {
+  try {
+    return parseMarkdown<Record<string, unknown>>(raw);
+  } catch {
+    return { frontmatter: {}, body: stripFrontmatter(raw) };
+  }
+}
+
+/** Mirrors the TauriDataPort `parseForPath` boundary for markdown files, minus logging. */
+function rendererSafeParse(raw: string): { frontmatter: Record<string, unknown>; body: string } {
+  try {
+    return parseFrontmatter(raw);
+  } catch {
+    return { frontmatter: {}, body: stripFrontmatter(raw) };
+  }
+}
+
+Deno.test('markdown conformance: malformed fixtures do throw in the server parser', () => {
+  // Guards against the fixtures silently becoming valid YAML.
+  for (const fixture of MALFORMED_FIXTURES) {
+    let threw = false;
+    try {
+      parseMarkdown<Record<string, unknown>>(fixture.raw);
+    } catch {
+      threw = true;
+    }
+    assertEquals(threw, true, fixture.name);
+  }
+});
+
+Deno.test('markdown conformance: server boundary degrades malformed frontmatter to body-only', () => {
+  for (const fixture of MALFORMED_FIXTURES) {
+    const parsed = serverSafeParse(fixture.raw);
+    assertEquals(parsed.frontmatter, {}, fixture.name);
+    assertEquals(parsed.body, fixture.body, fixture.name);
+  }
+});
+
+Deno.test('markdown conformance: renderer boundary never leaks the frontmatter block into the body', () => {
+  // The scalar-only renderer parser does not throw on invalid YAML (it reads the
+  // broken value as a string - documented divergence), but its boundary must
+  // produce the same body as the server's fallback so a corrupted file renders
+  // identically in browser/HTTP and bundled-desktop builds.
+  for (const fixture of MALFORMED_FIXTURES) {
+    const parsed = rendererSafeParse(fixture.raw);
+    assertEquals(parsed.body, fixture.body, fixture.name);
+    assertEquals(parsed.body.includes('---'), false, fixture.name);
+    assertEquals(typeof parsed.frontmatter, 'object', fixture.name);
+  }
+});
+
+Deno.test('markdown conformance: stripFrontmatter matches the server fallback shape', () => {
+  // Mirrors the server helper's behavior: no frontmatter -> trimmed raw;
+  // closed block -> body after it; unterminated block -> trimmed raw.
+  assertEquals(stripFrontmatter('plain body\n'), 'plain body');
+  assertEquals(stripFrontmatter('---\nkey: 1\n---\n\nbody'), 'body');
+  assertEquals(stripFrontmatter('---\nkey: 1\nunterminated'), '---\nkey: 1\nunterminated');
 });

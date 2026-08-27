@@ -35,34 +35,57 @@ function useThreadId(): [Promise<string> | null, () => void] {
   const sidecarStatus = useSidecarStatus();
   const [threadId, setThreadId] = useState<Promise<string> | null>(null);
   const creatingRef = useRef(false);
+  const attemptRef = useRef(0);
+  const retryTimerRef = useRef<number | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(retryTimerRef.current);
+    },
+    [],
+  );
 
   const create = useCallback(() => {
     if (creatingRef.current) return;
     creatingRef.current = true;
     // Create lazily once the sidecar is reachable. A failure (sidecar went down
-    // between status check and request) leaves the thread null; the effect retries
-    // on the next status/thread change. The rejection is consumed here so it never
+    // between status check and request) is retried with exponential backoff so a
+    // sidecar that reports ready but rejects requests (e.g. 5xx) cannot produce
+    // a tight create/reject loop. The rejection is consumed here so it never
     // becomes an unhandled promise rejection.
-    const pending = port.createThread().then((thread) => {
-      creatingRef.current = false;
+    const pending = port.createThread().then((thread): string => {
+      attemptRef.current = 0;
       return thread.id;
     });
     void pending.catch(() => {
       creatingRef.current = false;
+      const delay = Math.min(1000 * 2 ** attemptRef.current, 30_000);
+      attemptRef.current += 1;
       setThreadId(null);
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = window.setTimeout(() => {
+        retryTimerRef.current = undefined;
+        // Skip the retry while the sidecar is down; the effect below re-creates
+        // the thread as soon as it becomes ready again.
+        const status = port.getSidecarStatus();
+        if (status === 'ready' || status === 'browser') create();
+      }, delay);
     });
-    setThreadId(pending as Promise<string>);
+    setThreadId(pending);
   }, [port]);
 
-  // Create the thread as soon as the sidecar is available.
+  // Create the thread as soon as the sidecar is available, unless a backed-off
+  // retry is already scheduled (the timer owns the next attempt).
   const ready = sidecarStatus === 'ready' || sidecarStatus === 'browser';
   useEffect(() => {
-    if (ready && threadId === null) create();
+    if (ready && threadId === null && retryTimerRef.current === undefined) create();
   }, [ready, threadId, create]);
 
   const reset = useCallback(() => {
+    window.clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = undefined;
+    attemptRef.current = 0;
     setThreadId(null);
-    creatingRef.current = false;
     create();
   }, [create]);
 
