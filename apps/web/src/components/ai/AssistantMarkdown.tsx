@@ -84,6 +84,30 @@ function convertMarkdownToHtml(markdown: string): string {
   return html;
 }
 
+function sanitizeHtml(html: string): string {
+  const purify =
+    typeof DOMPurify?.sanitize === 'function'
+      ? DOMPurify
+      : typeof DOMPurify === 'function' && typeof window !== 'undefined'
+        ? DOMPurify(window)
+        : null;
+
+  if (purify) {
+    return purify.sanitize(html, {
+      ADD_ATTR: ['data-file-path', 'data-type', 'data-checked'],
+    });
+  }
+
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi, '')
+    .replace(/href\s*=\s*(['"])\s*javascript:[^'"]*\1/gi, '');
+}
+
+export function renderAssistantMarkdownHtml(content: string): string {
+  const html = convertMarkdownToHtml(content);
+  return sanitizeHtml(html);
+}
+
 export function AssistantMarkdown({ content, className }: AssistantMarkdownProps) {
   const selectFile = useWorkspaceStore((state) => state.selectFile);
 
@@ -106,12 +130,7 @@ export function AssistantMarkdown({ content, className }: AssistantMarkdownProps
     });
   }
 
-  const htmlContent = useMemo(() => {
-    const html = convertMarkdownToHtml(content);
-    return DOMPurify.sanitize(html, {
-      ADD_ATTR: ['data-file-path', 'data-type', 'data-checked'],
-    });
-  }, [content]);
+  const htmlContent = useMemo(() => renderAssistantMarkdownHtml(content), [content]);
 
   return (
     <div

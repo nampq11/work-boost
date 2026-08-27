@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert';
-import { resolveAIConfig, AI_DEFAULT_MODELS } from '../src/config.ts';
+import { AI_DEFAULT_MODELS, resolveAIConfig } from '../src/config.ts';
 import type { WorkspaceConfig } from '../src/config.ts';
 
 Deno.test('resolveAIConfig - default behavior', () => {

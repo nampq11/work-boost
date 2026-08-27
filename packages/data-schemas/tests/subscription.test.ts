@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert';
-import { isPlatformEnabled, getActivePlatforms } from '../src/subscription.ts';
+import { getActivePlatforms, isPlatformEnabled } from '../src/subscription.ts';
 import type { Subscription } from '../src/subscription.ts';
 
 Deno.test('isPlatformEnabled - returns true when platform is enabled and has an ID', () => {
