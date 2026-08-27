@@ -11,7 +11,7 @@ export function useAutosave() {
   useEffect(() => {
     if (!isAutosaveEnabled) return;
     if (!isDirty) return;
-    let timer: number | undefined;
+    let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
     let cancelled = false;
     let retryDelay = 300;
     const schedule = (delay: number) => {

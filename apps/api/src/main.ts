@@ -30,7 +30,7 @@ function resolveApiPort(defaultPort: number): number {
   if (Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
     return parsedPort;
   }
-  console.warn(`[DEBUG] Invalid WORKBOOST_PORT '${rawPort}'; falling back to ${defaultPort}`);
+  logger.warn(`Invalid WORKBOOST_PORT '${rawPort}'; falling back to ${defaultPort}`);
   return defaultPort;
 }
 

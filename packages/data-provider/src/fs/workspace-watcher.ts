@@ -2,6 +2,7 @@
 
 import { relative } from '@std/path';
 import type { WorkspaceFS } from '../fs/workspace-fs.ts';
+import { logger } from '@work-boost/shared';
 
 /**
  * Change event emitted by the workspace watcher.
@@ -64,12 +65,12 @@ export function createWorkspaceWatcher(
         } catch (error) {
           // Watching is best-effort; an Interrupted error is expected on close().
           if (!isCancellationError(error)) {
-            console.error('Workspace watcher loop exited with error', error);
+            logger.error('Workspace watcher loop exited with error', { error });
           }
         }
       })();
 
-      console.log(`Workspace Watcher started at: ${fs.root}`);
+      logger.info(`Workspace Watcher started at: ${fs.root}`);
     },
 
     stop(): void {
