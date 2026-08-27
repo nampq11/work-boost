@@ -121,7 +121,7 @@ export class Brain implements AgentPort {
    * files, so the model never sees raw file content unless it asks to.
    */
   async stream(message: string, options?: AgentStreamOptions): Promise<string> {
-    const sessionId = options?.sessionId || 'default';
+    const sessionId = options?.sessionId || 'default-session-id';
 
     const previous = this.queues.get(sessionId) ?? Promise.resolve();
     const current = previous.catch(() => {}).then(() => this.runTurn(sessionId, message, options));

@@ -74,7 +74,7 @@ export async function handleMessage(
     }
 
     const { message, sessionId } = validation.data!;
-    const activeSessionId = sessionId || 'default';
+    const activeSessionId = sessionId || 'default-session-id';
 
     logger.info('Processing async message request', {
       requestId,
@@ -146,7 +146,7 @@ export async function handleMessageSync(
     }
 
     const { message, sessionId } = validation.data!;
-    const activeSessionId = sessionId || 'default';
+    const activeSessionId = sessionId || 'default-session-id';
 
     logger.info('Processing sync message request', {
       requestId,
@@ -241,11 +241,11 @@ export async function handleMessageReset(
       );
     }
 
-    agent.removeSession('default');
+    agent.removeSession('default-session-id');
     return successResponse(
       {
         message: 'Default session has been reset',
-        sessionId: 'default',
+        sessionId: 'default-session-id',
         timestamp: new Date().toISOString(),
       },
       200,

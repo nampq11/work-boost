@@ -23,5 +23,6 @@ export function isValidUUID(id: string): boolean {
  */
 export function isValidSessionId(sessionId: string): boolean {
   // Allow UUID format or alphanumeric with hyphens/underscores (max 50 characters)
-  return isValidUUID(sessionId) || /^[a-zA-Z0-9_-]{1,50}$/.test(sessionId);
+  // Ensure that the minimum length is high enough to avoid weak IDs
+  return isValidUUID(sessionId) || /^[a-zA-Z0-9_-]{8,50}$/.test(sessionId);
 }
