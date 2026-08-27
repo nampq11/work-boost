@@ -291,6 +291,12 @@ fn sidecar_origin(base: &str) -> &str {
     base.strip_suffix("/api").unwrap_or(base)
 }
 
+/// Combine the sidecar origin (its `/api` suffix stripped) with a request path
+/// that already includes `/api`.
+fn sidecar_url(base: &str, path: &str) -> String {
+    format!("{}{}", sidecar_origin(base), path)
+}
+
 fn sidecar_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         // The sidecar can take a while on a cold start; keep a generous cap.
@@ -306,7 +312,7 @@ pub async fn sidecar_request(
     state: tauri::State<'_, Arc<SidecarManager>>,
 ) -> Result<SidecarResponse, String> {
     let base = state.inner().base().ok_or("sidecar not ready")?;
-    let url = format!("{}{}", sidecar_origin(&base), request.path);
+    let url = sidecar_url(&base, &request.path);
     let client = sidecar_client()?;
 
     let mut req = match request.method.as_str() {
@@ -344,7 +350,7 @@ pub async fn sidecar_stream(
     state: tauri::State<'_, Arc<SidecarManager>>,
 ) -> Result<(), String> {
     let base = state.inner().base().ok_or("sidecar not ready")?;
-    let url = format!("{}{}", sidecar_origin(&base), request.path);
+    let url = sidecar_url(&base, &request.path);
     let client = sidecar_client()?;
 
     let mut response = client

@@ -493,8 +493,8 @@ function installSidecarHttpProxy(): void {
     const url = new URL(input, 'http://127.0.0.1');
     const path = url.pathname + url.search;
     const method = init?.method ?? 'GET';
-    const headers = init?.headers as Record<string, string> | undefined;
-    const acceptsStream = headers?.['Accept'] === 'text/event-stream';
+    const headers = new Headers(init?.headers);
+    const acceptsStream = headers.get('Accept') === 'text/event-stream';
 
     let body: unknown;
     if (typeof init?.body === 'string' && init.body.length > 0) {

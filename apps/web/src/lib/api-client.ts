@@ -89,6 +89,50 @@ export interface AssistantResponseEvent {
   delta?: string;
 }
 
+/**
+ * Extract the `data:` payload from a single SSE frame. Frames are delimited by a
+ * blank line and the API emits exactly one `data:` line per frame, so a frame
+ * with no data (e.g. the keep-alive `:` comment) yields null.
+ */
+function sseData(frame: string): string | null {
+  const data = frame
+    .split('\n')
+    .find((line) => line.startsWith('data:'))
+    ?.slice('data:'.length)
+    .trim();
+  return data || null;
+}
+
+/**
+ * Read an SSE body, split it into frames on blank lines, and yield each frame's
+ * `data:` payload. `stop` is checked between chunks so a cancellable reader can
+ * halt (e.g. on keep-alives that carry no data). Releases the reader lock when
+ * the stream ends or when the consumer stops iterating early.
+ */
+async function* readSseData(
+  stream: ReadableStream<Uint8Array>,
+  stop?: () => boolean,
+): AsyncGenerator<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (!stop?.()) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) {
+        const data = sseData(frame);
+        if (data) yield data;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 async function* readAssistantEvents(
   responseId: string,
   signal?: AbortSignal,
@@ -114,27 +158,8 @@ async function* readAssistantEvents(
     );
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  try {
-    while (true) {
-      const result = await reader.read();
-      if (result.done) break;
-      buffer += decoder.decode(result.value, { stream: true });
-      const frames = buffer.split('\n\n');
-      buffer = frames.pop() ?? '';
-      for (const frame of frames) {
-        const data = frame
-          .split('\n')
-          .find((line) => line.startsWith('data:'))
-          ?.slice('data:'.length)
-          .trim();
-        if (data) yield JSON.parse(data) as AssistantResponseEvent;
-      }
-    }
-  } finally {
-    reader.releaseLock();
+  for await (const data of readSseData(response.body)) {
+    yield JSON.parse(data) as AssistantResponseEvent;
   }
 }
 
@@ -273,27 +298,11 @@ export const api = {
           if (!cancelled) onError();
           return;
         }
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (!cancelled) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const frames = buffer.split('\n\n');
-          buffer = frames.pop() ?? '';
-          for (const frame of frames) {
-            let data = '';
-            for (const line of frame.split('\n')) {
-              if (line.startsWith('data:')) data = line.slice('data:'.length).trim();
-            }
-            if (data) {
-              try {
-                onEvent(JSON.parse(data) as AuthLoginEvent);
-              } catch {
-                if (!cancelled) onError();
-              }
-            }
+        for await (const data of readSseData(response.body, () => cancelled)) {
+          try {
+            onEvent(JSON.parse(data) as AuthLoginEvent);
+          } catch {
+            if (!cancelled) onError();
           }
         }
       } catch {
