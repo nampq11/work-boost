@@ -124,14 +124,21 @@ function guardPath(path: string, requestId?: string): Response | null {
   return null;
 }
 
+const dateFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
 function getCurrentDateInTimezone(timezone: string): string {
   try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
+    let formatter = dateFormatterCache.get(timezone);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      dateFormatterCache.set(timezone, formatter);
+    }
+    return formatter.format(new Date());
   } catch {
     return new Date().toISOString().slice(0, 10);
   }

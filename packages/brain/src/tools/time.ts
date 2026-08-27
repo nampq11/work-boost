@@ -3,6 +3,9 @@ import { Type } from '@earendil-works/pi-ai';
 import type { ConfigManager } from '@work-boost/data-provider';
 import { successResult } from './result.ts';
 
+const dateFormatterCache = new Map<string, Intl.DateTimeFormat>();
+const timeFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
 /**
  * Get the current date and time in the workspace's configured timezone.
  */
@@ -18,18 +21,28 @@ export function createTimeTool(configManager: ConfigManager): AgentTool<any> {
       const timezone = config.timezone || 'Asia/Ho_Chi_Minh';
       const now = new Date();
 
-      const localDate = new Intl.DateTimeFormat('en-CA', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(now);
+      let dateFormatter = dateFormatterCache.get(timezone);
+      if (!dateFormatter) {
+        dateFormatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        dateFormatterCache.set(timezone, dateFormatter);
+      }
+      const localDate = dateFormatter.format(now);
 
-      const localTime = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        timeStyle: 'full',
-        dateStyle: 'full',
-      }).format(now);
+      let timeFormatter = timeFormatterCache.get(timezone);
+      if (!timeFormatter) {
+        timeFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: timezone,
+          timeStyle: 'full',
+          dateStyle: 'full',
+        });
+        timeFormatterCache.set(timezone, timeFormatter);
+      }
+      const localTime = timeFormatter.format(now);
 
       const summary = `📅 ${localDate} | ${localTime} (Timezone: ${timezone})`;
 

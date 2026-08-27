@@ -518,7 +518,12 @@ Deno.test('Workspace router - fs read of a corrupted markdown degrades to body-o
 Deno.test('Workspace router - GET /api/workspace/daily/today returns today report', async () => {
   await withTempWorkspace(async ({ dataLayer }) => {
     const handle = routerFor(dataLayer);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
     await dataLayer.dailyWork.save(today, {
       completed: [{ project: 'INBOX', task: 'test' }],
       incomplete: [],
