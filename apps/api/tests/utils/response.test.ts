@@ -24,6 +24,36 @@ Deno.test('successResponse', async (t) => {
     const body = await response.json();
     assertEquals(body.meta.requestId, 'req-123');
   });
+
+  await t.step('handles null data correctly', async () => {
+    const response = successResponse(null);
+
+    assertEquals(response.status, 200);
+
+    const body = await response.json();
+    assertEquals(body.success, true);
+    assertEquals(body.data, null);
+  });
+
+  await t.step('handles array data correctly', async () => {
+    const data = [{ id: 1 }, { id: 2 }];
+    const response = successResponse(data);
+
+    assertEquals(response.status, 200);
+
+    const body = await response.json();
+    assertEquals(body.success, true);
+    assertEquals(body.data, data);
+  });
+
+  await t.step('uses custom status code correctly', async () => {
+    const response = successResponse({ deleted: true }, 204);
+
+    assertEquals(response.status, 204);
+
+    // A 204 response has no body
+    assertEquals(response.body, null);
+  });
 });
 
 Deno.test('errorResponse', async (t) => {
