@@ -7,3 +7,4 @@ docs/solutions/
 .claude
 todos/
 dist/
+.test_workspace/

@@ -146,26 +146,33 @@ export function createDebtRepository(fs: WorkspaceFS): DebtRepository {
       const allPaths = [...activePaths, ...archivePaths];
       const mdPaths = allPaths.filter((p) => p.endsWith('.md'));
 
-      const results: DebtDocument[] = [];
-      for (const p of mdPaths) {
-        try {
-          const raw = await fs.readText(p);
-          const { frontmatter, body } = parseMarkdown<Record<string, unknown>>(raw);
-          if (!isDebtFrontmatter(frontmatter)) continue;
-          results.push({
-            frontmatter: DebtFrontmatterSchema.parse(frontmatter),
-            reason: body,
-            filePath: p,
-          });
-        } catch (error) {
-          logger.warn('Corrupted debt file detected', { path: p });
-          logger.debug('Corrupted debt file parse error', {
-            path: p,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-      return results.sort((a, b) => b.frontmatter.createdAt.localeCompare(a.frontmatter.createdAt));
+      const results = await Promise.all(
+        mdPaths.map(async (p) => {
+          try {
+            const raw = await fs.readText(p);
+            const { frontmatter, body } = parseMarkdown<Record<string, unknown>>(raw);
+            if (!isDebtFrontmatter(frontmatter)) return null;
+            return {
+              frontmatter: DebtFrontmatterSchema.parse(frontmatter),
+              reason: body,
+              filePath: p,
+            };
+          } catch (error) {
+            logger.warn('Corrupted debt file detected', { path: p });
+            logger.debug('Corrupted debt file parse error', {
+              path: p,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+          }
+        }),
+      );
+
+      const validResults = results.filter((d): d is DebtDocument => d !== null);
+
+      return validResults.sort((a, b) =>
+        b.frontmatter.createdAt.localeCompare(a.frontmatter.createdAt),
+      );
     },
 
     async filter(options: DebtFilterOptions): Promise<DebtDocument[]> {
