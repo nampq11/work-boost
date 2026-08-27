@@ -10,3 +10,16 @@ Deno.test('timingSafeEqual returns false for different strings', () => {
   assertFalse(timingSafeEqual('short', 'shorter'));
   assertFalse(timingSafeEqual('abc', 'abd'));
 });
+
+Deno.test('timingSafeEqual handles empty strings correctly', () => {
+  assert(timingSafeEqual('', ''));
+  assertFalse(timingSafeEqual('', 'a'));
+  assertFalse(timingSafeEqual('a', ''));
+});
+
+Deno.test('timingSafeEqual returns false for different strings of same length', () => {
+  assertFalse(timingSafeEqual('abc', 'cba'));
+  assertFalse(timingSafeEqual('a', 'b'));
+  assertFalse(timingSafeEqual('12345', '12346'));
+  assertFalse(timingSafeEqual('test-1', 'test-2'));
+});
