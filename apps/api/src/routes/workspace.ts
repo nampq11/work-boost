@@ -32,18 +32,21 @@ export interface WorkspaceRouterDeps {
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const APPS_BASE = '/workspace-apps';
-const CSP_POLICY = [
-  'sandbox allow-scripts allow-forms allow-same-origin',
-  "default-src 'none'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net",
-  "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*",
-  "img-src 'self' data:",
-  "font-src 'self' data:",
-  "form-action 'self'",
-  "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*",
-  "base-uri 'none'",
-].join('; ');
+
+function getCspPolicy(nonce: string): string {
+  return [
+    'sandbox allow-scripts allow-forms allow-same-origin',
+    "default-src 'none'",
+    `script-src 'self' 'nonce-${nonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net`,
+    "style-src 'self' 'unsafe-inline'",
+    "connect-src 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*",
+    "img-src 'self' data:",
+    "font-src 'self' data:",
+    "form-action 'self'",
+    "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*",
+    "base-uri 'none'",
+  ].join('; ');
+}
 
 function isLoopback(info?: Deno.ServeHandlerInfo): boolean {
   const hostname = (info as unknown as { remote?: { hostname?: string } })?.remote?.hostname;
@@ -364,13 +367,15 @@ export function createWorkspaceRouter(deps: WorkspaceRouterDeps): WorkspaceRoute
     const runtimeBundleJs = `window.__WORKBOOST_API_BASE__=${JSON.stringify(
       workspaceBase,
     )};\n${runtime.js}`;
-    const html = injectHtmlAppRuntime(rawHtml, runtimeBundleJs, runtime.themeCss);
+
+    const nonce = crypto.randomUUID();
+    const html = injectHtmlAppRuntime(rawHtml, runtimeBundleJs, runtime.themeCss, nonce);
 
     return new Response(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store, no-cache, must-revalidate',
-        'Content-Security-Policy': CSP_POLICY,
+        'Content-Security-Policy': getCspPolicy(nonce),
       },
     });
   }

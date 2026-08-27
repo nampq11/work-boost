@@ -1,8 +1,8 @@
 /// <reference lib="deno.ns" />
 
 import { relative } from '@std/path';
-import type { WorkspaceFS } from '../fs/workspace-fs.ts';
 import { logger } from '@work-boost/shared';
+import type { WorkspaceFS } from '../fs/workspace-fs.ts';
 
 /**
  * Change event emitted by the workspace watcher.

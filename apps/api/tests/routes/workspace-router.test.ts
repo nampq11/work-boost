@@ -1,4 +1,4 @@
-import { assert, assertEquals } from '@std/assert';
+import { assert, assertEquals, assertMatch } from '@std/assert';
 import { createWorkspaceRouter } from '@work-boost/api/routes/workspace.ts';
 import { createDataLayer } from '@work-boost/data-provider';
 import type { DataLayer } from '@work-boost/data-provider';
@@ -82,14 +82,14 @@ Deno.test('Workspace router - serves seeded HTML apps with CSP + injected runtim
 
     assertEquals(res.status, 200);
     assertEquals(res.headers.get('content-type'), 'text/html; charset=utf-8');
-    assertEquals(
-      res.headers.get('content-security-policy'),
-      "sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*; img-src 'self' data:; font-src 'self' data:; form-action 'self'; frame-ancestors 'self' http://localhost:* http://127.0.0.1:* http://[::1]:*; base-uri 'none'",
+    assertMatch(
+      res.headers.get('content-security-policy')!,
+      /sandbox allow-scripts allow-forms allow-same-origin; default-src 'none'; script-src 'self' 'nonce-[a-zA-Z0-9-]+' https:\/\/cdn\.tailwindcss\.com https:\/\/cdn\.jsdelivr\.net; style-src 'self' 'unsafe-inline'; connect-src 'self' http:\/\/localhost:\* http:\/\/127\.0\.0\.1:\* http:\/\/\[::1\]:\*; img-src 'self' data:; font-src 'self' data:; form-action 'self'; frame-ancestors 'self' http:\/\/localhost:\* http:\/\/127\.0\.0\.1:\* http:\/\/\[::1\]:\*; base-uri 'none'/,
     );
     assertEquals(res.headers.get('cache-control'), 'no-store, no-cache, must-revalidate');
     const text = await bodyText(res);
     assertEquals(text.includes('cdn.tailwindcss.com/3.4.17'), true);
-    assertEquals(text.includes('cdn.jsdelivr.net/npm/alpinejs@3.16.2'), true);
+    assertEquals(text.includes('cdn.jsdelivr.net/npm/@alpinejs/csp@3.16.2'), true);
     assertEquals(text.includes('window.workboost'), true);
     assertEquals(text.includes('Debt Ledger Work Boost'), true);
   });

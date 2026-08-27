@@ -6,14 +6,14 @@ import type { DebtDocument } from '@work-boost/data-schemas/debt.ts';
 import type { Subscription } from '@work-boost/data-schemas/subscription.ts';
 import type { Message } from '@work-boost/data-schemas/task.ts';
 import type { User } from '@work-boost/data-schemas/user.ts';
-import { createWorkspaceFS, type WorkspaceFS } from './fs/workspace-fs.ts';
+import { type WorkspaceFS, createWorkspaceFS } from './fs/workspace-fs.ts';
 import { parseMarkdown } from './markdown/markdown-engine.ts';
 import { type ConfigManager, createConfigManager } from './repositories/config-manager.ts';
 import {
-  createDailyWorkRepository,
   type DailyWorkRepository,
+  createDailyWorkRepository,
 } from './repositories/daily-work-repository.ts';
-import { createDebtRepository, type DebtRepository } from './repositories/debt-repository.ts';
+import { type DebtRepository, createDebtRepository } from './repositories/debt-repository.ts';
 
 /**
  * Single-user workspace user ID for backward compatibility
