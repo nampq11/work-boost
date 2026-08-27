@@ -92,19 +92,22 @@ async function searchFiles(
   const pattern = folder ? `${folder}/**/*.md` : '**/*.md';
   const files = await fs.listByGlob(pattern);
 
-  const hits: { path: string; line: number; snippet: string }[] = [];
-  for (const file of files) {
+  const filePromises = files.map(async (file) => {
+    const fileHits: { path: string; line: number; snippet: string }[] = [];
     const lines = (await fs.readText(file)).split('\n');
     lines.forEach((line, index) => {
       if (line.toLowerCase().includes(searchQuery)) {
-        hits.push({
+        fileHits.push({
           path: file,
           line: index + 1,
           snippet: line.trim().slice(0, MAX_SNIPPET_LENGTH),
         });
       }
     });
-  }
+    return fileHits;
+  });
+
+  const hits = (await Promise.all(filePromises)).flat();
 
   if (hits.length === 0) {
     return successResult([], `🔍 No results for "${searchQuery}".`);
