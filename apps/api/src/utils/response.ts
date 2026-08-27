@@ -28,7 +28,10 @@ export function successResponse<T>(
     },
   };
 
-  return new Response(JSON.stringify(response), {
+  // A 204 No Content response cannot have a body
+  const body = statusCode === 204 ? null : JSON.stringify(response);
+
+  return new Response(body, {
     status: statusCode,
     headers: {
       'content-type': 'application/json',
