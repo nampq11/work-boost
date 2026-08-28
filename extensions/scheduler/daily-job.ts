@@ -3,7 +3,7 @@
 import type { AgentPort } from '@work-boost/brain';
 import { type Database, SINGLE_USER_ID } from '@work-boost/data-provider/database.ts';
 import type { Logger } from '@work-boost/shared';
-import type { ExtensionContext, ExtensionCronJob } from '../types.ts';
+import type { ExtensionContext, ExtensionCronJob, ExtensionMessageSender } from '../types.ts';
 
 export interface SchedulerDependencies {
   db: Database;
@@ -44,6 +44,22 @@ export function createDailySummaryJob(ctx: ExtensionContext): ExtensionCronJob {
   };
 }
 
+function warnIfPlatformDisconnected(
+  platform: string,
+  sender: ExtensionMessageSender | undefined,
+  chatId: string | undefined,
+  logger: Logger,
+): void {
+  // Capability and intent are separate: the subscription can target a platform
+  // whose bot token is missing from the environment, so say so instead of
+  // silently dropping the delivery.
+  if (!sender && chatId) {
+    logger.warn(
+      `[Scheduler] ${platform} is subscribed for delivery but its extension is not connected; check its bot token configuration`,
+    );
+  }
+}
+
 export async function processDailySummary(
   dependencies: SchedulerDependencies,
 ): Promise<ProcessResult> {
@@ -74,6 +90,7 @@ export async function processDailySummary(
     const promises = subscription.enabled.map(async (platform) => {
       const sender = dependencies.messaging?.[platform];
       const chatId = subscription.platforms[platform];
+      warnIfPlatformDisconnected(platform, sender, chatId, dependencies.logger);
       if (!sender || !chatId) return;
 
       try {
@@ -111,6 +128,7 @@ export function createPlatformSender(
     const promises = subscription.enabled.map(async (platform) => {
       const sender = messaging?.[platform];
       const chatId = subscription.platforms[platform];
+      warnIfPlatformDisconnected(platform, sender, chatId, logger);
       if (!sender || !chatId) return;
       try {
         await sender.sendMessage(chatId, message, {
