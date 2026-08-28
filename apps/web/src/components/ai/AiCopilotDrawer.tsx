@@ -34,7 +34,9 @@ export function AiCopilotDrawer() {
   const [authProgress, setAuthProgress] = useState('');
   const [authError, setAuthError] = useState('');
   const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const [codeSubmitting, setCodeSubmitting] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const codeSubmittingRef = useRef(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const loginSessionRef = useRef<AuthLoginSession | null>(null);
   const authRequestRef = useRef(0);
@@ -242,7 +244,12 @@ export function AiCopilotDrawer() {
 
   async function submitLoginCode(code: string) {
     const session = loginSessionRef.current;
-    if (!session) return;
+    // A second submit while one is in flight would hit the server's 409
+    // AUTH_NO_CODE_PROMPT; the ref guard also covers clicks that land before
+    // React re-renders the disabled button.
+    if (!session || codeSubmittingRef.current) return;
+    codeSubmittingRef.current = true;
+    setCodeSubmitting(true);
     const requestId = loginRequestRef.current;
     setAuthError('');
     try {
@@ -256,6 +263,9 @@ export function AiCopilotDrawer() {
       if (requestId === loginRequestRef.current && loginSessionRef.current === session) {
         setAuthError(error instanceof Error ? error.message : t('copilot.auth.unableSubmitCode'));
       }
+    } finally {
+      codeSubmittingRef.current = false;
+      setCodeSubmitting(false);
     }
   }
 
@@ -355,6 +365,7 @@ export function AiCopilotDrawer() {
             manualCodePrompt={manualCodePrompt}
             authProgress={authProgress}
             authUrl={authUrl}
+            submittingCode={codeSubmitting}
             onRetry={() => void refreshAuthStatus()}
             onStartLogin={(provider, model) => void handleStartLogin(provider, model)}
             onSaveApiKey={(provider, apiKey, model) =>

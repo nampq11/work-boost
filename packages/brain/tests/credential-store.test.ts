@@ -154,3 +154,31 @@ Deno.test('credential store migrates the legacy ~/.pi/agent/auth.json once', asy
     Deno.removeSync(root, { recursive: true });
   }
 });
+
+Deno.test('credential store migration surfaces stat failures on the legacy path', () => {
+  if (Deno.build.os === 'windows') return;
+  // Root ignores permission bits, so the forced EACCES below would not happen.
+  if (Deno.uid() === 0) return;
+  const root = Deno.makeTempDirSync({ prefix: 'work-boost-home-' });
+  const legacyDir = join(root, '.pi');
+  Deno.mkdirSync(legacyDir, { mode: 0o000 });
+
+  const originalHome = Deno.env.get('HOME');
+  const originalAuthPath = Deno.env.get('PI_AUTH_PATH');
+  Deno.env.set('HOME', root);
+  Deno.env.delete('PI_AUTH_PATH');
+  try {
+    createCredentialStore();
+    throw new Error('expected migration to fail on an unreadable legacy path');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.startsWith('Failed to migrate work-boost credentials from')) throw error;
+  } finally {
+    if (originalHome !== undefined) Deno.env.set('HOME', originalHome);
+    else Deno.env.delete('HOME');
+    if (originalAuthPath !== undefined) Deno.env.set('PI_AUTH_PATH', originalAuthPath);
+    else Deno.env.delete('PI_AUTH_PATH');
+    Deno.chmodSync(legacyDir, 0o700);
+    Deno.removeSync(root, { recursive: true });
+  }
+});

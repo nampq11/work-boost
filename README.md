@@ -116,7 +116,7 @@ Create a `.env` file in the project root:
 # AI provider (optional; changes require an API restart)
 AI_PROVIDER=zai              # zai | openai-codex | openrouter | google
 AI_MODEL=                    # Provider default, except OpenRouter which requires one
-PI_AUTH_PATH=                # Defaults to ~/.pi/agent/auth.json
+PI_AUTH_PATH=                # Defaults to ~/.workboost/agent/auth.json (legacy ~/.pi/agent/auth.json is migrated once)
 
 # Provider API keys are fallbacks when the selected provider has no pi credential
 ZAI_API_KEY=your_zai_api_key
@@ -160,9 +160,10 @@ The same AI settings can be stored in `.workboost/config.json`:
 
 Supported provider defaults are Z.ai (`glm-5.2`), OpenAI Codex (`gpt-5.4-mini`), and Google
 Gemini (`gemini-2.5-flash`). OpenRouter requires an explicit model. Environment variables override
-workspace configuration. Credentials are read from `~/.pi/agent/auth.json` by default, and OAuth
-refreshes are written back safely without changing other providers. Existing workspaces without AI
-settings continue to use Google Gemini for backward compatibility. Provider changes take effect
+workspace configuration. Credentials are read from `~/.workboost/agent/auth.json` by default; a
+legacy `~/.pi/agent/auth.json` is copied there once on first use, and OAuth refreshes are written
+back safely without changing other providers. Existing workspaces without AI settings continue to
+use Google Gemini for backward compatibility. Provider changes take effect
 after an API restart; there is no automatic provider fallback. When `AI_PROVIDER=openai-codex`,
 the browser Copilot drawer can start device-code login without exposing tokens to the browser.
 OAuth credentials remain in the server-side pi credential file and can be removed with the

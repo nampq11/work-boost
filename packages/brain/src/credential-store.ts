@@ -86,8 +86,11 @@ function pathExists(path: string): boolean {
   try {
     Deno.statSync(path);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    // Only a missing file means "absent"; any other stat failure is a real IO
+    // problem (e.g. permissions) and must surface, not hide the credentials.
+    if (error instanceof Deno.errors.NotFound) return false;
+    throw error;
   }
 }
 
@@ -194,11 +197,13 @@ export class FileCredentialStore implements CredentialStore {
   private migrateLegacyIfNeeded(): void {
     const legacyPath = resolveAuthPath(getLegacyAuthPath());
     if (legacyPath === this.path) return;
-    if (pathExists(this.path)) return;
-    if (!pathExists(legacyPath)) return;
     try {
+      // The existence checks sit inside the try so a non-NotFound stat failure
+      // is reported as a migration failure with both paths, not a bare error.
+      if (pathExists(this.path)) return;
+      if (!pathExists(legacyPath)) return;
       const contents = Deno.readTextFileSync(legacyPath);
-      Deno.mkdirSync(dirname(this.path), { recursive: true });
+      Deno.mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
       Deno.writeTextFileSync(this.path, contents, { mode: 0o600 });
     } catch (error) {
       throw new Error(

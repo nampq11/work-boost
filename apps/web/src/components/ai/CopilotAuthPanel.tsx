@@ -13,6 +13,8 @@ export interface CopilotAuthPanelProps {
   deviceCode: Extract<AuthLoginEvent, { type: 'device_code' }> | null;
   manualCodePrompt: Extract<AuthLoginEvent, { type: 'manual_code' }> | null;
   authProgress: string;
+  /** True while a manual-code submit request is in flight; disables resubmission. */
+  submittingCode: boolean;
   authUrl: string | null;
   onRetry: () => void;
   onStartLogin: (provider: string, model?: string) => void;
@@ -36,6 +38,7 @@ export function CopilotAuthPanel({
   deviceCode,
   manualCodePrompt,
   authProgress,
+  submittingCode,
   authUrl,
   onRetry,
   onStartLogin,
@@ -249,7 +252,10 @@ export function CopilotAuthPanel({
                       }
                       className="w-full rounded border border-[var(--border)] bg-[var(--surface-app)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)]"
                     />
-                    <Button onClick={submitManualCode} disabled={!manualCodeValue.trim()}>
+                    <Button
+                      onClick={submitManualCode}
+                      disabled={!manualCodeValue.trim() || submittingCode}
+                    >
                       {t('copilot.auth.submitCode')}
                     </Button>
                   </div>
