@@ -5,8 +5,10 @@ import type { WorkspaceConfig } from '../src/config.ts';
 Deno.test('resolveAIConfig - default behavior', () => {
   const workspaceConfig: Pick<WorkspaceConfig, 'ai'> = {};
   const result = resolveAIConfig(workspaceConfig);
-  assertEquals(result.provider, 'google');
-  assertEquals(result.model, AI_DEFAULT_MODELS['google']);
+  // Default provider must have a working login path (openai-codex OAuth), not
+  // an API-key-only provider like google that dead-ends on a fresh install.
+  assertEquals(result.provider, 'openai-codex');
+  assertEquals(result.model, AI_DEFAULT_MODELS['openai-codex']);
 });
 
 Deno.test('resolveAIConfig - workspace config values', () => {

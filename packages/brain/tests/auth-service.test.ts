@@ -22,6 +22,7 @@ function createModels(
   } as unknown as Provider;
   return {
     getProvider: () => provider,
+    getProviders: () => [provider as unknown as Provider],
     checkAuth: () =>
       Promise.resolve(connected ? { source: 'OAuth', type: 'oauth' as const } : undefined),
     getAuth: () =>
@@ -121,6 +122,9 @@ Deno.test('AuthService exposes only safe connected status metadata', async () =>
   assertEquals(await service.getStatus(), {
     provider: 'openai-codex',
     model: 'gpt-5.4-mini',
+    providers: [
+      { id: 'openai-codex', name: 'OpenAI Codex', methods: ['oauth'], requiresModel: false },
+    ],
     auth: { supported: true, type: 'oauth', status: 'connected', source: 'OAuth' },
   });
   service.dispose();
@@ -166,6 +170,106 @@ Deno.test('AuthService reports refresh_failed when auth resolution fails', async
       status: 'refresh_failed',
       source: 'OAuth',
     });
+  } finally {
+    service.dispose();
+  }
+});
+
+function createApiKeyModels(initial?: { apiKey?: string }) {
+  let storedKey = initial?.apiKey;
+  const provider = {
+    id: 'google',
+    name: 'Google',
+    auth: {
+      apiKey: {
+        name: 'Gemini API key',
+        login: async (interaction: ProviderAuthInteraction) => {
+          const key = await interaction.prompt({ type: 'secret', message: 'key' });
+          storedKey = key;
+          return { type: 'api_key' as const, key };
+        },
+      },
+    },
+  } as unknown as Provider;
+  return {
+    getProvider: (id: string) => (id === 'google' ? provider : undefined),
+    getProviders: () => [provider],
+    checkAuth: () =>
+      Promise.resolve(
+        storedKey ? { source: 'GEMINI_API_KEY', type: 'api_key' as const } : undefined,
+      ),
+    getAuth: () =>
+      Promise.resolve(
+        storedKey ? { auth: { apiKey: storedKey }, source: 'GEMINI_API_KEY' } : undefined,
+      ),
+    login: (_provider: string, _type: string, interaction: ProviderAuthInteraction) =>
+      provider.auth.apiKey!.login!(interaction),
+    logout: () => Promise.resolve(),
+  } as unknown as Models;
+}
+
+Deno.test('AuthService reports api_key status for a key-only provider', async () => {
+  const notConnected = new AuthService({
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+    models: createApiKeyModels(),
+  });
+  try {
+    assertEquals((await notConnected.getStatus()).auth, {
+      supported: true,
+      type: 'api_key',
+      status: 'not_connected',
+    });
+  } finally {
+    notConnected.dispose();
+  }
+
+  const connected = new AuthService({
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+    models: createApiKeyModels({ apiKey: 'the-key' }),
+  });
+  try {
+    assertEquals((await connected.getStatus()).auth, {
+      supported: true,
+      type: 'api_key',
+      status: 'connected',
+      source: 'GEMINI_API_KEY',
+    });
+  } finally {
+    connected.dispose();
+  }
+});
+
+Deno.test('AuthService saveApiKey stores an API key via the provider login', async () => {
+  const models = createApiKeyModels();
+  const service = new AuthService({
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+    models,
+  });
+  try {
+    await service.saveApiKey('google', '  sk-secret-key  ');
+    assertEquals((await service.getStatus()).auth, {
+      supported: true,
+      type: 'api_key',
+      status: 'connected',
+      source: 'GEMINI_API_KEY',
+    });
+  } finally {
+    service.dispose();
+  }
+});
+
+Deno.test('AuthService saveApiKey rejects empty keys and unsupported providers', async () => {
+  const service = new AuthService({
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+    models: createApiKeyModels(),
+  });
+  try {
+    await assertRejects(() => service.saveApiKey('google', '   '), Error, 'An API key is required');
+    await assertRejects(
+      () => service.saveApiKey('openai-codex', 'key'),
+      Error,
+      'does not support API key login',
+    );
   } finally {
     service.dispose();
   }

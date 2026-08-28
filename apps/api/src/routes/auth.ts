@@ -1,4 +1,9 @@
-import { type AuthLoginEvent, type AuthPort, AuthServiceError } from '@work-boost/brain';
+import {
+  type AIConfigPort,
+  type AuthLoginEvent,
+  type AuthPort,
+  AuthServiceError,
+} from '@work-boost/brain';
 import { ERROR_CODES, errorResponse, successResponse } from '../utils/response.ts';
 
 const LOGIN_ID_PATTERN =
@@ -23,6 +28,19 @@ function authErrorResponse(error: unknown, requestId: string): Response {
     ERROR_CODES.AUTH_SERVICE_UNAVAILABLE,
     'The authentication service is unavailable',
     503,
+    undefined,
+    requestId,
+  );
+}
+
+function aiConfigErrorResponse(error: unknown, requestId: string): Response {
+  if (error instanceof AuthServiceError) return authErrorResponse(error, requestId);
+  // Validation failures arrive as AuthServiceError above; anything else
+  // (config load/save IO) is a server fault, not user-correctable input.
+  return errorResponse(
+    ERROR_CODES.INTERNAL_ERROR,
+    'Failed to update the AI configuration',
+    500,
     undefined,
     requestId,
   );
@@ -197,5 +215,102 @@ export async function handleAuthLogout(auth: AuthPort, requestId: string): Promi
     return noStore(successResponse(await auth.logout(), 200, requestId));
   } catch (error) {
     return noStore(authErrorResponse(error, requestId));
+  }
+}
+
+export async function handleAuthApiKey(
+  auth: AuthPort,
+  req: Request,
+  requestId: string,
+): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => undefined);
+    if (!body || typeof body !== 'object') {
+      return noStore(
+        errorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'Request body is required',
+          400,
+          undefined,
+          requestId,
+        ),
+      );
+    }
+    const { provider, apiKey } = body as { provider?: unknown; apiKey?: unknown };
+    if (typeof provider !== 'string' || provider.length === 0) {
+      return noStore(
+        errorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'provider is required',
+          400,
+          undefined,
+          requestId,
+        ),
+      );
+    }
+    if (typeof apiKey !== 'string') {
+      return noStore(
+        errorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'apiKey must be a string',
+          400,
+          undefined,
+          requestId,
+        ),
+      );
+    }
+    await auth.saveApiKey(provider, apiKey);
+    return noStore(successResponse(await auth.getStatus(), 200, requestId));
+  } catch (error) {
+    return noStore(authErrorResponse(error, requestId));
+  }
+}
+
+export async function handleAuthConfig(
+  aiConfig: AIConfigPort,
+  req: Request,
+  requestId: string,
+): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => undefined);
+    if (!body || typeof body !== 'object') {
+      return noStore(
+        errorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'Request body is required',
+          400,
+          undefined,
+          requestId,
+        ),
+      );
+    }
+    const { provider, model } = body as { provider?: unknown; model?: unknown };
+    if (typeof provider !== 'string' || provider.length === 0) {
+      return noStore(
+        errorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'provider is required',
+          400,
+          undefined,
+          requestId,
+        ),
+      );
+    }
+    if (model !== undefined && typeof model !== 'string') {
+      return noStore(
+        errorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'model must be a string',
+          400,
+          undefined,
+          requestId,
+        ),
+      );
+    }
+    return noStore(
+      successResponse(await aiConfig.setAIConfig({ provider, model }), 200, requestId),
+    );
+  } catch (error) {
+    return noStore(aiConfigErrorResponse(error, requestId));
   }
 }

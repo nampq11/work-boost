@@ -10,7 +10,7 @@ export {
   type AuthPort,
 } from './auth-service.ts';
 export { AI_UNAVAILABLE_CODE, AIUnavailableError } from './types.ts';
-export { Brain, createBrain } from './brain.ts';
+export { Brain, createBrain, type AIConfigPort } from './brain.ts';
 export type { BrainDeps } from './brain.ts';
 export type { AgentPort, AgentStreamOptions, AgentToolEvent } from './types.ts';
 export { getWorkspaceTools } from './tools/index.ts';

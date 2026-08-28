@@ -1,4 +1,4 @@
-import { Sparkle, X } from '@phosphor-icons/react';
+import { Plug, Sparkle, X } from '@phosphor-icons/react';
 import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
 import { Button, ResizablePanel, usePanelRef } from '@work-boost/ui';
 import React, { useEffect, useRef, useState } from 'react';
@@ -8,7 +8,7 @@ import { openExternalUrl } from '../../lib/external-url.ts';
 import { useI18n } from '../../lib/i18n.tsx';
 import { isTauri } from '../../lib/tauri.ts';
 import { useUiStore } from '../../store/ui-store.ts';
-import { CopilotAuthPanel } from './CopilotAuthPanel.tsx';
+import { CopilotAuthDialog } from './CopilotAuthDialog.tsx';
 import { WorkBoostThread } from './WorkBoostThread.tsx';
 
 export function AiCopilotDrawer() {
@@ -30,6 +30,7 @@ export function AiCopilotDrawer() {
   const [authProgress, setAuthProgress] = useState('');
   const [authError, setAuthError] = useState('');
   const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const loginSessionRef = useRef<AuthLoginSession | null>(null);
   const authRequestRef = useRef(0);
@@ -142,16 +143,31 @@ export function AiCopilotDrawer() {
     }
   }
 
-  async function startLogin() {
+  /**
+   * Start an OAuth login for the given provider. Switches the active provider
+   * first if the provider is not already active.
+   */
+  async function handleStartLogin(provider: string, model?: string) {
     if (authLoading || loginSession) return;
     const requestId = ++loginRequestRef.current;
     setAuthLoading(true);
     setAuthError('');
     setDeviceCode(null);
-    setAuthProgress(t('copilot.auth.startingLogin'));
+    setAuthProgress('');
     try {
+      // Switch the active provider when it differs from the selection, or
+      // persist an explicitly typed model even when the provider is already
+      // active; otherwise the typed model would be silently dropped.
+      if (provider !== authStatus?.provider || model !== undefined) {
+        const status = await port.setAIConfig(provider, model);
+        if (requestId !== loginRequestRef.current) return;
+        setAuthStatus(status);
+        // The provider is already connected; no login needed.
+        if (status.auth.status === 'connected') return;
+      }
+      setAuthProgress(t('copilot.auth.startingLogin'));
       const session = await port.startAuthLogin(
-        authStatus?.provider ?? '',
+        provider,
         authStatus?.auth.status === 'refresh_failed',
       );
       if (requestId !== loginRequestRef.current) {
@@ -166,6 +182,27 @@ export function AiCopilotDrawer() {
       });
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : t('copilot.auth.providerUnavailable'));
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  /**
+   * Store an API key for a provider. Switches the active provider first if the
+   * provider is not already active.
+   */
+  async function handleSaveApiKey(provider: string, apiKey: string, model?: string) {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      if (provider !== authStatus?.provider || model !== undefined) {
+        const status = await port.setAIConfig(provider, model);
+        setAuthStatus(status);
+      }
+      await port.saveApiKey(provider, apiKey);
+      await refreshAuthStatus();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : t('copilot.auth.unableSaveApiKey'));
     } finally {
       setAuthLoading(false);
     }
@@ -191,6 +228,16 @@ export function AiCopilotDrawer() {
   }
 
   const isConnected = authStatus?.auth.status === 'connected';
+
+  function handleAuthDialogChange(next: boolean) {
+    setAuthDialogOpen(next);
+    if (!next && loginSession) void cancelLogin();
+  }
+
+  // The connection dialog is a transient setup step; dismiss it once connected.
+  useEffect(() => {
+    if (isConnected) setAuthDialogOpen(false);
+  }, [isConnected]);
   return (
     <ResizablePanel
       id="copilot"
@@ -206,53 +253,79 @@ export function AiCopilotDrawer() {
       className="min-w-0"
     >
       {open && (
-        <aside className="flex h-full select-none flex-col border-l border-[var(--border)] bg-[var(--surface-sidebar)]">
-          <div className="flex h-12 items-center justify-between border-b border-[var(--border)] px-3.5">
-            <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
-              <Sparkle size={15} className="text-[var(--accent-blue)]" weight="fill" />
-              <span>{t('copilot.workspace')}</span>
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => void closeDrawer()}>
-              <X size={15} />
-            </Button>
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col">
-            {sidecarStatus === 'starting' ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm text-[var(--text-muted)]">
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--accent-blue)]" />
-                <p>{t('copilot.sidecar.starting')}</p>
+        <>
+          <aside className="flex h-full select-none flex-col border-l border-[var(--border)] bg-[var(--surface-sidebar)]">
+            <div className="flex h-12 items-center justify-between border-b border-[var(--border)] px-3.5">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
+                <Sparkle size={15} className="text-[var(--accent-blue)]" weight="fill" />
+                <span>{t('copilot.workspace')}</span>
               </div>
-            ) : sidecarStatus === 'failed' ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm">
-                <p className="text-[var(--text-primary)]">{t('copilot.sidecar.unavailable')}</p>
+              <div className="flex items-center gap-1">
                 <Button
-                  variant="secondary"
-                  onClick={() => void port.retrySidecar?.()}
-                  className="mt-1"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setAuthDialogOpen(true)}
+                  aria-label={t('copilot.auth.connection')}
                 >
-                  {t('copilot.sidecar.retry')}
+                  <Plug size={15} />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => void closeDrawer()}>
+                  <X size={15} />
                 </Button>
               </div>
-            ) : isConnected ? (
-              <WorkBoostThread />
-            ) : (
-              <CopilotAuthPanel
-                authStatus={authStatus}
-                authLoading={authLoading}
-                authError={authError}
-                loginSession={loginSession}
-                deviceCode={deviceCode}
-                authProgress={authProgress}
-                authUrl={authUrl}
-                onRetry={() => void refreshAuthStatus()}
-                onStartLogin={() => void startLogin()}
-                onCancelLogin={() => void cancelLogin()}
-                onError={setAuthError}
-              />
-            )}
-          </div>
-        </aside>
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col">
+              {sidecarStatus === 'starting' ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm text-[var(--text-muted)]">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--accent-blue)]" />
+                  <p>{t('copilot.sidecar.starting')}</p>
+                </div>
+              ) : sidecarStatus === 'failed' ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm">
+                  <p className="text-[var(--text-primary)]">{t('copilot.sidecar.unavailable')}</p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void port.retrySidecar?.()}
+                    className="mt-1"
+                  >
+                    {t('copilot.sidecar.retry')}
+                  </Button>
+                </div>
+              ) : isConnected ? (
+                <WorkBoostThread />
+              ) : (
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+                  <Sparkle size={32} className="text-[var(--accent-blue)]" weight="fill" />
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {t('copilot.auth.notConnected')}
+                  </p>
+                  <Button variant="secondary" onClick={() => setAuthDialogOpen(true)}>
+                    {t('copilot.auth.connect')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </aside>
+          <CopilotAuthDialog
+            open={authDialogOpen}
+            onOpenChange={handleAuthDialogChange}
+            authStatus={authStatus}
+            authLoading={authLoading}
+            authError={authError}
+            loginSession={loginSession}
+            deviceCode={deviceCode}
+            authProgress={authProgress}
+            authUrl={authUrl}
+            onRetry={() => void refreshAuthStatus()}
+            onStartLogin={(provider, model) => void handleStartLogin(provider, model)}
+            onSaveApiKey={(provider, apiKey, model) =>
+              void handleSaveApiKey(provider, apiKey, model)
+            }
+            onCancelLogin={() => void cancelLogin()}
+            onError={setAuthError}
+          />
+        </>
       )}
     </ResizablePanel>
   );

@@ -1,11 +1,16 @@
-import type { AuthEvent, AuthType, Models, Provider } from '@earendil-works/pi-ai';
+import type { AuthEvent, AuthType, Models } from '@earendil-works/pi-ai';
 import type {
+  AIProviderDescriptor,
   AuthLoginEvent,
   AuthLoginSession,
   AuthStatus,
   AuthStatusValue,
 } from '@work-boost/data-schemas/auth.ts';
-import type { ResolvedAIConfig } from '@work-boost/data-schemas/config.ts';
+import {
+  AIProviderSchema,
+  AI_DEFAULT_MODELS,
+  type ResolvedAIConfig,
+} from '@work-boost/data-schemas/config.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 
 export type {
@@ -13,6 +18,7 @@ export type {
   AuthLoginSession,
   AuthStatus,
   AuthStatusValue,
+  AIProviderDescriptor,
 } from '@work-boost/data-schemas/auth.ts';
 
 export type AuthLoginTerminalStatus = 'completed' | 'failed' | 'cancelled';
@@ -33,6 +39,8 @@ export interface AuthPort {
   disconnect(loginId: string): void;
   cancelLogin(loginId: string): Promise<AuthLoginCancellation>;
   logout(): Promise<{ provider: string; status: 'not_connected' }>;
+  /** Store an API key for a provider, replacing any existing credential. */
+  saveApiKey(provider: string, apiKey: string): Promise<void>;
   dispose?(): void;
 }
 
@@ -70,22 +78,10 @@ export interface AuthServiceDeps {
   disconnectGraceMs?: number;
 }
 
-const SUPPORTED_PROVIDER = 'openai-codex';
 const DEFAULT_LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_TERMINAL_CLEANUP_MS = 5_000;
 const DEFAULT_DISCONNECT_GRACE_MS = 1_000;
 const MAX_BUFFERED_EVENTS = 32;
-
-function safeProvider(provider: Provider | undefined): Provider {
-  if (!provider) {
-    throw new AuthServiceError(
-      'AUTH_OAUTH_UNSUPPORTED',
-      'The active AI provider does not support OAuth login',
-      422,
-    );
-  }
-  return provider;
-}
 
 function safePublicUrl(value: string): string | undefined {
   try {
@@ -124,7 +120,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export class AuthService {
-  readonly ai: ResolvedAIConfig;
+  ai: ResolvedAIConfig;
   private readonly models: Models;
   private readonly apiPrefix: string;
   private readonly loginTimeoutMs: number;
@@ -142,20 +138,83 @@ export class AuthService {
     this.disconnectGraceMs = deps.disconnectGraceMs ?? DEFAULT_DISCONNECT_GRACE_MS;
   }
 
+  /** Static metadata for every selectable provider, used by the auth panel. */
+  private listProviders(): AIProviderDescriptor[] {
+    return this.models.getProviders().map((provider) => {
+      const known = AIProviderSchema.safeParse(provider.id);
+      return {
+        id: provider.id,
+        name: provider.name,
+        methods: [
+          ...(provider.auth.oauth?.login ? ['oauth' as const] : []),
+          ...(provider.auth.apiKey?.login ? ['api_key' as const] : []),
+        ],
+        // Providers without a server-side default (openrouter) need an
+        // explicit model from the user before they can connect.
+        requiresModel: known.success ? AI_DEFAULT_MODELS[known.data] === undefined : false,
+      };
+    });
+  }
+
+  /** Reconfigure the active provider/model in place (does not touch the store). */
+  setAIConfig(ai: ResolvedAIConfig): void {
+    this.ai = ai;
+  }
+
+  /**
+   * Store an API key for a provider through the provider's interactive API-key
+   * login flow. Replaces any previously stored credential for that provider.
+   */
+  async saveApiKey(provider: string, apiKey: string): Promise<void> {
+    const value = apiKey.trim();
+    if (!value) {
+      throw new AuthServiceError('AUTH_API_KEY_REQUIRED', 'An API key is required', 400);
+    }
+    const configuredProvider = this.models.getProvider(provider);
+    if (!configuredProvider?.auth.apiKey?.login) {
+      throw new AuthServiceError(
+        'AUTH_API_KEY_UNSUPPORTED',
+        `Provider "${provider}" does not support API key login`,
+        422,
+      );
+    }
+    const signal = new AbortController().signal;
+    await this.models.login(provider, 'api_key', {
+      signal,
+      prompt: async () => value,
+      notify: () => undefined,
+    });
+  }
+
   async getStatus(): Promise<AuthStatus> {
     const provider = this.models.getProvider(this.ai.provider);
-    const base = {
+    const providers = this.listProviders();
+    const base: Omit<AuthStatus, 'auth'> = {
       provider: this.ai.provider,
       model: this.ai.model,
+      providers,
     };
 
-    if (this.ai.provider !== SUPPORTED_PROVIDER || !provider?.auth.oauth) {
+    if (!provider) {
       return {
         ...base,
         auth: { supported: false, type: 'unsupported', status: 'unsupported' },
       };
     }
 
+    // Which interactive login paths does this provider offer? A provider may
+    // offer both (openrouter); OAuth is the primary/leading flow when present.
+    const hasOauth = Boolean(provider.auth.oauth?.login);
+    const hasApiKey = Boolean(provider.auth.apiKey?.login);
+
+    if (!hasOauth && !hasApiKey) {
+      return {
+        ...base,
+        auth: { supported: false, type: 'unsupported', status: 'unsupported' },
+      };
+    }
+
+    const primaryType = hasOauth ? 'oauth' : 'api_key';
     let check;
     try {
       check = await this.models.checkAuth(this.ai.provider);
@@ -168,9 +227,9 @@ export class AuthService {
         ...base,
         auth: {
           supported: true,
-          type: 'oauth',
+          type: primaryType,
           status: 'refresh_failed',
-          source: 'OAuth',
+          ...(primaryType === 'oauth' ? { source: 'OAuth' } : { source: 'API key' }),
         },
       };
     }
@@ -178,29 +237,44 @@ export class AuthService {
     if (!check) {
       return {
         ...base,
-        auth: { supported: true, type: 'oauth', status: 'not_connected' },
+        auth: {
+          supported: true,
+          type: primaryType,
+          status: 'not_connected',
+          ...(primaryType === 'oauth' ? { source: 'OAuth' } : {}),
+        },
       };
     }
 
+    const oauthConfigured = check.type === 'oauth';
     try {
       const resolved = await this.models.getAuth(this.ai.provider);
       return {
         ...base,
         auth: {
           supported: true,
-          type: 'oauth',
+          type: oauthConfigured ? 'oauth' : 'api_key',
           status: resolved ? 'connected' : 'not_connected',
-          ...(resolved?.source === 'OAuth' ? { source: 'OAuth' } : {}),
+          ...(resolved?.source
+            ? { source: resolved.source }
+            : oauthConfigured
+              ? { source: 'OAuth' }
+              : {}),
         },
       };
     } catch (error) {
-      logger.warn('[AuthService.getStatus] OAuth refresh failed', {
+      logger.warn('[AuthService.getStatus] auth resolution failed', {
         provider: this.ai.provider,
         error: error instanceof Error ? error.name : 'UnknownError',
       });
       return {
         ...base,
-        auth: { supported: true, type: 'oauth', status: 'refresh_failed', source: 'OAuth' },
+        auth: {
+          supported: true,
+          type: oauthConfigured ? 'oauth' : 'api_key',
+          status: 'refresh_failed',
+          ...(oauthConfigured ? { source: 'OAuth' } : { source: 'API key' }),
+        },
       };
     }
   }
@@ -231,8 +305,8 @@ export class AuthService {
         409,
       );
     }
-    const provider = safeProvider(this.models.getProvider(this.ai.provider));
-    if (this.ai.provider !== SUPPORTED_PROVIDER || !provider.auth.oauth?.login) {
+    const provider = this.models.getProvider(this.ai.provider);
+    if (!provider?.auth.oauth?.login) {
       throw new AuthServiceError(
         'AUTH_OAUTH_UNSUPPORTED',
         'The active AI provider does not support browser OAuth login',
