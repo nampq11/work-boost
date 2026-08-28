@@ -148,6 +148,10 @@ export const en = {
   'copilot.auth.providerHint': 'Choose where Work Boost runs. You can switch providers any time.',
   'copilot.auth.active': 'Active',
   'copilot.auth.connect': 'Connect',
+
+  'copilot.auth.connection': 'Connect an AI provider',
+  'copilot.auth.connectionHint': 'Connect and configure the AI provider for this workspace.',
+  'copilot.auth.notConnected': 'Connect an AI provider to start.',
   'copilot.auth.reconnect': 'Reconnect',
   'copilot.auth.connectWith': 'Connect with {{name}}',
   'copilot.auth.connected': 'Connected',

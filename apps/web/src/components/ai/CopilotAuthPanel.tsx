@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '../../lib/api-client.ts';
 import { useI18n } from '../../lib/i18n.tsx';
 
-interface CopilotAuthPanelProps {
+export interface CopilotAuthPanelProps {
   authStatus: AuthStatus | null;
   authLoading: boolean;
   authError: string;
@@ -100,7 +100,7 @@ export function CopilotAuthPanel({
   const providerLabel = activeDescriptor?.name ?? authStatus?.provider ?? '';
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4">
+    <div className="p-4">
       {authLoading && !authStatus && (
         <p className="text-sm text-[var(--text-muted)]">{t('copilot.auth.checkingConnection')}</p>
       )}
