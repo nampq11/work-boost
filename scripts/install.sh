@@ -15,7 +15,9 @@ PROGRESS_FILE="${1:-}"
 
 # Append a marker line for the desktop app to tail. A no-op for manual installs.
 progress() {
-  [ -n "$PROGRESS_FILE" ] && printf '%s\n' "$1" >> "$PROGRESS_FILE"
+  # Without a scratch path the [ -n ] test returns 1, which under `set -e`
+  # would abort the whole install silently; `|| true` keeps this a true no-op.
+  [ -n "$PROGRESS_FILE" ] && printf '%s\n' "$1" >> "$PROGRESS_FILE" || true
 }
 
 GITHUB_API="https://api.github.com/repos/nampq11/work-boost/releases/latest"
