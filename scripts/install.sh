@@ -49,7 +49,9 @@ case "$OS" in
 esac
 
 log "resolving latest release from GitHub"
-RELEASE_JSON=$(curl -fsSL "$GITHUB_API") || fail "could not reach GitHub Releases - is the repository public and has it published a release?"
+# Bound the network calls so a stalled connection fails with a clear error
+# instead of hanging the install silently.
+RELEASE_JSON=$(curl -fsSL --connect-timeout 10 --max-time 30 "$GITHUB_API") || fail "could not reach GitHub Releases - is the repository public and has it published a release?"
 DOWNLOAD_URL=$(printf '%s' "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*"' | sed 's/.*"\(https[^"]*\)"/\1/' | grep -E "$ASSET_PATTERN" | head -1)
 [ -n "$DOWNLOAD_URL" ] || fail "no desktop bundle matching $ASSET_PATTERN found in the latest release"
 # checksum files are uploaded next to bundles with a .sha256 suffix on the same name
@@ -69,8 +71,8 @@ CHECKSUM_FILE="$ARTIFACT.sha256"
 
 progress "phase:downloading"
 log "downloading $(basename "$ARTIFACT")"
-curl -fL "$DOWNLOAD_URL" -o "$ARTIFACT" || fail "download failed"
-if curl -fsL "$CHECKSUM_URL" -o "$CHECKSUM_FILE"; then
+curl -fL --connect-timeout 10 --max-time 600 "$DOWNLOAD_URL" -o "$ARTIFACT" || fail "download failed"
+if curl -fsL --connect-timeout 10 --max-time 30 "$CHECKSUM_URL" -o "$CHECKSUM_FILE"; then
   # Compare hashes directly instead of "sha256sum -c": asset names contain
   # spaces ("Work Boost_...") and -c relies on checksum-file name parsing
   # that differs between GNU coreutils and BSD/macOS tooling.
