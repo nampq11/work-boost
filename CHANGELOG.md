@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-28
+
+### Added
+
+- Added a provider selector and API-key login to copilot auth, so fresh installs no longer dead-end on providers that only support API keys. The auth panel now lists AI providers with OAuth/API-key badges, supports switching provider at runtime via `PUT /api/auth/config`, and offers a key-entry flow for key-only providers. The default provider is now `openai-codex`, which supports browser login. #73
+
+### Fixed
+
+- Fixed the one-line installer so a stalled network call errors out instead of hanging, by adding connection and total timeouts to the GitHub API, bundle, and checksum requests.
+- Fixed the one-line installer's progress helper being a no-op under `set -e`, so it no longer silently aborts an install when the progress file is unset.
+
 ## [0.4.3] - 2026-08-28
 
 ### Added
