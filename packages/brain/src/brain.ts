@@ -16,12 +16,12 @@ import { zaiProvider } from '@earendil-works/pi-ai/providers/zai';
 import type { DataLayer } from '@work-boost/data-provider';
 import type { AIConfigSetRequest, AuthStatus } from '@work-boost/data-schemas/auth.ts';
 import {
-  AI_DEFAULT_MODELS,
   AIProviderSchema,
+  AI_DEFAULT_MODELS,
   type ResolvedAIConfig,
 } from '@work-boost/data-schemas/config.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
-import { AuthService } from './auth-service.ts';
+import { AuthService, AuthServiceError } from './auth-service.ts';
 import { createSessionStore } from './sessions.ts';
 import { SYSTEM_PROMPT } from './system-prompt.ts';
 import { getWorkspaceTools } from './tools/index.ts';
@@ -129,28 +129,40 @@ export class Brain implements AgentPort, AIConfigPort {
    * the newly configured model. Returns the refreshed auth status.
    */
   async setAIConfig(input: AIConfigSetRequest): Promise<AuthStatus> {
-    const currentConfig = await this.dataLayer.config.load();
     // The model is the explicitly requested one or the provider's default. It
     // must not inherit the previous provider's model (e.g. google's
     // "gemini-2.5-flash") when switching to a provider whose default is
     // undefined (openrouter).
     const provider = AIProviderSchema.safeParse(input.provider);
     if (!provider.success) {
-      throw new Error(
+      throw new AuthServiceError(
+        'AI_CONFIG_INVALID_PROVIDER',
         `Invalid AI provider "${input.provider}". Supported providers: ${AIProviderSchema.options.join(', ')}`,
+        400,
       );
     }
     const model = input.model?.trim() || AI_DEFAULT_MODELS[provider.data];
     if (!model) {
-      throw new Error(`AI model is required when provider "${provider.data}" is selected`);
+      throw new AuthServiceError(
+        'AI_CONFIG_MODEL_REQUIRED',
+        `AI model is required when provider "${provider.data}" is selected`,
+        400,
+      );
     }
     const resolved: ResolvedAIConfig = { provider: provider.data, model };
 
     const nextModel = this.models.getModel(resolved.provider, resolved.model);
     if (!nextModel) {
-      throw new Error(`Unknown AI model "${resolved.model}" for provider "${resolved.provider}"`);
+      throw new AuthServiceError(
+        'AI_CONFIG_UNKNOWN_MODEL',
+        `Unknown AI model "${resolved.model}" for provider "${resolved.provider}"`,
+        400,
+      );
     }
 
+    // Config IO runs after validation so storage faults stay distinguishable
+    // from user-correctable input errors.
+    const currentConfig = await this.dataLayer.config.load();
     this.ai = resolved;
     this.model = nextModel;
     this.auth.setAIConfig(resolved);

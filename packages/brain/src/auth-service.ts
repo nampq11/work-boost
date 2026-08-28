@@ -6,7 +6,11 @@ import type {
   AuthStatus,
   AuthStatusValue,
 } from '@work-boost/data-schemas/auth.ts';
-import type { ResolvedAIConfig } from '@work-boost/data-schemas/config.ts';
+import {
+  AIProviderSchema,
+  AI_DEFAULT_MODELS,
+  type ResolvedAIConfig,
+} from '@work-boost/data-schemas/config.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 
 export type {
@@ -136,14 +140,20 @@ export class AuthService {
 
   /** Static metadata for every selectable provider, used by the auth panel. */
   private listProviders(): AIProviderDescriptor[] {
-    return this.models.getProviders().map((provider) => ({
-      id: provider.id,
-      name: provider.name,
-      methods: [
-        ...(provider.auth.oauth?.login ? ['oauth' as const] : []),
-        ...(provider.auth.apiKey?.login ? ['api_key' as const] : []),
-      ],
-    }));
+    return this.models.getProviders().map((provider) => {
+      const known = AIProviderSchema.safeParse(provider.id);
+      return {
+        id: provider.id,
+        name: provider.name,
+        methods: [
+          ...(provider.auth.oauth?.login ? ['oauth' as const] : []),
+          ...(provider.auth.apiKey?.login ? ['api_key' as const] : []),
+        ],
+        // Providers without a server-side default (openrouter) need an
+        // explicit model from the user before they can connect.
+        requiresModel: known.success ? AI_DEFAULT_MODELS[known.data] === undefined : false,
+      };
+    });
   }
 
   /** Reconfigure the active provider/model in place (does not touch the store). */

@@ -155,8 +155,10 @@ export function AiCopilotDrawer() {
     setDeviceCode(null);
     setAuthProgress('');
     try {
-      // Switch active provider if the selected one differs from the active one.
-      if (provider !== authStatus?.provider) {
+      // Switch the active provider when it differs from the selection, or
+      // persist an explicitly typed model even when the provider is already
+      // active; otherwise the typed model would be silently dropped.
+      if (provider !== authStatus?.provider || model !== undefined) {
         const status = await port.setAIConfig(provider, model);
         if (requestId !== loginRequestRef.current) return;
         setAuthStatus(status);
@@ -193,14 +195,14 @@ export function AiCopilotDrawer() {
     setAuthLoading(true);
     setAuthError('');
     try {
-      if (provider !== authStatus?.provider) {
+      if (provider !== authStatus?.provider || model !== undefined) {
         const status = await port.setAIConfig(provider, model);
         setAuthStatus(status);
       }
       await port.saveApiKey(provider, apiKey);
       await refreshAuthStatus();
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Failed to save API key');
+      setAuthError(error instanceof Error ? error.message : t('copilot.auth.unableSaveApiKey'));
     } finally {
       setAuthLoading(false);
     }

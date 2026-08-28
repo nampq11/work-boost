@@ -1,4 +1,5 @@
 import { Check, Copy, Key } from '@phosphor-icons/react';
+import type { AuthMethod } from '@work-boost/data-schemas/auth';
 import { Button } from '@work-boost/ui';
 import React, { useEffect, useRef, useState } from 'react';
 import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '../../lib/api-client.ts';
@@ -19,7 +20,7 @@ export interface CopilotAuthPanelProps {
   onError: (message: string) => void;
 }
 
-function getAuthMethodLabel(method: string): string {
+function getAuthMethodLabel(method: AuthMethod): string {
   return method === 'oauth' ? 'OAuth' : 'API key';
 }
 
@@ -57,7 +58,7 @@ export function CopilotAuthPanel({
   // Only show API key as primary when the provider has no OAuth.
   const showApiKeyPrimary = !supportsOAuth && supportsApiKey;
   const showOAuthPrimary = supportsOAuth && !useApiKeyMode;
-  const showModelInput = selectedProvider === 'openrouter';
+  const showModelInput = selectedDescriptor?.requiresModel ?? false;
   const modelValid = !showModelInput || modelValue.trim().length > 0;
 
   async function copyUserCode() {

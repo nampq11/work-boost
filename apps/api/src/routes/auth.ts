@@ -35,11 +35,12 @@ function authErrorResponse(error: unknown, requestId: string): Response {
 
 function aiConfigErrorResponse(error: unknown, requestId: string): Response {
   if (error instanceof AuthServiceError) return authErrorResponse(error, requestId);
-  // Invalid provider/model/unknown-model errors are user-correctable, not server faults.
+  // Validation failures arrive as AuthServiceError above; anything else
+  // (config load/save IO) is a server fault, not user-correctable input.
   return errorResponse(
-    ERROR_CODES.VALIDATION_ERROR,
-    error instanceof Error ? error.message : String(error),
-    400,
+    ERROR_CODES.INTERNAL_ERROR,
+    'Failed to update the AI configuration',
+    500,
     undefined,
     requestId,
   );

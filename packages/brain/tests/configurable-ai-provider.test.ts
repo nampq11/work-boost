@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert';
-import { createBrain } from '@work-boost/brain';
+import { AuthServiceError, createBrain } from '@work-boost/brain';
 import type {
   ConfigManager,
   DailyWorkRepository,
@@ -124,11 +124,13 @@ Deno.test('Brain.setAIConfig rejects unknown models', async () => {
     ai: { provider: 'google', model: 'gemini-2.5-flash' },
   });
   try {
-    await assertRejects(
+    const error = await assertRejects(
       () => brain.setAIConfig({ provider: 'google', model: 'not-a-real-model' }),
-      Error,
+      AuthServiceError,
       'Unknown AI model',
     );
+    assertEquals(error.code, 'AI_CONFIG_UNKNOWN_MODEL');
+    assertEquals(error.status, 400);
   } finally {
     brain.dispose();
   }
@@ -140,11 +142,50 @@ Deno.test('Brain.setAIConfig requires a model for openrouter', async () => {
     ai: { provider: 'google', model: 'gemini-2.5-flash' },
   });
   try {
-    await assertRejects(
+    const error = await assertRejects(
       () => brain.setAIConfig({ provider: 'openrouter' }),
-      Error,
+      AuthServiceError,
       'AI model is required when provider "openrouter" is selected',
     );
+    assertEquals(error.code, 'AI_CONFIG_MODEL_REQUIRED');
+    assertEquals(error.status, 400);
+  } finally {
+    brain.dispose();
+  }
+});
+
+Deno.test('Brain.setAIConfig rejects invalid providers with a typed validation error', async () => {
+  const brain = createBrain({
+    dataLayer: createFakeDataLayer(),
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+  });
+  try {
+    const error = await assertRejects(
+      () => brain.setAIConfig({ provider: 'not-a-provider' }),
+      AuthServiceError,
+      'Invalid AI provider',
+    );
+    assertEquals(error.code, 'AI_CONFIG_INVALID_PROVIDER');
+    assertEquals(error.status, 400);
+  } finally {
+    brain.dispose();
+  }
+});
+
+Deno.test('Brain.setAIConfig propagates storage failures instead of masking them', async () => {
+  const dataLayer = createFakeDataLayer();
+  dataLayer.config.save = () => Promise.reject(new Error('config write failed'));
+  const brain = createBrain({
+    dataLayer,
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+  });
+  try {
+    const error = await assertRejects(
+      () => brain.setAIConfig({ provider: 'openai-codex' }),
+      Error,
+      'config write failed',
+    );
+    assertEquals(error instanceof AuthServiceError, false);
   } finally {
     brain.dispose();
   }

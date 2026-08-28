@@ -1,6 +1,12 @@
 import { assertEquals, assertStringIncludes } from '@std/assert';
-import { type AuthLoginEvent, type AuthPort, AuthServiceError } from '@work-boost/brain';
 import {
+  type AIConfigPort,
+  type AuthLoginEvent,
+  type AuthPort,
+  AuthServiceError,
+} from '@work-boost/brain';
+import {
+  handleAuthConfig,
   handleAuthLogin,
   handleAuthLoginCancel,
   handleAuthLoginEvents,
@@ -148,4 +154,43 @@ Deno.test('auth cancel and logout handle invalid IDs and successful logout', asy
   const logout = await handleAuthLogout(createAuth(), 'logout-request');
   assertEquals(logout.status, 200);
   assertStringIncludes(await logout.text(), 'not_connected');
+});
+
+Deno.test('auth config maps typed validation errors to 400 and storage faults to 500', async () => {
+  const aiConfig: AIConfigPort = {
+    setAIConfig: (input) =>
+      input.provider === 'openrouter' && !input.model
+        ? Promise.reject(
+            new AuthServiceError(
+              'AI_CONFIG_MODEL_REQUIRED',
+              'AI model is required when provider "openrouter" is selected',
+              400,
+            ),
+          )
+        : Promise.reject(new Error('config write failed')),
+  };
+  const request = (body: Record<string, string>) =>
+    new Request('http://localhost/api/auth/config', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    });
+
+  const invalid = await handleAuthConfig(
+    aiConfig,
+    request({ provider: 'openrouter' }),
+    'config-validation-request',
+  );
+  assertEquals(invalid.status, 400);
+  assertStringIncludes(await invalid.text(), 'AI_CONFIG_MODEL_REQUIRED');
+
+  const storageFault = await handleAuthConfig(
+    aiConfig,
+    request({ provider: 'openai-codex', model: 'gpt-5.4-mini' }),
+    'config-fault-request',
+  );
+  assertEquals(storageFault.status, 500);
+  const payload = await storageFault.json();
+  assertEquals(payload.error.code, 'INTERNAL_ERROR');
+  assertEquals(payload.error.message, 'Failed to update the AI configuration');
 });

@@ -8,12 +8,14 @@ export interface AIProviderDescriptor {
   name: string;
   /** Auth methods the provider actually supports for interactive login. */
   methods: AuthMethod[];
+  /** True when the provider has no server-side default model, so the user must supply one. */
+  requiresModel: boolean;
 }
 
 export interface AuthStatus {
   provider: string;
   model: string;
-  /** Available selectable AI providers (present on fresh/unconfigured installs). */
+  /** Available selectable AI providers; always populated by the auth service. */
   providers?: AIProviderDescriptor[];
   auth: {
     supported: boolean;

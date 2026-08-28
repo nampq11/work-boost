@@ -122,7 +122,9 @@ Deno.test('AuthService exposes only safe connected status metadata', async () =>
   assertEquals(await service.getStatus(), {
     provider: 'openai-codex',
     model: 'gpt-5.4-mini',
-    providers: [{ id: 'openai-codex', name: 'OpenAI Codex', methods: ['oauth'] }],
+    providers: [
+      { id: 'openai-codex', name: 'OpenAI Codex', methods: ['oauth'], requiresModel: false },
+    ],
     auth: { supported: true, type: 'oauth', status: 'connected', source: 'OAuth' },
   });
   service.dispose();
@@ -201,7 +203,7 @@ function createApiKeyModels(initial?: { apiKey?: string }) {
         storedKey ? { auth: { apiKey: storedKey }, source: 'GEMINI_API_KEY' } : undefined,
       ),
     login: (_provider: string, _type: string, interaction: ProviderAuthInteraction) =>
-      provider.auth.apiKey!.login(interaction),
+      provider.auth.apiKey!.login!(interaction),
     logout: () => Promise.resolve(),
   } as unknown as Models;
 }
