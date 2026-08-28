@@ -55,6 +55,10 @@ function useThreadId(): [Promise<string> | null, () => void] {
     // becomes an unhandled promise rejection.
     const pending = port.createThread().then((thread): string => {
       attemptRef.current = 0;
+      // Clear the in-flight guard on success too. It is only reset on failure
+      // today, so after the first thread is created a "new chat" reset would see
+      // a stale flag and never make a fresh thread, leaving the session null.
+      creatingRef.current = false;
       return thread.id;
     });
     void pending.catch(() => {

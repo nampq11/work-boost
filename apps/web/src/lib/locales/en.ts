@@ -192,6 +192,7 @@ export const en = {
   'thread.assistantFailed': 'The assistant failed.',
   'thread.welcomeTitle': 'How can I help you today?',
   'thread.welcomeSubtitle': 'Summarize notes, query daily tasks, or record debt entries.',
+  'thread.newChat': 'New chat',
   'thread.mention.title': 'Workspace files',
   'thread.mention.noFiles': 'No matching files',
   'thread.mention.kindDaily': 'Daily',

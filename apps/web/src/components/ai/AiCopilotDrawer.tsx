@@ -1,4 +1,4 @@
-import { Plug, Sparkle, X } from '@phosphor-icons/react';
+import { Plug, Plus, Sparkle, X } from '@phosphor-icons/react';
 import type { AuthLoginEvent, AuthLoginSession, AuthStatus } from '@work-boost/data-schemas/auth';
 import { Button, ResizablePanel, usePanelRef } from '@work-boost/ui';
 import React, { useEffect, useRef, useState } from 'react';
@@ -9,11 +9,13 @@ import { useI18n } from '../../lib/i18n.tsx';
 import { isTauri } from '../../lib/tauri.ts';
 import { useUiStore } from '../../store/ui-store.ts';
 import { CopilotAuthDialog } from './CopilotAuthDialog.tsx';
+import { useCopilotRuntime } from './CopilotRuntimeProvider.tsx';
 import { WorkBoostThread } from './WorkBoostThread.tsx';
 
 export function AiCopilotDrawer() {
   const { t } = useI18n();
   const port = useDataPort();
+  const { resetConversation } = useCopilotRuntime();
   const sidecarStatus = useSidecarStatus();
   const open = useUiStore((state) => state.copilotOpen);
   const panelRef = usePanelRef();
@@ -308,6 +310,17 @@ export function AiCopilotDrawer() {
                 <span>{t('copilot.workspace')}</span>
               </div>
               <div className="flex items-center gap-1">
+                {isConnected && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => void resetConversation()}
+                    aria-label={t('thread.newChat')}
+                    title={t('thread.newChat')}
+                  >
+                    <Plus size={15} />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
