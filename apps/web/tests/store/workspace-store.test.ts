@@ -32,7 +32,10 @@ function createMockPort(): DataPort {
     startAuthLogin: () => Promise.reject(new Error('not implemented')),
     subscribeAuthLogin: () => () => undefined,
     cancelAuthLogin: () => Promise.reject(new Error('not implemented')),
+    submitLoginCode: () => Promise.reject(new Error('not implemented')),
     logoutAuth: () => Promise.reject(new Error('not implemented')),
+    saveApiKey: () => Promise.reject(new Error('not implemented')),
+    setAIConfig: () => Promise.reject(new Error('not implemented')),
     getSidecarStatus: () => 'browser',
     onSidecarStatusChange: () => () => undefined,
   };

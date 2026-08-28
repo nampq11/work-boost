@@ -109,6 +109,8 @@ export interface DataPort {
     onError: () => void,
   ): () => void;
   cancelAuthLogin(loginId: string): Promise<{ status: 'completed' | 'failed' | 'cancelled' }>;
+  /** Resolve a pending `manual_code` prompt with a pasted code or redirect URL. */
+  submitLoginCode(loginId: string, code: string): Promise<void>;
   logoutAuth(): Promise<{ provider: string; status: 'not_connected' }>;
   /** Store an API key for a provider; resolves to the refreshed auth status. */
   saveApiKey(provider: string, apiKey: string): Promise<AuthStatus>;

@@ -27,6 +27,10 @@ export function AiCopilotDrawer() {
     AuthLoginEvent,
     { type: 'device_code' }
   > | null>(null);
+  const [manualCodePrompt, setManualCodePrompt] = useState<Extract<
+    AuthLoginEvent,
+    { type: 'manual_code' }
+  > | null>(null);
   const [authProgress, setAuthProgress] = useState('');
   const [authError, setAuthError] = useState('');
   const [authUrl, setAuthUrl] = useState<string | null>(null);
@@ -104,6 +108,13 @@ export function AiCopilotDrawer() {
     if (event.type === 'device_code') {
       setDeviceCode(event);
       setAuthProgress(t('copilot.auth.waitingForAuthorization'));
+      // Auto-open the verification page in Tauri, mirroring the auth_url flow. In
+      // a browser we keep it manual: window.open without a user gesture is blocked.
+      if (isTauri() && /^https?:\/\//i.test(event.verificationUri)) {
+        void openExternalUrl(event.verificationUri).catch(() =>
+          setAuthError(t('copilot.auth.unableOpenBrowser')),
+        );
+      }
     } else if (event.type === 'auth_url') {
       // Browser-flow OAuth: in Tauri, auto-open via opener plugin. In browser,
       // show a clickable link since window.open without user activation is blocked.
@@ -124,9 +135,12 @@ export function AiCopilotDrawer() {
       }
     } else if (event.type === 'progress') {
       setAuthProgress(event.message);
+    } else if (event.type === 'manual_code') {
+      setManualCodePrompt(event);
     } else if (event.type === 'completed') {
       clearLoginSession();
       setDeviceCode(null);
+      setManualCodePrompt(null);
       setAuthError('');
       setAuthUrl(null);
       void refreshAuthStatus();
@@ -134,11 +148,13 @@ export function AiCopilotDrawer() {
       clearLoginSession();
       setAuthError(event.message);
       setAuthUrl(null);
+      setManualCodePrompt(null);
       void refreshAuthStatus();
     } else if (event.type === 'cancelled') {
       clearLoginSession();
       setAuthError(t('copilot.auth.loginCancelled'));
       setAuthUrl(null);
+      setManualCodePrompt(null);
       void refreshAuthStatus();
     }
   }
@@ -153,6 +169,7 @@ export function AiCopilotDrawer() {
     setAuthLoading(true);
     setAuthError('');
     setDeviceCode(null);
+    setManualCodePrompt(null);
     setAuthProgress('');
     try {
       // Switch the active provider when it differs from the selection, or
@@ -213,6 +230,7 @@ export function AiCopilotDrawer() {
     if (!session) return;
     clearLoginSession();
     setDeviceCode(null);
+    setManualCodePrompt(null);
     setAuthProgress('');
     try {
       await port.cancelAuthLogin(session.loginId);
@@ -220,6 +238,25 @@ export function AiCopilotDrawer() {
       setAuthError(error instanceof Error ? error.message : t('copilot.auth.unableCancelLogin'));
     }
     await refreshAuthStatus();
+  }
+
+  async function submitLoginCode(code: string) {
+    const session = loginSessionRef.current;
+    if (!session) return;
+    const requestId = loginRequestRef.current;
+    setAuthError('');
+    try {
+      // Keep the prompt visible until a terminal event arrives; the login may
+      // still be racing the loopback callback, which can complete independently.
+      await port.submitLoginCode(session.loginId, code);
+      setManualCodePrompt(null);
+    } catch (error) {
+      // Ignore a rejection when the login has already settled (e.g. the loopback
+      // callback won the race): the terminal event clears the prompt and state.
+      if (requestId === loginRequestRef.current && loginSessionRef.current === session) {
+        setAuthError(error instanceof Error ? error.message : t('copilot.auth.unableSubmitCode'));
+      }
+    }
   }
 
   async function closeDrawer() {
@@ -315,6 +352,7 @@ export function AiCopilotDrawer() {
             authError={authError}
             loginSession={loginSession}
             deviceCode={deviceCode}
+            manualCodePrompt={manualCodePrompt}
             authProgress={authProgress}
             authUrl={authUrl}
             onRetry={() => void refreshAuthStatus()}
@@ -323,6 +361,12 @@ export function AiCopilotDrawer() {
               void handleSaveApiKey(provider, apiKey, model)
             }
             onCancelLogin={() => void cancelLogin()}
+            onSubmitCode={(code) => void submitLoginCode(code)}
+            onOpenExternal={(url) =>
+              void openExternalUrl(url).catch(() =>
+                setAuthError(t('copilot.auth.unableOpenBrowser')),
+              )
+            }
             onError={setAuthError}
           />
         </>

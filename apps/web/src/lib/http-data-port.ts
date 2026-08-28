@@ -127,6 +127,10 @@ export class HttpDataPort implements DataPort {
     return api.cancelAuthLogin(loginId);
   }
 
+  submitLoginCode(loginId: string, code: string): Promise<void> {
+    return api.submitLoginCode(loginId, code);
+  }
+
   logoutAuth(): Promise<{ provider: string; status: 'not_connected' }> {
     return api.logoutAuth();
   }

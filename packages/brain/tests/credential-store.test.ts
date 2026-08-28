@@ -1,6 +1,7 @@
 import { createModels } from '@earendil-works/pi-ai';
 import { zaiProvider } from '@earendil-works/pi-ai/providers/zai';
 import { assertEquals } from '@std/assert';
+import { dirname, join } from '@std/path';
 import { createCredentialStore } from '@work-boost/brain';
 
 Deno.test('file credential store reads and preserves unrelated providers', async () => {
@@ -102,4 +103,54 @@ Deno.test('credential store recovers a lock owned by a terminated process', asyn
     'recovered',
   );
   await Deno.remove(root, { recursive: true });
+});
+
+Deno.test('credential store defaults to ~/.workboost/agent/auth.json', () => {
+  const root = Deno.makeTempDirSync({ prefix: 'work-boost-home-' });
+  const originalHome = Deno.env.get('HOME');
+  const originalAuthPath = Deno.env.get('PI_AUTH_PATH');
+  Deno.env.set('HOME', root);
+  Deno.env.delete('PI_AUTH_PATH');
+  try {
+    const store = createCredentialStore();
+    assertEquals(store.path, join(root, '.workboost', 'agent', 'auth.json'));
+  } finally {
+    if (originalHome !== undefined) Deno.env.set('HOME', originalHome);
+    if (originalAuthPath !== undefined) Deno.env.set('PI_AUTH_PATH', originalAuthPath);
+    else Deno.env.delete('PI_AUTH_PATH');
+    Deno.removeSync(root, { recursive: true });
+  }
+});
+
+Deno.test('credential store migrates the legacy ~/.pi/agent/auth.json once', async () => {
+  const root = Deno.makeTempDirSync({ prefix: 'work-boost-home-' });
+  const legacyPath = join(root, '.pi', 'agent', 'auth.json');
+  const newPath = join(root, '.workboost', 'agent', 'auth.json');
+  Deno.mkdirSync(dirname(legacyPath), { recursive: true });
+  Deno.writeTextFileSync(
+    legacyPath,
+    JSON.stringify({ zai: { type: 'api_key', key: 'migrated-key' } }),
+  );
+
+  const originalHome = Deno.env.get('HOME');
+  const originalAuthPath = Deno.env.get('PI_AUTH_PATH');
+  Deno.env.set('HOME', root);
+  Deno.env.delete('PI_AUTH_PATH');
+  try {
+    const store = createCredentialStore();
+    assertEquals(store.path, newPath);
+    const migrated = JSON.parse(Deno.readTextFileSync(newPath));
+    assertEquals(migrated.zai.key, 'migrated-key');
+    // The legacy file is left in place for other tools that share it.
+    assertEquals(Deno.statSync(legacyPath).isFile, true);
+    // A second store (or a later reload) does not clobber the migrated file.
+    const store2 = createCredentialStore();
+    assertEquals(store2.path, newPath);
+    assertEquals((await store2.read('zai'))?.type, 'api_key');
+  } finally {
+    if (originalHome !== undefined) Deno.env.set('HOME', originalHome);
+    if (originalAuthPath !== undefined) Deno.env.set('PI_AUTH_PATH', originalAuthPath);
+    else Deno.env.delete('PI_AUTH_PATH');
+    Deno.removeSync(root, { recursive: true });
+  }
 });

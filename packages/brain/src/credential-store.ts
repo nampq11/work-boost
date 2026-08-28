@@ -8,7 +8,9 @@ import { dirname, join } from '@std/path';
 
 type AuthFile = Record<string, unknown>;
 
-const DEFAULT_AUTH_RELATIVE_PATH = '.pi/agent/auth.json';
+const DEFAULT_AUTH_RELATIVE_PATH = '.workboost/agent/auth.json';
+// Legacy shared pi location; migrated into the work-boost file on first use.
+const LEGACY_AUTH_RELATIVE_PATH = '.pi/agent/auth.json';
 const LOCK_RETRY_MS = 25;
 const LOCK_TIMEOUT_MS = 30_000;
 const LOCK_STALE_MS = LOCK_TIMEOUT_MS;
@@ -66,13 +68,27 @@ export interface FileCredentialStoreOptions {
   path?: string;
 }
 
-function getDefaultAuthPath(): string {
-  const configuredPath = Deno.env.get('PI_AUTH_PATH')?.trim();
-  if (configuredPath) return configuredPath;
-
+function resolveHome(): string {
   const home = Deno.env.get('HOME') ?? Deno.env.get('USERPROFILE');
-  if (!home) throw new Error('Cannot resolve the home directory for pi credentials');
-  return join(home, DEFAULT_AUTH_RELATIVE_PATH);
+  if (!home) throw new Error('Cannot resolve the home directory for work-boost credentials');
+  return home;
+}
+
+function getDefaultAuthPath(): string {
+  return join(resolveHome(), DEFAULT_AUTH_RELATIVE_PATH);
+}
+
+function getLegacyAuthPath(): string {
+  return join(resolveHome(), LEGACY_AUTH_RELATIVE_PATH);
+}
+
+function pathExists(path: string): boolean {
+  try {
+    Deno.statSync(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function throwIfAborted(options?: AuthOperationOptions): void {
@@ -162,7 +178,34 @@ export class FileCredentialStore implements CredentialStore {
 
   constructor(options: FileCredentialStoreOptions = {}) {
     const configuredPath = options.path?.trim();
-    this.path = resolveAuthPath(configuredPath || getDefaultAuthPath());
+    const envPath = Deno.env.get('PI_AUTH_PATH')?.trim();
+    this.path = resolveAuthPath(configuredPath || envPath || getDefaultAuthPath());
+    // One-time migration from the legacy shared pi location, only when the store
+    // is using its default location (no explicit or env-configured path).
+    if (!configuredPath && !envPath) this.migrateLegacyIfNeeded();
+  }
+
+  /**
+   * Copy the legacy shared `~/.pi/agent/auth.json` into the work-boost file the
+   * first time the default location is used. Best-effort: if the target already
+   * exists (or the legacy file is absent) it is a no-op. A real IO failure is
+   * surfaced because the credentials would otherwise appear silently lost.
+   */
+  private migrateLegacyIfNeeded(): void {
+    const legacyPath = resolveAuthPath(getLegacyAuthPath());
+    if (legacyPath === this.path) return;
+    if (pathExists(this.path)) return;
+    if (!pathExists(legacyPath)) return;
+    try {
+      const contents = Deno.readTextFileSync(legacyPath);
+      Deno.mkdirSync(dirname(this.path), { recursive: true });
+      Deno.writeTextFileSync(this.path, contents, { mode: 0o600 });
+    } catch (error) {
+      throw new Error(
+        `Failed to migrate work-boost credentials from ${legacyPath} to ${this.path}`,
+        { cause: error },
+      );
+    }
   }
 
   private async acquireLock(signal?: AbortSignal): Promise<() => Promise<void>> {

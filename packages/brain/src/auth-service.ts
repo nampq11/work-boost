@@ -38,6 +38,8 @@ export interface AuthPort {
   subscribe(loginId: string, listener: (event: AuthLoginEvent) => void): () => void;
   disconnect(loginId: string): void;
   cancelLogin(loginId: string): Promise<AuthLoginCancellation>;
+  /** Resolve a pending `manual_code` prompt with a pasted code or redirect URL. */
+  submitLoginCode(loginId: string, code: string): Promise<void>;
   logout(): Promise<{ provider: string; status: 'not_connected' }>;
   /** Store an API key for a provider, replacing any existing credential. */
   saveApiKey(provider: string, apiKey: string): Promise<void>;
@@ -128,6 +130,11 @@ export class AuthService {
   private readonly disconnectGraceMs: number;
   private readonly sessions = new Map<string, LoginSession>();
   private activeLoginId?: string;
+  private pendingPrompt?: {
+    loginId: string;
+    resolve: (value: string) => void;
+    reject: (error: Error) => void;
+  };
 
   constructor(deps: AuthServiceDeps) {
     this.ai = deps.ai;
@@ -388,6 +395,33 @@ export class AuthService {
     return { status: 'cancelled' };
   }
 
+  /**
+   * Resolve a pending `manual_code` prompt with a pasted authorization code or
+   * full redirect URL. Used by browser PKCE flows (e.g. OpenRouter) that race a
+   * loopback callback server against a manual paste fallback.
+   */
+  async submitLoginCode(loginId: string, code: string): Promise<void> {
+    const value = code.trim();
+    if (!value) {
+      throw new AuthServiceError(
+        'AUTH_CODE_REQUIRED',
+        'An authorization code or redirect URL is required',
+        400,
+      );
+    }
+    const session = this.sessions.get(loginId);
+    if (!session || session.terminal) throw this.loginNotFound();
+    const pending = this.pendingPrompt;
+    if (!pending || pending.loginId !== loginId) {
+      throw new AuthServiceError(
+        'AUTH_NO_CODE_PROMPT',
+        'No verification input is currently expected',
+        409,
+      );
+    }
+    pending.resolve(value);
+  }
+
   async logout(): Promise<{ provider: string; status: 'not_connected' }> {
     if (this.activeLoginId) await this.cancelLogin(this.activeLoginId);
     await this.models.logout(this.ai.provider);
@@ -404,6 +438,49 @@ export class AuthService {
     }
     this.sessions.clear();
     this.activeLoginId = undefined;
+    this.pendingPrompt = undefined;
+  }
+
+  private awaitManualCodeInput(
+    session: LoginSession,
+    prompt: { message: string; placeholder?: string; signal?: AbortSignal },
+  ): Promise<string> {
+    const message = sanitizePublicMessage(prompt.message);
+    const placeholder = prompt.placeholder ? sanitizePublicMessage(prompt.placeholder) : undefined;
+    this.emit(session, {
+      type: 'manual_code',
+      message,
+      ...(placeholder ? { placeholder } : {}),
+    });
+    return new Promise<string>((resolve, reject) => {
+      const clear = () => {
+        if (this.pendingPrompt?.loginId === session.loginId) this.pendingPrompt = undefined;
+      };
+      this.pendingPrompt = {
+        loginId: session.loginId,
+        resolve: (value) => {
+          clear();
+          resolve(value);
+        },
+        reject: (error) => {
+          clear();
+          reject(error);
+        },
+      };
+      const abortSignal = prompt.signal ?? session.controller.signal;
+      const onAbort = () => {
+        if (this.pendingPrompt?.loginId === session.loginId) {
+          const abortError = new Error('Login cancelled');
+          abortError.name = 'AbortError';
+          this.pendingPrompt.reject(abortError);
+        }
+      };
+      if (abortSignal.aborted) {
+        onAbort();
+      } else {
+        abortSignal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
   }
 
   private async runLogin(session: LoginSession): Promise<void> {
@@ -412,6 +489,9 @@ export class AuthService {
         signal: session.controller.signal,
         prompt: async (prompt) => {
           if (prompt.type === 'select') return 'device_code';
+          if (prompt.type === 'manual_code' || prompt.type === 'text') {
+            return this.awaitManualCodeInput(session, prompt);
+          }
           throw new AuthServiceError(
             'AUTH_OAUTH_UNSUPPORTED',
             'This OAuth flow requires interactive input that the browser does not support',
@@ -504,6 +584,13 @@ export class AuthService {
     clearTimeout(session.expiryTimer);
     if (session.disconnectTimer) clearTimeout(session.disconnectTimer);
     if (this.activeLoginId === session.loginId) this.activeLoginId = undefined;
+    if (this.pendingPrompt?.loginId === session.loginId) {
+      const pendingPrompt = this.pendingPrompt;
+      this.pendingPrompt = undefined;
+      const abortError = new Error('Login cancelled');
+      abortError.name = 'AbortError';
+      pendingPrompt.reject(abortError);
+    }
     this.emit(session, event);
     session.cleanupTimer = setTimeout(() => {
       session.subscribers.clear();

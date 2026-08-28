@@ -17,6 +17,7 @@ import {
   handleAuthConfig,
   handleAuthLogin,
   handleAuthLoginCancel,
+  handleAuthLoginCode,
   handleAuthLoginEvents,
   handleAuthLogout,
   handleAuthStatus,
@@ -372,6 +373,10 @@ export function createServer(config: ApiServerConfig) {
           pathname.startsWith(loginPathPrefix) && pathname.endsWith('/cancel')
             ? pathname.slice(loginPathPrefix.length, -'/cancel'.length)
             : undefined;
+        const loginCodeMatch =
+          pathname.startsWith(loginPathPrefix) && pathname.endsWith('/code')
+            ? pathname.slice(loginPathPrefix.length, -'/code'.length)
+            : undefined;
 
         if (pathname === `${authBase}/status` && method === 'GET') {
           response = await handleAuthStatus(config.auth, ctx.requestId);
@@ -381,6 +386,8 @@ export function createServer(config: ApiServerConfig) {
           response = handleAuthLoginEvents(req, config.auth, loginEventsMatch, ctx.requestId);
         } else if (loginCancelMatch !== undefined && method === 'POST') {
           response = await handleAuthLoginCancel(config.auth, loginCancelMatch, ctx.requestId);
+        } else if (loginCodeMatch !== undefined && method === 'POST') {
+          response = await handleAuthLoginCode(req, config.auth, loginCodeMatch, ctx.requestId);
         } else if (pathname === `${authBase}/api-key` && method === 'POST') {
           response = await handleAuthApiKey(config.auth, req, ctx.requestId);
         } else if (pathname === `${authBase}/config` && method === 'PUT') {

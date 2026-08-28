@@ -445,6 +445,10 @@ export class TauriDataPort implements DataPort {
     return this.requireHttp(() => this.http.cancelAuthLogin(loginId));
   }
 
+  submitLoginCode(loginId: string, code: string): Promise<void> {
+    return this.requireHttp(() => this.http.submitLoginCode(loginId, code));
+  }
+
   logoutAuth(): Promise<{ provider: string; status: 'not_connected' }> {
     return this.requireHttp(() => this.http.logoutAuth());
   }
