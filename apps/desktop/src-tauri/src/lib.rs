@@ -8,18 +8,24 @@ use tauri::{Manager, State};
 
 mod sidecar;
 mod update;
+mod update_install;
 mod watcher;
 mod workspace;
 
 /// Read-only launch check: is there a newer release? Never blocks or fails launch; returns `None`
-/// on any error and never returns a URL to the webview.
+/// on any error and never returns a URL to the webview. Runs the network fetch on a blocking task
+/// so a slow/offline launch check never stalls the main thread (the app would otherwise look
+/// frozen for up to the 10s HTTP timeout).
 #[tauri::command]
-fn check_for_update(app: tauri::AppHandle) -> Result<Option<update::UpdateInfo>, String> {
+async fn check_for_update(app: tauri::AppHandle) -> Result<Option<update::UpdateInfo>, String> {
     if !update::auto_update_enabled() {
         return Ok(None);
     }
     let current = app.package_info().version.to_string();
-    match update::latest_release() {
+    let info = tauri::async_runtime::spawn_blocking(update::latest_release)
+        .await
+        .map_err(|e| format!("update check task failed: {e}"))?;
+    match info {
         Ok(Some(info))
             if update::compare_versions(&info.version, &current) == Ordering::Greater =>
         {
@@ -32,67 +38,11 @@ fn check_for_update(app: tauri::AppHandle) -> Result<Option<update::UpdateInfo>,
 
 /// Run the canonical installer elevated and relaunch. Takes NO arguments from the webview; the
 /// install command is a Rust constant, so a webview XSS cannot direct the app to install anything.
+/// Async so it runs off the main thread; the install itself runs on a spawned background thread
+/// and reports phases/failures as Tauri events, so the app window stays responsive throughout.
 #[tauri::command]
-fn apply_update(app: tauri::AppHandle) -> Result<(), String> {
-    run_installer()?;
-    // Trigger a restart; the app relaunches into the newly installed binary on the next exit event.
-    app.request_restart();
-    Ok(())
-}
-
-fn run_installer() -> Result<(), String> {
-    match std::env::consts::OS {
-        "linux" => run_linux_installer(),
-        "macos" => run_macos_installer(),
-        "windows" => Err(manual_install_message("Windows")),
-        other => Err(manual_install_message(other)),
-    }
-}
-
-fn manual_install_message(platform: &str) -> String {
-    format!(
-        "{platform} updates are manual. Open the releases page to download the latest installer."
-    )
-}
-
-fn command_exists(command: &str) -> bool {
-    std::process::Command::new("sh")
-        .arg("-c")
-        .arg(format!("command -v {command} >/dev/null 2>&1"))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
-}
-
-fn run_linux_installer() -> Result<(), String> {
-    if !command_exists("pkexec") {
-        return Err(manual_install_message("Linux (requires pkexec)"));
-    }
-    let script = format!("curl -fsSL {} | sh", update::INSTALL_URL);
-    match std::process::Command::new("pkexec")
-        .arg("sh")
-        .arg("-c")
-        .arg(&script)
-        .status()
-    {
-        Ok(status) if status.success() => Ok(()),
-        Ok(status) => Err(format!("installer exited with code {:?}", status.code())),
-        Err(err) => Err(format!("failed to launch pkexec: {err}")),
-    }
-}
-
-fn run_macos_installer() -> Result<(), String> {
-    let script = format!("curl -fsSL {} | sh", update::INSTALL_URL);
-    let osascript = format!("do shell script \"{script}\" with administrator privileges");
-    match std::process::Command::new("osascript")
-        .arg("-e")
-        .arg(&osascript)
-        .status()
-    {
-        Ok(status) if status.success() => Ok(()),
-        Ok(_) => Err("update cancelled or failed".into()),
-        Err(err) => Err(format!("failed to launch osascript: {err}")),
-    }
+async fn apply_update(app: tauri::AppHandle) -> Result<(), String> {
+    update_install::start_install(app)
 }
 
 /// Resolved API base. Used by the legacy `resolveApiBase` bootstrap (dev-mode desktop only);
