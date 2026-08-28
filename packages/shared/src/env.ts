@@ -23,7 +23,13 @@ for (const [key, value] of Object.entries(envFile)) {
 }
 
 const envSchema = z.object({
-  DENO_ENV: z.enum(['development', 'developement', 'production', 'test']).default('development'),
+  DENO_ENV: z
+    .enum(['development', 'developement', 'production', 'test'])
+    .default('development')
+    // 'developement' is accepted for backward compatibility but normalized to 'development'
+    .transform((value): 'development' | 'production' | 'test' =>
+      value === 'developement' ? 'development' : value,
+    ),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   REDACT_SECRETS: z
     .string()
@@ -31,9 +37,7 @@ const envSchema = z.object({
     .transform((value) => value !== 'false'),
 });
 
-type ParsedEnv = z.infer<typeof envSchema>;
-
-export type EnvSchema = ParsedEnv & { DENO_ENV: 'development' | 'production' | 'test' };
+export type EnvSchema = z.infer<typeof envSchema>;
 
 export interface Env extends EnvSchema {
   /** Read a variable outside the validated schema (secrets, feature tokens). */
@@ -54,17 +58,9 @@ export function parseEnv(source: Record<string, string | undefined>): EnvSchema 
     } else {
       console.error(message);
     }
-    return finalize(envSchema.parse({}));
+    return envSchema.parse({});
   }
-  return finalize(result.data);
-}
-
-function finalize(parsed: ParsedEnv): EnvSchema {
-  return {
-    ...parsed,
-    // 'developement' is accepted for backward compatibility but normalized to 'development'
-    DENO_ENV: parsed.DENO_ENV === 'developement' ? 'development' : parsed.DENO_ENV,
-  };
+  return result.data;
 }
 
 export const env: Env = {
