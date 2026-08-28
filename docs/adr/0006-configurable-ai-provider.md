@@ -2,8 +2,9 @@
 type: ADR
 id: "0006"
 title: "Preserve the legacy AI provider default"
-status: active
+status: superseded
 date: 2026-08-21
+superseded_by: "0022"
 ---
 
 ## Context

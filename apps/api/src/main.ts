@@ -45,6 +45,25 @@ function resolveApiPrefix(defaultPrefix: string): string {
   return configuredPrefix;
 }
 
+function resolvePositiveInt(name: string, fallback: number): number {
+  const rawValue = Deno.env.get(name);
+  if (rawValue === undefined) return fallback;
+  const parsed = Number(rawValue);
+  if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  logger.warn(`Invalid ${name} '${rawValue}'; falling back to ${fallback}`);
+  return fallback;
+}
+
+export function resolveRateLimit(defaults: { maxRequests: number; windowMs: number }): {
+  maxRequests: number;
+  windowMs: number;
+} {
+  return {
+    maxRequests: resolvePositiveInt('WORKBOOST_RATE_LIMIT_MAX', defaults.maxRequests),
+    windowMs: resolvePositiveInt('WORKBOOST_RATE_LIMIT_WINDOW_MS', defaults.windowMs),
+  };
+}
+
 export interface StartApiModeOptions {
   port: number;
   host: string;
@@ -80,8 +99,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     port,
     host,
     corsOrigins: CORS_ORIGINS,
-    rateLimitMaxRequests: 100,
-    rateLimitWindowMs: 15 * 60 * 1000,
+    ...resolveRateLimit({ maxRequests: 100, windowMs: 15 * 60 * 1000 }),
     enableWebSocket: false,
     apiPrefix,
     db,

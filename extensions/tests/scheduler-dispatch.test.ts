@@ -1,4 +1,4 @@
-import { assertEquals } from '@std/assert';
+import { assertEquals, assertStringIncludes } from '@std/assert';
 import type { AgentPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import { processDailySummary } from '@work-boost/extensions/scheduler/daily-job.ts';
@@ -20,6 +20,17 @@ function fakeAgent(): AgentPort {
   return {
     stream: () => Promise.resolve('Summary content'),
   } as unknown as AgentPort;
+}
+
+function spyLogger(warnMessages: string[]): Logger {
+  return {
+    info: () => {},
+    debug: () => {},
+    warn: (message: string) => {
+      warnMessages.push(message);
+    },
+    error: () => {},
+  } as unknown as Logger;
 }
 
 const noopLogger = {
@@ -73,4 +84,32 @@ Deno.test('processDailySummary reports failure when no platform delivers', async
 
   assertEquals(result.success, false);
   assertEquals(result.reason, 'all_platforms_failed');
+});
+
+Deno.test('processDailySummary warns when a subscribed platform has no connected sender', async () => {
+  const warnings: string[] = [];
+  const result = await processDailySummary({
+    db: fakeDb({ enabled: ['telegram'], platforms: { telegram: 'T1' } }),
+    agent: fakeAgent(),
+    messaging: {},
+    logger: spyLogger(warnings),
+  });
+
+  assertEquals(result.success, false);
+  assertEquals(result.reason, 'all_platforms_failed');
+  assertEquals(warnings.length, 1);
+  assertStringIncludes(warnings[0], 'telegram');
+});
+
+Deno.test('processDailySummary stays silent for subscriptions without a chat id', async () => {
+  const warnings: string[] = [];
+  const result = await processDailySummary({
+    db: fakeDb({ enabled: ['telegram'], platforms: {} }),
+    agent: fakeAgent(),
+    messaging: {},
+    logger: spyLogger(warnings),
+  });
+
+  assertEquals(warnings.length, 0);
+  assertEquals(result.success, false);
 });

@@ -22,82 +22,54 @@ for (const [key, value] of Object.entries(envFile)) {
   }
 }
 
-// 'developement' is accepted for backward compatibility but normalized to 'development'
-function normalizeDenoEnv(value: string | undefined): string {
-  if (value === 'developement') {
-    return 'development';
-  }
-  return value ?? 'development';
-}
-
 const envSchema = z.object({
-  DENO_ENV: z.enum(['development', 'developement', 'production', 'test']).default('development'),
+  DENO_ENV: z
+    .enum(['development', 'developement', 'production', 'test'])
+    .default('development')
+    // 'developement' is accepted for backward compatibility but normalized to 'development'
+    .transform((value): 'development' | 'production' | 'test' =>
+      value === 'developement' ? 'development' : value,
+    ),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
-  REDACT_SECRETS: z.boolean().default(true),
+  REDACT_SECRETS: z
+    .string()
+    .default('true')
+    .transform((value) => value !== 'false'),
 });
 
-type EnvSchema = z.infer<typeof envSchema>;
+export type EnvSchema = z.infer<typeof envSchema>;
 
-/**
- * Get environment variable by key
- * This function works correctly with TypeScript and Deno
- */
-function getEnvValue(key: string): string | undefined {
-  return Deno.env.get(key);
+export interface Env extends EnvSchema {
+  /** Read a variable outside the validated schema (secrets, feature tokens). */
+  get(key: string): string | undefined;
 }
 
 /**
- * Environment object that supports both property access and function call syntax
- * - env.GOOGLE_API_KEY (property access)
- * - env.get('GOOGLE_API_KEY') (function call)
+ * Validate and parse the controlled environment variables. Invalid values fall
+ * back to the schema defaults so the app still boots, with the parse errors
+ * reported for diagnosis.
  */
-const envHandlers = {
-  get(key: string): string | undefined {
-    return getEnvValue(key);
-  },
-};
-
-const envProxy = new Proxy(envHandlers, {
-  get(_target, prop: string | symbol): unknown {
-    if (prop === 'get' && typeof prop === 'string') {
-      return envHandlers.get;
+export function parseEnv(source: Record<string, string | undefined>): EnvSchema {
+  const result = envSchema.safeParse(source);
+  if (!result.success) {
+    const message = `Environment validation failed: ${JSON.stringify(result.error.issues)}; using defaults`;
+    if (isMcpMode) {
+      process.stderr.write(`[MCP-SERVER] ERROR: ${message}\n`);
+    } else {
+      console.error(message);
     }
-    if (typeof prop !== 'string') {
-      return undefined;
-    }
-    // Handle property access like env.GOOGLE_API_KEY
-    switch (prop) {
-      case 'DENO_ENV':
-        return normalizeDenoEnv(Deno.env.get('DENO_ENV'));
-      case 'LOG_LEVEL':
-        return Deno.env.get('LOG_LEVEL') || 'info';
-      case 'REDACT_SECRETS':
-        return Deno.env.get('REDACT_SECRETS') !== 'false';
-      default:
-        return Deno.env.get(prop);
-    }
-  },
-});
+    return envSchema.parse({});
+  }
+  return result.data;
+}
 
-export const env = envProxy as EnvSchema & { get(key: string): string | undefined };
-
-export function validateEnv(): boolean {
-  const envToValidate = {
+export const env: Env = {
+  ...parseEnv({
     DENO_ENV: Deno.env.get('DENO_ENV'),
     LOG_LEVEL: Deno.env.get('LOG_LEVEL'),
-    REDACT_SECRETS: Deno.env.get('REDACT_SECRETS') === 'false' ? false : true,
-  };
-
-  const result = envSchema.safeParse(envToValidate);
-  if (!result.success) {
-    // Note: logger might not be available during early initialization
-    const errorMsg = `Environment validation failed: ${JSON.stringify(result.error.issues)}`;
-    if (isMcpMode) {
-      process.stderr.write(`[MCP-SERVER] ERROR: ${errorMsg}\n`);
-    } else {
-      console.error('Environment validation failed:', result.error.issues);
-    }
-    return false;
-  }
-  return result.success;
-}
+    REDACT_SECRETS: Deno.env.get('REDACT_SECRETS'),
+  }),
+  get(key: string): string | undefined {
+    return Deno.env.get(key);
+  },
+};

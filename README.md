@@ -130,9 +130,11 @@ DENO_ENV=development    # development | production | test
 LOG_LEVEL=info          # error | warn | info | debug
 
 # Server (optional)
-PORT=3001               # Server port (default: 3001)
-HOST=localhost          # Server host
+WORKBOOST_PORT=3001     # Server port (default: 3001)
+WORKBOOST_HOST=localhost  # Server host
 WORKBOOST_API_PREFIX=/api  # API prefix
+WORKBOOST_RATE_LIMIT_MAX=100            # Requests per window (default: 100)
+WORKBOOST_RATE_LIMIT_WINDOW_MS=900000   # Window length in ms (default: 15 minutes)
 
 # Slack (optional - for Slack integration)
 SLACK_BOT_TOKEN=xoxb-your-bot-token
@@ -159,15 +161,35 @@ The same AI settings can be stored in `.workboost/config.json`:
 ```
 
 Supported provider defaults are Z.ai (`glm-5.2`), OpenAI Codex (`gpt-5.4-mini`), and Google
-Gemini (`gemini-2.5-flash`). OpenRouter requires an explicit model. Environment variables override
+Gemini (`gemini-2.5-flash`). OpenRouter requires an explicit model. Unconfigured workspaces default
+to OpenAI Codex, the one provider with a built-in browser login path. Environment variables override
 workspace configuration. Credentials are read from `~/.workboost/agent/auth.json` by default; a
 legacy `~/.pi/agent/auth.json` is copied there once on first use, and OAuth refreshes are written
-back safely without changing other providers. Existing workspaces without AI settings continue to
-use Google Gemini for backward compatibility. Provider changes take effect
+back safely without changing other providers. Provider changes take effect
 after an API restart; there is no automatic provider fallback. When `AI_PROVIDER=openai-codex`,
 the browser Copilot drawer can start device-code login without exposing tokens to the browser.
 OAuth credentials remain in the server-side pi credential file and can be removed with the
 drawer's Log out action.
+
+### Platform tokens vs subscriptions
+
+The two switches that control a messaging platform are independent:
+
+- **Capability (`.env`)**: `SLACK_BOT_TOKEN` / `TELEGRAM_BOT_TOKEN` decide whether the platform's
+  transport is wired into the API at startup. Without a token, the platform cannot send or
+  receive anything.
+- **Intent (subscription)**: `/subscribe` and `/unsubscribe` (stored in
+  `.workboost/config.json` under `platforms`) decide whether scheduled jobs such as the daily
+  summary target that platform.
+
+A subscription for a platform whose token is missing is logged as a warning by the scheduler
+instead of being silently dropped.
+
+### Plugins
+
+Drop `.ts`, `.js`, or `.mjs` files into `~/.workboost/plugins/` to load custom extensions at
+startup. Plugin code runs inside the API process with full permissions - only add files you
+trust.
 
 ## Setting Up Telegram Bot
 
