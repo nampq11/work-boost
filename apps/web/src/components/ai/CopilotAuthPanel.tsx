@@ -11,13 +11,19 @@ export interface CopilotAuthPanelProps {
   authError: string;
   loginSession: AuthLoginSession | null;
   deviceCode: Extract<AuthLoginEvent, { type: 'device_code' }> | null;
+  manualCodePrompt: Extract<AuthLoginEvent, { type: 'manual_code' }> | null;
   authProgress: string;
+  /** True while a manual-code submit request is in flight; disables resubmission. */
+  submittingCode: boolean;
   authUrl: string | null;
   onRetry: () => void;
   onStartLogin: (provider: string, model?: string) => void;
   onCancelLogin: () => void;
+  onSubmitCode: (code: string) => void;
   onSaveApiKey: (provider: string, apiKey: string, model?: string) => void;
   onError: (message: string) => void;
+  /** Open a URL in the OS browser: Tauri opener in desktop, new tab in browser. */
+  onOpenExternal: (url: string) => void;
 }
 
 function getAuthMethodLabel(method: AuthMethod): string {
@@ -30,19 +36,24 @@ export function CopilotAuthPanel({
   authError,
   loginSession,
   deviceCode,
+  manualCodePrompt,
   authProgress,
+  submittingCode,
   authUrl,
   onRetry,
   onStartLogin,
   onCancelLogin,
+  onSubmitCode,
   onSaveApiKey,
   onError,
+  onOpenExternal,
 }: CopilotAuthPanelProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [apiKeyValue, setApiKeyValue] = useState('');
   const [modelValue, setModelValue] = useState('');
+  const [manualCodeValue, setManualCodeValue] = useState('');
   const [useApiKeyMode, setUseApiKeyMode] = useState(false);
   const copyTimeoutRef = useRef<number | undefined>(undefined);
 
@@ -60,6 +71,13 @@ export function CopilotAuthPanel({
   const showOAuthPrimary = supportsOAuth && !useApiKeyMode;
   const showModelInput = selectedDescriptor?.requiresModel ?? false;
   const modelValid = !showModelInput || modelValue.trim().length > 0;
+
+  function openAuthPage(url: string): void {
+    // Never hand a non-http(s) value to the OS opener: the URL arrives over SSE and a
+    // javascript:/custom-scheme value must never reach an anchor href or the Tauri opener.
+    if (!/^https?:\/\//i.test(url)) return;
+    onOpenExternal(url);
+  }
 
   async function copyUserCode() {
     if (!deviceCode) return;
@@ -88,12 +106,24 @@ export function CopilotAuthPanel({
     onSaveApiKey(selectedProvider, key, model);
   }
 
+  function submitManualCode() {
+    const code = manualCodeValue.trim();
+    if (!code) return;
+    onSubmitCode(code);
+  }
+
   // Reset the auth form whenever the provider being edited changes.
   useEffect(() => {
     setApiKeyValue('');
     setModelValue('');
     setUseApiKeyMode(false);
   }, [selectedProvider]);
+
+  // Drop any stale pasted value once the prompt is dismissed so it never
+  // lingers into a later login step.
+  useEffect(() => {
+    if (!manualCodePrompt) setManualCodeValue('');
+  }, [manualCodePrompt]);
 
   useEffect(() => () => window.clearTimeout(copyTimeoutRef.current), []);
 
@@ -189,28 +219,46 @@ export function CopilotAuthPanel({
                         {copied ? <Check size={15} /> : <Copy size={15} />}
                       </Button>
                     </div>
-                    <a
-                      href={deviceCode.verificationUri}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block text-center text-[var(--accent-blue)] underline"
+                    <button
+                      type="button"
+                      onClick={() => openAuthPage(deviceCode.verificationUri)}
+                      className="block w-full cursor-pointer border-0 bg-transparent p-0 text-center text-[var(--accent-blue)] underline"
                     >
                       {t('copilot.auth.openVerificationPageLink')}
-                    </a>
+                    </button>
                   </>
                 )}
                 <p className="text-[var(--text-muted)]">
                   {authProgress || t('copilot.auth.waitingForAuthorization')}
                 </p>
                 {authUrl && (
-                  <a
-                    href={authUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 block text-center text-[var(--accent-blue)] underline"
+                  <button
+                    type="button"
+                    onClick={() => openAuthPage(authUrl)}
+                    className="mt-2 block w-full cursor-pointer border-0 bg-transparent p-0 text-center text-[var(--accent-blue)] underline"
                   >
                     {t('copilot.auth.openAuthorizationLink')}
-                  </a>
+                  </button>
+                )}
+                {manualCodePrompt && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    <p className="text-[var(--text-muted)]">{manualCodePrompt.message}</p>
+                    <input
+                      type="text"
+                      value={manualCodeValue}
+                      onChange={(e) => setManualCodeValue(e.target.value)}
+                      placeholder={
+                        manualCodePrompt.placeholder ?? t('copilot.auth.pasteCodePlaceholder')
+                      }
+                      className="w-full rounded border border-[var(--border)] bg-[var(--surface-app)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)]"
+                    />
+                    <Button
+                      onClick={submitManualCode}
+                      disabled={!manualCodeValue.trim() || submittingCode}
+                    >
+                      {t('copilot.auth.submitCode')}
+                    </Button>
+                  </div>
                 )}
                 <Button variant="secondary" onClick={onCancelLogin}>
                   {t('copilot.auth.cancel')}

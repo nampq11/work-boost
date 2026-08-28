@@ -274,3 +274,91 @@ Deno.test('AuthService saveApiKey rejects empty keys and unsupported providers',
     service.dispose();
   }
 });
+Deno.test('AuthService emits manual_code and resolves it via submitLoginCode', async () => {
+  const models = createModels(async (interaction) => {
+    await interaction.prompt({
+      type: 'manual_code',
+      message: 'Complete sign-in in your browser, or paste the redirect URL here:',
+      placeholder: 'http://127.0.0.1:9999/oauth/callback/uuid',
+    });
+    interaction.notify({ type: 'progress', message: 'Exchanging authorization code...' });
+    return {
+      type: 'oauth',
+      access: 'access-token-secret',
+      refresh: 'refresh-token-secret',
+      expires: Date.now() + 60_000,
+    };
+  });
+  models.login = async (_provider, _type, interaction) =>
+    models
+      .getProvider(ai.provider)!
+      .auth.oauth!.login(interaction as AuthInteraction & { signal: AbortSignal });
+
+  const service = new AuthService({ ai, models, terminalCleanupMs: 10_000 });
+  try {
+    const session = await service.startLogin({ provider: ai.provider, type: 'oauth' });
+    const events: AuthLoginEvent[] = [];
+    service.subscribe(session.loginId, (event) => events.push(event));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // A manual_code prompt is surfaced, but nothing has resolved yet.
+    assert(events.some((event) => event.type === 'manual_code'));
+    assert(!events.some((event) => event.type === 'completed'));
+
+    // Submitting the redirect URL resolves the prompt and completes the login.
+    await service.submitLoginCode(
+      session.loginId,
+      'http://127.0.0.1:9999/oauth/callback/uuid?code=stub',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert(events.some((event) => event.type === 'completed'));
+    assert(!JSON.stringify(events).includes('access-token-secret'));
+    assert(!JSON.stringify(events).includes('refresh-token-secret'));
+  } finally {
+    service.dispose();
+  }
+});
+
+Deno.test('AuthService submitLoginCode rejects empty input and stale prompts', async () => {
+  const models = createModels(async (interaction) => {
+    await interaction.prompt({
+      type: 'manual_code',
+      message: 'Paste the code',
+    });
+    interaction.notify({ type: 'progress', message: 'Exchanging...' });
+    return {
+      type: 'oauth',
+      access: 'access-token-secret',
+      refresh: 'refresh-token-secret',
+      expires: Date.now() + 60_000,
+    };
+  });
+  models.login = async (_provider, _type, interaction) =>
+    models
+      .getProvider(ai.provider)!
+      .auth.oauth!.login(interaction as AuthInteraction & { signal: AbortSignal });
+
+  const service = new AuthService({ ai, models, terminalCleanupMs: 10_000 });
+  try {
+    const session = await service.startLogin({ provider: ai.provider, type: 'oauth' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Empty / whitespace-only codes are rejected; the pending prompt survives.
+    await assertRejects(
+      () => service.submitLoginCode(session.loginId, '   '),
+      Error,
+      'An authorization code or redirect URL is required',
+    );
+
+    // Resolving with a real value completes the login, so a later submission is stale.
+    await service.submitLoginCode(session.loginId, 'stub');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await assertRejects(
+      () => service.submitLoginCode(session.loginId, 'stub2'),
+      Error,
+      'Login session was not found',
+    );
+  } finally {
+    service.dispose();
+  }
+});

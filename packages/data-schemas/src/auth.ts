@@ -34,6 +34,7 @@ export interface AIConfigSetRequest {
 export type AuthLoginEvent =
   | { type: 'started'; provider: string; authType: 'oauth' }
   | { type: 'auth_url'; url: string; instructions?: string }
+  | { type: 'manual_code'; message: string; placeholder?: string }
   | {
       type: 'device_code';
       verificationUri: string;

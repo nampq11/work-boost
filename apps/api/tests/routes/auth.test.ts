@@ -9,6 +9,7 @@ import {
   handleAuthConfig,
   handleAuthLogin,
   handleAuthLoginCancel,
+  handleAuthLoginCode,
   handleAuthLoginEvents,
   handleAuthLogout,
   handleAuthStatus,
@@ -49,6 +50,7 @@ function createAuth(): AuthPort {
     },
     disconnect: () => undefined,
     cancelLogin: () => Promise.resolve({ status: 'cancelled' as const }),
+    submitLoginCode: () => Promise.resolve(),
     saveApiKey: () => Promise.resolve(),
     logout: () => Promise.resolve({ provider: 'openai-codex', status: 'not_connected' as const }),
   };
@@ -154,6 +156,63 @@ Deno.test('auth cancel and logout handle invalid IDs and successful logout', asy
   const logout = await handleAuthLogout(createAuth(), 'logout-request');
   assertEquals(logout.status, 200);
   assertStringIncludes(await logout.text(), 'not_connected');
+});
+
+Deno.test('auth code submission validates input and maps service errors', async () => {
+  const codeRequest = (body: unknown) =>
+    new Request(`http://localhost/api/auth/login/${loginId}/code`, {
+      method: 'POST',
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      headers: { 'content-type': 'application/json' },
+    });
+
+  // Invalid login id never reaches the service.
+  const invalid = await handleAuthLoginCode(
+    codeRequest({ code: 'abc' }),
+    createAuth(),
+    'not-a-login-id',
+    'code-invalid-id-request',
+  );
+  assertEquals(invalid.status, 404);
+  assertStringIncludes(await invalid.text(), 'AUTH_LOGIN_NOT_FOUND');
+
+  // Missing or empty code is a validation error.
+  for (const body of [undefined, null, {}, { code: '' }, { code: '   ' }, { code: 42 }]) {
+    const response = await handleAuthLoginCode(
+      codeRequest(body),
+      createAuth(),
+      loginId,
+      'code-validation-request',
+    );
+    assertEquals(response.status, 400);
+    assertStringIncludes(await response.text(), 'VALIDATION_ERROR');
+  }
+
+  // A valid submission returns an envelope.
+  const ok = await handleAuthLoginCode(
+    codeRequest({ code: 'http://127.0.0.1:9999/oauth/callback/uuid?code=abc' }),
+    createAuth(),
+    loginId,
+    'code-ok-request',
+  );
+  assertEquals(ok.status, 200);
+  assertStringIncludes(await ok.text(), 'submitted');
+
+  // Service-level rejection maps straight through.
+  const noPromptAuth: AuthPort = {
+    ...createAuth(),
+    submitLoginCode: () =>
+      Promise.reject(new AuthServiceError('AUTH_NO_CODE_PROMPT', 'No prompt', 409)),
+  };
+  const noPrompt = await handleAuthLoginCode(
+    codeRequest({ code: 'abc' }),
+    noPromptAuth,
+    loginId,
+    'code-no-prompt-request',
+  );
+  assertEquals(noPrompt.status, 409);
+  const payload = await noPrompt.json();
+  assertEquals(payload.error.code, 'AUTH_NO_CODE_PROMPT');
 });
 
 Deno.test('auth config maps typed validation errors to 400 and storage faults to 500', async () => {

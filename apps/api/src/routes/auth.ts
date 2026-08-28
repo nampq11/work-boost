@@ -210,6 +210,55 @@ export async function handleAuthLoginCancel(
   }
 }
 
+export async function handleAuthLoginCode(
+  req: Request,
+  auth: AuthPort,
+  loginId: string,
+  requestId: string,
+): Promise<Response> {
+  if (!isValidLoginId(loginId)) {
+    return noStore(
+      errorResponse(
+        ERROR_CODES.AUTH_LOGIN_NOT_FOUND,
+        'Login session was not found',
+        404,
+        undefined,
+        requestId,
+      ),
+    );
+  }
+  try {
+    const body = await req.json().catch(() => undefined);
+    if (!body || typeof body !== 'object') {
+      return noStore(
+        errorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'Request body is required',
+          400,
+          undefined,
+          requestId,
+        ),
+      );
+    }
+    const { code } = body as { code?: unknown };
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      return noStore(
+        errorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'code must be a non-empty string',
+          400,
+          undefined,
+          requestId,
+        ),
+      );
+    }
+    await auth.submitLoginCode(loginId, code);
+    return noStore(successResponse({ submitted: true }, 200, requestId));
+  } catch (error) {
+    return noStore(authErrorResponse(error, requestId));
+  }
+}
+
 export async function handleAuthLogout(auth: AuthPort, requestId: string): Promise<Response> {
   try {
     return noStore(successResponse(await auth.logout(), 200, requestId));

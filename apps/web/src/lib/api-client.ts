@@ -318,6 +318,11 @@ export const api = {
       `${apiBase}/auth/login/${encodeURIComponent(loginId)}/cancel`,
       { method: 'POST' },
     ),
+  submitLoginCode: (loginId: string, code: string) =>
+    request<void>(`${apiBase}/auth/login/${encodeURIComponent(loginId)}/code`, {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
   logoutAuth: () =>
     request<{ provider: string; status: 'not_connected' }>(`${apiBase}/auth/logout`, {
       method: 'POST',
