@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import type { AgentPort, AuthPort } from '@work-boost/brain';
+import type { AIConfigPort, AgentPort, AuthPort } from '@work-boost/brain';
 import type { Database } from '@work-boost/data-provider';
 import type { ExtensionManager } from '@work-boost/extensions';
 import { logger } from '@work-boost/shared/logger/logger.ts';
@@ -13,6 +13,8 @@ import {
 } from './middleware/logging.ts';
 import { handleAssistantRequest } from './routes/assistant.ts';
 import {
+  handleAuthApiKey,
+  handleAuthConfig,
   handleAuthLogin,
   handleAuthLoginCancel,
   handleAuthLoginEvents,
@@ -42,6 +44,7 @@ export interface ApiServerConfig {
   db?: Database;
   agent?: AgentPort;
   auth?: AuthPort;
+  aiConfig?: AIConfigPort;
   extensionManager?: ExtensionManager;
 }
 
@@ -378,6 +381,20 @@ export function createServer(config: ApiServerConfig) {
           response = handleAuthLoginEvents(req, config.auth, loginEventsMatch, ctx.requestId);
         } else if (loginCancelMatch !== undefined && method === 'POST') {
           response = await handleAuthLoginCancel(config.auth, loginCancelMatch, ctx.requestId);
+        } else if (pathname === `${authBase}/api-key` && method === 'POST') {
+          response = await handleAuthApiKey(config.auth, req, ctx.requestId);
+        } else if (pathname === `${authBase}/config` && method === 'PUT') {
+          if (!config.aiConfig) {
+            response = errorResponse(
+              ERROR_CODES.AUTH_SERVICE_UNAVAILABLE,
+              'AI configuration is unavailable',
+              503,
+              undefined,
+              ctx.requestId,
+            );
+          } else {
+            response = await handleAuthConfig(config.aiConfig, req, ctx.requestId);
+          }
         } else if (pathname === `${authBase}/logout` && method === 'POST') {
           response = await handleAuthLogout(config.auth, ctx.requestId);
         } else {

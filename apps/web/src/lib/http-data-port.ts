@@ -130,6 +130,13 @@ export class HttpDataPort implements DataPort {
   logoutAuth(): Promise<{ provider: string; status: 'not_connected' }> {
     return api.logoutAuth();
   }
+  saveApiKey(provider: string, apiKey: string): Promise<AuthStatus> {
+    return api.saveApiKey(provider, apiKey);
+  }
+
+  setAIConfig(provider: string, model?: string): Promise<AuthStatus> {
+    return api.setAIConfig(provider, model);
+  }
 
   getSidecarStatus(): SidecarStatus {
     return 'browser';

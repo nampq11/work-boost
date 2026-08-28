@@ -322,6 +322,16 @@ export const api = {
     request<{ provider: string; status: 'not_connected' }>(`${apiBase}/auth/logout`, {
       method: 'POST',
     }),
+  saveApiKey: (provider: string, apiKey: string) =>
+    request<AuthStatus>(`${apiBase}/auth/api-key`, {
+      method: 'POST',
+      body: JSON.stringify({ provider, apiKey }),
+    }),
+  setAIConfig: (provider: string, model?: string) =>
+    request<AuthStatus>(`${apiBase}/auth/config`, {
+      method: 'PUT',
+      body: JSON.stringify({ provider, ...(model ? { model } : {}) }),
+    }),
   subscribe: (onEvent: (event: WorkspaceEvent) => void, onError: () => void) => {
     const source = new EventSource(`${workspaceBase}/events`);
     source.onopen = () => undefined;

@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from '@std/assert';
+import { assertEquals, assertRejects, assertThrows } from '@std/assert';
 import { createBrain } from '@work-boost/brain';
 import type {
   ConfigManager,
@@ -26,7 +26,7 @@ function createFakeDataLayer(): DataLayer {
   };
 }
 
-Deno.test('old workspace config remains compatible and resolves Google defaults', () => {
+Deno.test('old workspace config remains compatible and resolves the default provider', () => {
   const config = WorkspaceConfigSchema.parse({
     version: 1,
     createdAt: '2026-08-21T00:00:00.000Z',
@@ -35,8 +35,8 @@ Deno.test('old workspace config remains compatible and resolves Google defaults'
 
   assertEquals(config.ai, undefined);
   assertEquals(resolveAIConfig(config), {
-    provider: 'google',
-    model: AI_DEFAULT_MODELS.google,
+    provider: 'openai-codex',
+    model: AI_DEFAULT_MODELS['openai-codex'],
   });
 });
 
@@ -101,4 +101,51 @@ Deno.test('Brain rejects an unknown model during construction', () => {
     Error,
     'Unknown AI model',
   );
+});
+
+Deno.test('Brain.setAIConfig switches the active provider and persists the choice', async () => {
+  const brain = createBrain({
+    dataLayer: createFakeDataLayer(),
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+  });
+  try {
+    const status = await brain.setAIConfig({ provider: 'openai-codex' });
+    assertEquals(brain.ai, { provider: 'openai-codex', model: 'gpt-5.4-mini' });
+    assertEquals(status.provider, 'openai-codex');
+    assertEquals(status.model, 'gpt-5.4-mini');
+  } finally {
+    brain.dispose();
+  }
+});
+
+Deno.test('Brain.setAIConfig rejects unknown models', async () => {
+  const brain = createBrain({
+    dataLayer: createFakeDataLayer(),
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+  });
+  try {
+    await assertRejects(
+      () => brain.setAIConfig({ provider: 'google', model: 'not-a-real-model' }),
+      Error,
+      'Unknown AI model',
+    );
+  } finally {
+    brain.dispose();
+  }
+});
+
+Deno.test('Brain.setAIConfig requires a model for openrouter', async () => {
+  const brain = createBrain({
+    dataLayer: createFakeDataLayer(),
+    ai: { provider: 'google', model: 'gemini-2.5-flash' },
+  });
+  try {
+    await assertRejects(
+      () => brain.setAIConfig({ provider: 'openrouter' }),
+      Error,
+      'AI model is required when provider "openrouter" is selected',
+    );
+  } finally {
+    brain.dispose();
+  }
 });

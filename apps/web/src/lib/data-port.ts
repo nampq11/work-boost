@@ -110,6 +110,10 @@ export interface DataPort {
   ): () => void;
   cancelAuthLogin(loginId: string): Promise<{ status: 'completed' | 'failed' | 'cancelled' }>;
   logoutAuth(): Promise<{ provider: string; status: 'not_connected' }>;
+  /** Store an API key for a provider; resolves to the refreshed auth status. */
+  saveApiKey(provider: string, apiKey: string): Promise<AuthStatus>;
+  /** Switch the active provider/model at runtime; resolves to the refreshed auth status. */
+  setAIConfig(provider: string, model?: string): Promise<AuthStatus>;
 
   // ---- Sidecar lifecycle ------------------------------------------------
   /** Current AI sidecar state. `'browser'` when running in a plain browser (no sidecar concept). */

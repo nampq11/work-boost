@@ -37,7 +37,11 @@ export function resolveAIConfig(
   workspaceConfig: Pick<WorkspaceConfig, 'ai'>,
   overrides: AIConfigOverrides = {},
 ): ResolvedAIConfig {
-  const providerValue = nonEmpty(overrides.provider) ?? workspaceConfig.ai?.provider ?? 'google';
+  // Default to openai-codex: it is the only provider with a guaranteed browser
+  // OAuth login path, so a fresh install never lands on a dead-end "no login"
+  // message that google/zai (API-key only) produce.
+  const providerValue =
+    nonEmpty(overrides.provider) ?? workspaceConfig.ai?.provider ?? 'openai-codex';
   const providerResult = AIProviderSchema.safeParse(providerValue);
   if (!providerResult.success) {
     throw new Error(

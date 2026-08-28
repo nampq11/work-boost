@@ -14,7 +14,12 @@ import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-code
 import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
 import { zaiProvider } from '@earendil-works/pi-ai/providers/zai';
 import type { DataLayer } from '@work-boost/data-provider';
-import type { ResolvedAIConfig } from '@work-boost/data-schemas/config.ts';
+import type { AIConfigSetRequest, AuthStatus } from '@work-boost/data-schemas/auth.ts';
+import {
+  AI_DEFAULT_MODELS,
+  AIProviderSchema,
+  type ResolvedAIConfig,
+} from '@work-boost/data-schemas/config.ts';
 import { logger } from '@work-boost/shared/logger/logger.ts';
 import { AuthService } from './auth-service.ts';
 import { createSessionStore } from './sessions.ts';
@@ -47,6 +52,23 @@ function createProvider(provider: ResolvedAIConfig['provider']) {
   }
 }
 
+/** All AI providers the app can switch between. */
+function createAllProviders(): Array<ReturnType<typeof createProvider>> {
+  return [
+    createProvider('openai-codex'),
+    createProvider('openrouter'),
+    createProvider('google'),
+    createProvider('zai'),
+  ];
+}
+
+/**
+ * Runtime AI configuration boundary consumed by the API server to switch the
+ * active provider/model on the fly and persist the choice.
+ */
+export interface AIConfigPort {
+  setAIConfig(input: AIConfigSetRequest): Promise<AuthStatus>;
+}
 function createEnvironmentAuthContext(): AuthContext {
   return {
     async env(name: string): Promise<string | undefined> {
@@ -69,22 +91,25 @@ function createEnvironmentAuthContext(): AuthContext {
   };
 }
 
-export class Brain implements AgentPort {
+export class Brain implements AgentPort, AIConfigPort {
   private readonly store: ReturnType<typeof createSessionStore>;
   private readonly queues = new Map<string, Promise<unknown>>();
   private readonly models;
-  private readonly model: Model<any>;
+  private model: Model<any>;
   private readonly tools;
-  readonly ai: ResolvedAIConfig;
+  private readonly dataLayer: DataLayer;
+  ai: ResolvedAIConfig;
   readonly auth: AuthService;
 
   constructor(deps: BrainDeps) {
-    this.ai = deps.ai ?? { provider: 'google', model: 'gemini-2.5-flash' };
+    this.ai = deps.ai ?? { provider: 'openai-codex', model: 'gpt-5.4-mini' };
+    // Register every provider up front so the auth panel can enumerate them and
+    // so switching provider at runtime only swaps the active model, not the set.
     const models = createModels({
       credentials: deps.credentials ?? new InMemoryCredentialStore(),
       authContext: deps.authContext ?? createEnvironmentAuthContext(),
     });
-    models.setProvider(createProvider(this.ai.provider));
+    for (const provider of createAllProviders()) models.setProvider(provider);
     const model = models.getModel(this.ai.provider, this.ai.model);
     if (!model) {
       throw new Error(`Unknown AI model "${this.ai.model}" for provider "${this.ai.provider}"`);
@@ -92,9 +117,49 @@ export class Brain implements AgentPort {
 
     this.models = models;
     this.model = model;
+    this.dataLayer = deps.dataLayer;
     this.store = createSessionStore();
     this.tools = getWorkspaceTools(deps.dataLayer);
     this.auth = new AuthService({ ai: this.ai, models, apiPrefix: deps.authApiPrefix });
+  }
+
+  /**
+   * Switch the active AI provider/model at runtime, persist the choice to
+   * `workspaceConfig.ai`, and clear existing sessions so the next prompt uses
+   * the newly configured model. Returns the refreshed auth status.
+   */
+  async setAIConfig(input: AIConfigSetRequest): Promise<AuthStatus> {
+    const currentConfig = await this.dataLayer.config.load();
+    // The model is the explicitly requested one or the provider's default. It
+    // must not inherit the previous provider's model (e.g. google's
+    // "gemini-2.5-flash") when switching to a provider whose default is
+    // undefined (openrouter).
+    const provider = AIProviderSchema.safeParse(input.provider);
+    if (!provider.success) {
+      throw new Error(
+        `Invalid AI provider "${input.provider}". Supported providers: ${AIProviderSchema.options.join(', ')}`,
+      );
+    }
+    const model = input.model?.trim() || AI_DEFAULT_MODELS[provider.data];
+    if (!model) {
+      throw new Error(`AI model is required when provider "${provider.data}" is selected`);
+    }
+    const resolved: ResolvedAIConfig = { provider: provider.data, model };
+
+    const nextModel = this.models.getModel(resolved.provider, resolved.model);
+    if (!nextModel) {
+      throw new Error(`Unknown AI model "${resolved.model}" for provider "${resolved.provider}"`);
+    }
+
+    this.ai = resolved;
+    this.model = nextModel;
+    this.auth.setAIConfig(resolved);
+    await this.dataLayer.config.save({ ...currentConfig, ai: resolved });
+
+    // Sessions hold an Agent bound to the previous model, so drop them.
+    for (const sessionId of this.store.list()) this.store.remove(sessionId);
+
+    return this.auth.getStatus();
   }
 
   /**

@@ -43,6 +43,7 @@ function createAuth(): AuthPort {
     },
     disconnect: () => undefined,
     cancelLogin: () => Promise.resolve({ status: 'cancelled' as const }),
+    saveApiKey: () => Promise.resolve(),
     logout: () => Promise.resolve({ provider: 'openai-codex', status: 'not_connected' as const }),
   };
 }

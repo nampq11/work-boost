@@ -12,6 +12,7 @@ Deno.test('AuthService expires a login and aborts the provider flow', async () =
   } as unknown as Provider;
   const models = {
     getProvider: () => provider,
+    getProviders: () => [provider],
     checkAuth: () => Promise.resolve(undefined),
     getAuth: () => Promise.resolve(undefined),
     login: (_provider: string, _type: 'oauth', interaction: { signal?: AbortSignal }) =>

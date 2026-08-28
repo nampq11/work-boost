@@ -67,7 +67,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
   logger.debug(`AI_MODEL: ${env.get('AI_MODEL') || 'workspace/default'}`);
 
   // Initialize services (validates required secrets first)
-  const { db, agent, auth, extensionManager } = await initializeServices({
+  const { db, agent, auth, aiConfig, extensionManager } = await initializeServices({
     enableScheduler,
     apiPrefix,
   });
@@ -87,6 +87,7 @@ export async function startApiMode(options: StartApiModeOptions): Promise<void> 
     db,
     agent,
     auth,
+    aiConfig,
     extensionManager,
   });
 

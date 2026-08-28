@@ -448,6 +448,13 @@ export class TauriDataPort implements DataPort {
   logoutAuth(): Promise<{ provider: string; status: 'not_connected' }> {
     return this.requireHttp(() => this.http.logoutAuth());
   }
+  saveApiKey(provider: string, apiKey: string): Promise<AuthStatus> {
+    return this.requireHttp(() => this.http.saveApiKey(provider, apiKey));
+  }
+
+  setAIConfig(provider: string, model?: string): Promise<AuthStatus> {
+    return this.requireHttp(() => this.http.setAIConfig(provider, model));
+  }
 
   // ---- Helpers -----------------------------------------------------------
 

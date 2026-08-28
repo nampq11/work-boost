@@ -142,16 +142,29 @@ export function AiCopilotDrawer() {
     }
   }
 
-  async function startLogin() {
+  /**
+   * Start an OAuth login for the given provider. Switches the active provider
+   * first if the provider is not already active.
+   */
+  async function handleStartLogin(provider: string, model?: string) {
     if (authLoading || loginSession) return;
     const requestId = ++loginRequestRef.current;
     setAuthLoading(true);
     setAuthError('');
     setDeviceCode(null);
-    setAuthProgress(t('copilot.auth.startingLogin'));
+    setAuthProgress('');
     try {
+      // Switch active provider if the selected one differs from the active one.
+      if (provider !== authStatus?.provider) {
+        const status = await port.setAIConfig(provider, model);
+        if (requestId !== loginRequestRef.current) return;
+        setAuthStatus(status);
+        // The provider is already connected; no login needed.
+        if (status.auth.status === 'connected') return;
+      }
+      setAuthProgress(t('copilot.auth.startingLogin'));
       const session = await port.startAuthLogin(
-        authStatus?.provider ?? '',
+        provider,
         authStatus?.auth.status === 'refresh_failed',
       );
       if (requestId !== loginRequestRef.current) {
@@ -166,6 +179,27 @@ export function AiCopilotDrawer() {
       });
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : t('copilot.auth.providerUnavailable'));
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  /**
+   * Store an API key for a provider. Switches the active provider first if the
+   * provider is not already active.
+   */
+  async function handleSaveApiKey(provider: string, apiKey: string, model?: string) {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      if (provider !== authStatus?.provider) {
+        const status = await port.setAIConfig(provider, model);
+        setAuthStatus(status);
+      }
+      await port.saveApiKey(provider, apiKey);
+      await refreshAuthStatus();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Failed to save API key');
     } finally {
       setAuthLoading(false);
     }
@@ -246,7 +280,10 @@ export function AiCopilotDrawer() {
                 authProgress={authProgress}
                 authUrl={authUrl}
                 onRetry={() => void refreshAuthStatus()}
-                onStartLogin={() => void startLogin()}
+                onStartLogin={(provider, model) => void handleStartLogin(provider, model)}
+                onSaveApiKey={(provider, apiKey, model) =>
+                  void handleSaveApiKey(provider, apiKey, model)
+                }
                 onCancelLogin={() => void cancelLogin()}
                 onError={setAuthError}
               />

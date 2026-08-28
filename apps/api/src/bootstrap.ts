@@ -1,4 +1,5 @@
 import {
+  type AIConfigPort,
   type AgentPort,
   type AuthService,
   createBrain,
@@ -21,6 +22,7 @@ export interface Services {
   db: Database;
   agent: AgentPort;
   auth: AuthService;
+  aiConfig: AIConfigPort;
   extensionManager: ExtensionManager;
 }
 
@@ -92,5 +94,5 @@ export async function initializeServices(
     extensionManager.registerAllCronJobs();
   }
 
-  return { dataLayer, db, agent, auth: brain.auth, extensionManager };
+  return { dataLayer, db, agent, auth: brain.auth, aiConfig: brain, extensionManager };
 }
