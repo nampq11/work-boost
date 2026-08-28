@@ -44,8 +44,6 @@ function TreeNode({
   const [expanded, setExpanded] = useState(
     () => !(node.kind === 'folder' && node.name === 'daily'),
   );
-  // Performance optimization: prevent full tree re-renders
-  // By selecting a boolean instead of the active path string, Zustand only re-renders the nodes that actually change state
   const isActive = useWorkspaceStore((state) => state.activePath === node.path);
   const selectFile = useWorkspaceStore((state) => state.selectFile);
   const closeCopilot = useUiStore((state) => state.closeCopilot);
