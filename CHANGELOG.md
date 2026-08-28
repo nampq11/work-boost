@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-08-28
+
+### Added
+
+- Desktop self-update now streams live progress phases (downloading, installing, restarting) to the banner and keeps the app responsive by running the installer off the main thread. #70
+
+### Fixed
+
+- Bundled desktop AI and daily data loading now works: the `custom-protocol` feature is enabled at build time, so the API sidecar's HTTP service is reachable instead of the app surfacing `Network request failed` / `Could not load today's data`. #69
+- Removed `unsafe-inline` and `unsafe-eval` from the CSP policy by using a per-request nonce, hardening the content-security policy. #56
+
 ## [0.4.2] - 2026-08-27
 
 ### Fixed
