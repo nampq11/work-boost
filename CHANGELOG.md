@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed copilot OAuth login: device-code and OpenRouter authorization pages now open in the default browser via the OS opener, and OpenRouter's PKCE flow completes through a manual code paste step instead of aborting. #74
+
+### Changed
+
+- Credentials are now stored in `~/.workboost/agent/auth.json` (created with `0700` permissions) with a one-time migration from the legacy `~/.pi/agent/auth.json`. #74
+
 ## [0.5.0] - 2026-08-28
 
 ### Added
