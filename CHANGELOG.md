@@ -7,13 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.5.1] - 2026-08-29
 
-- Fixed copilot OAuth login: device-code and OpenRouter authorization pages now open in the default browser via the OS opener, and OpenRouter's PKCE flow completes through a manual code paste step instead of aborting. #74
+### Added
+
+- Added a New chat button to the Copilot drawer header to start a fresh assistant conversation. #76
+- Made API rate limiting configurable via `WORKBOOST_RATE_LIMIT_MAX` and `WORKBOOST_RATE_LIMIT_WINDOW_MS` env vars. #75
 
 ### Changed
 
+- The daily scheduler now warns when a subscribed platform's transport is not connected, instead of silently skipping the delivery. #75
 - Credentials are now stored in `~/.workboost/agent/auth.json` (created with `0700` permissions) with a one-time migration from the legacy `~/.pi/agent/auth.json`. #74
+
+### Fixed
+
+- Fixed copilot OAuth login: device-code and OpenRouter authorization pages now open in the default browser via the OS opener, and OpenRouter's PKCE flow completes through a manual code paste step instead of aborting. #74
+- Fixed New chat in the Copilot drawer so it creates a fresh server-side thread instead of leaving the session null. #76
 
 ## [0.5.0] - 2026-08-28
 
