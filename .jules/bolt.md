@@ -1,0 +1,3 @@
+## 2023-10-27 - Zustand Selectors cause re-renders
+**Learning:** `useWorkspaceStore((state) => state.activePath)` without a selector equality function, or selecting primitive values from the state causes re-renders ONLY when `activePath` changes. BUT! `const activePath = useWorkspaceStore(state => state.activePath); const isActive = activePath === node.path;` means this component re-renders *every time* `activePath` changes, even if `isActive` evaluates to the same boolean.
+**Action:** Use derived state in selectors: `const isActive = useWorkspaceStore((state) => state.activePath === node.path);` so that the component only re-renders when the *result of the equality check* changes.

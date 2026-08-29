@@ -44,11 +44,12 @@ function TreeNode({
   const [expanded, setExpanded] = useState(
     () => !(node.kind === 'folder' && node.name === 'daily'),
   );
-  const activePath = useWorkspaceStore((state) => state.activePath);
+  // ⚡ Bolt: Derived selector prevents O(n) tree re-renders on selection change
+  // by only re-rendering the single node whose `isActive` boolean result flips.
+  const isActive = useWorkspaceStore((state) => state.activePath === node.path);
   const selectFile = useWorkspaceStore((state) => state.selectFile);
   const closeCopilot = useUiStore((state) => state.closeCopilot);
   const isFolder = node.kind === 'folder';
-  const isActive = activePath === node.path;
   const moveFile = useWorkspaceStore((state) => state.moveFile);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const itemType = getSidebarItemType(node);
