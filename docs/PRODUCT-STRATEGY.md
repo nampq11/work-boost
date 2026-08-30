@@ -2,6 +2,7 @@
 
 > **Tài liệu chiến lược sản phẩm duy nhất.** Tổng hợp từ: nghiên cứu thị trường, nghiên cứu vấn đề người dùng, và tầm nhìn sản phẩm.
 > Mục đích: trả lời "chúng ta đang xây gì, cho ai, vì sao thắng" và là la bàn cho mọi quyết định feature. Nếu một feature không phục vụ chiến lược này, không nên làm.
+> **Cấu trúc bám theo khung chuẩn:** Vision + Principles -> Market/Segment -> Needs -> Standout features -> Business goals -> Strategy drivers -> Roadmap (outcome-based) + North-star metric.
 
 ---
 
@@ -136,7 +137,32 @@ Mâu thuẫn phụ:
 
 ---
 
-## 6. Đánh giá Product-Market Fit
+## 6. Strategy Drivers - VÌ SAO chọn "REPORTING" (rationale, phần lõi)
+
+> Phần này là điểm khác biệt giữa "có strategy" và "chỉ có danh sách tính năng". Nó nói rõ **ta chọn hướng nào, vì lý do gì, và ta đã từ chối hướng nào**. Không có phần này, strategy chỉ là sự thật (market, đối thủ, quote) chứ không phải lựa chọn.
+
+### 6.1 Lựa chọn trung tâm
+**Chọn trục "daily work companion (local-first, proactive reporting)".** Các hướng khác được cân nhắc và từ chối có lý do.
+
+### 6.2 Bằng chứng (insight) dẫn tới lựa chọn
+1. **Nỗi đau gốc của bạn là proactive reporting** (viết báo cáo mỗi sáng), không phải note-taking. Đây là bài toán bạn đã tự trải nghiệm, không phải đoán.
+2. **Pain point mạnh nhất được xác nhận bằng quote thật** = offline / "my data is mine" / chống lock-in, giải thích bằng **file-over-app** chứ không chỉ privacy. Đây là lý do người rời Notion.
+3. **Làn sóng thị trường đang diễn ra** - người dùng chủ động rời Notion/cloud sang local-first. Ta không cần thuyết phục họ chuyển đổi, chỉ cần là điểm đến tốt.
+4. **Khác biệt cạnh tranh** - các bot hiện hữu chủ yếu *reactive*; chỉ OpenClaw/TheTop làm *proactive*. "Proactive daily report + trí nhớ bền + đáng tin" là khoảng trống chưa ai chiếm.
+5. **Đa kênh** - "đúng nơi tôi làm việc" hạ rào cản adoption so với app phải mở.
+
+### 6.3 Các hướng ĐÃ TỪ CHỐI (và vì sao)
+| Hướng từ chối | Lý do từ chối |
+|---|---|
+| **"Notion mới" / second brain đầy đủ** | Thị trường đông đúc (Notion, Obsidian, hubble.md, Reflect); ta không có lợi thế, và bài toán đó là note-taking chứ không phải nỗi đau gốc của bạn. |
+| **Công cụ AI finance / budgeting** (đẩy mạnh debt) | Rơi vào nhóm Cleo/Monarch/Copilot; mất tính "daily work assistant"; và market đã có người làm tốt hơn. |
+| **Assistant đa năng / chatbot thông thường** | Quá rộng, không có "reason to be" - Bassino gọi đây là "wrong play level" (danh sách 40 sáng kiến hoặc mục tiêu quá cao). |
+
+**Kết luận của mục này:** Ta chọn "reporting", không phải "note-taking", không phải "finance", không phải "chatbot đa năng". Mọi feature phải phục vụ trục này; những thứ tạo ra sự cộng hưởng (debt, chat, task) là *feature bổ trợ*, không phải trục.
+
+---
+
+## 7. Đánh giá Product-Market Fit
 
 ### Tín hiệu tích cực
 - **[TRUE] Strong differentiator** - file-over-app + local-first + đa kênh, khớp lý do người rời Notion.
@@ -144,7 +170,7 @@ Mâu thuẫn phụ:
 - **[TRUE] Được chứng minh bởi chuyển dịch thị trường** - làn sóng rời Notion/cloud sang local-first đang diễn ra.
 
 ### Tín hiệu yếu / rủi ro
-- Monetization chưa rõ (free/open source hoàn toàn).
+- Monetization chưa rõ (free/open source hoàn toàn) - xem mục 8 (Business Goals).
 - Mâu thuẫn local-first vs cloud AI.
 - Tín hiệu kéo (pull) chưa đo được.
 - TAM vĩ mô lớn nhưng SOM nhỏ.
@@ -159,7 +185,34 @@ Nếu user vẫn phải tự viết báo cáo hoặc bỏ qua báo cáo, chưa P
 
 ---
 
-## 7. Tầm nhìn (Vision)
+## 8. Business Goals
+
+> Pichler hỏi: "sản phẩm đem lại lợi ích gì cho công ty?". Đây là lựa chọn cốt lõi mà khung strategy yêu cầu trả lời.
+
+**✅ Quyết định (đã chọn): Nhánh B - Sản phẩm thu phí nhẹ (personal tool, có monetization).**
+
+### 8.1 Mục tiêu kinh doanh
+Giữ tinh thần local-first, nhưng **thu phí nhẹ** (donate hoặc optional tier cho hosted AI / advanced features) để đo willingness-to-pay và phân đoạn, đồng thời có nguồn lực phát triển và không hoàn toàn phụ thuộc chi phí cloud model.
+
+### 8.2 Nhánh đã cân nhắc và lý do chọn B
+| Nhánh | Trạng thái |
+|---|---|
+| **B - thu phí nhẹ** | ✅ Đã chọn |
+| A - personal free (không monetization) | ❌ Không chọn - gần như không doanh thu, phụ thuộc thời gian cá nhân, khó bền vững nếu muốn toàn thời gian. |
+
+### 8.3 Điểm mạnh / rủi ro đã biết
+- **Điểm mạnh:** đo được PMF intent; có nguồn lực; không phụ thuộc hoàn toàn chi phí cloud.
+- **Điểm yếu / rủi ro:** **willingness-to-pay ceiling thấp** (Notion AI $20 bị chê "không đáng trả") - khó thu phí cao; rủi ro phản cảm với group "free/open source".
+
+### 8.4 Hệ quả chiến lược của việc chọn B
+1. **Local model (Ollama/LM Studio) trở nên quan trọng hơn** - giúp giảm chi phí hosting AI để giữ biên lợi nhuận, đồng thời củng cố lời hứa privacy trong positioning.
+2. **Cần một pricing model rõ ràng** - tối thiểu một optional paid tier để đo intent; miễn là không phá vỡ lời hứa "local-first".
+3. **Không bị phản cảm bởi "open source"** - giữ MIT cho core, thu phí cho phần hosted/advanced.
+4. **Báo cáo + trí nhớ bền + đáng tin là tiền đề để thu phí** - user chỉ trả tiền nếu giá trị cốt lõi (báo cáo đáng tin) thực sự chạy tốt. Củng cố Ưu tiên 1 là con đường ngắn nhất tới doanh thu.
+
+---
+
+## 9. Tầm nhìn (Vision)
 
 > **"Công việc của bạn tự báo cáo lại cho bạn. Dữ liệu của bạn nằm trong tay bạn."**
 >
@@ -173,6 +226,18 @@ Nếu user vẫn phải tự viết báo cáo hoặc bỏ qua báo cáo, chưa P
 
 **Debt tracking nằm ở trụ 4** - nó là minh chứng cho "nói chuyện với công việc trên dữ liệu local", KHÔNG phải sản phẩm tài chính.
 
+---
+
+## 10. Product Principles (giá trị + trade-off)
+
+> Khác với "không nên làm" ở dưới, đây là **nguyên tắc sống còn** giúp đưa quyết định khi gặp trade-off khó. Cagan: principles "phản ánh giá trị của tổ chức và các quyết định chiến lược giúp team chọn đúng khi gặp khó".
+
+1. **Dữ liệu của user luôn là nơi user sở hữu, trước hết.** Mọi thứ quan trọng (notes, daily report, transcript, debt) phải là file Markdown trong workspace user - kể cả khi AI inference chạy trên cloud. (Nếu AI là cloud thì storage vẫn local; điều này giữ lời hứa "file-over-app".)
+2. **Báo cáo phải trung thực, không cần đầy đủ.** Khi dữ liệu mỏng, báo cáo nói thật "hôm nay chưa có ghi chú" thay vì bịa ra. Một báo cáo chính xác nhỏ còn hơn một báo cáo phóng đại.
+3. **Không mở rộng chức năng ngoài trục reporting.** Một tính năng chỉ được thêm nếu nó giúp công việc tự báo cáo lại cho bạn, ở nơi bạn làm việc, trên dữ liệu bạn sở hữu. Nếu không, tạm dừng.
+4. **Quyền riêng tư là điểm bán hàng, không phải tính năng phụ.** Nếu một quyết định làm yếu đi lời hứa local-first/local-model mà không có lợi ích tương xứng, ưu tiên bảo vệ privacy.
+5. **Chủ động hơn thụ động.** Ưu tiên "hệ thống tự đẩy thông tin đúng lúc" hơn "user phải mở app và tìm". (Khác biệt với hubble.md.)
+
 ### Những điều KHÔNG nên làm (chống trôi vision)
 - **Đừng trở thành "Notion mới" / "second brain đầy đủ"** - thị trường đông đúc, hubble.md/Obsidian/Notion đã làm. Vision là **reporting**, không phải note-taking đầy đủ.
 - **Đừng đẩy debt thành app tài chính riêng** - sẽ rơi vào Cleo/Monarch. Giữ debt như minh chứng "nói chuyện với dữ liệu local".
@@ -180,47 +245,58 @@ Nếu user vẫn phải tự viết báo cáo hoặc bỏ qua báo cáo, chưa P
 
 ---
 
-## 8. Khuyến nghị (roadmap)
+## 11. Roadmap (outcome-based, theo metric)
+
+> Mỗi ưu tiên gắn **outcome + metric để biết thành công** (Pichler: roadmap là outcome-based, không phải feature list). Kèm thời frame và nguồn lực.
 
 ### Ưu tiên 1 - Làm daily summary ĐÁNG TIN (trụ 2, quan trọng nhất)
-- Thêm grounding/verify để không bịa ra việc không tồn tại.
-- Phân cấp mức độ quan trọng (không chỉ là đống text).
-- Fallback khi dữ liệu mỏng (báo cáo trung thực "hôm nay chưa có ghi chú" thay vì bịa).
-- **Đây là điều kiện để vision "báo cáo hộ bạn" thành công.**
+- **Outcome:** user tin tưởng báo cáo là sự thật, không bịa.
+- **Hành động:** thêm grounding/verify; phân cấp quan trọng; fallback khi dữ liệu mỏng.
+- **Metric thành công:** tỷ lệ báo cáo có ít nhất 1 mục "có nguồn/đúng" do user xác nhận không phóng đại; % báo cáo không cần user sửa. => Mục tiêu 6 tuần.
 
 ### Ưu tiên 2 - Giải quyết mâu thuẫn local-first vs cloud AI + "lethal trifecta"
-- Ghi rõ dữ liệu nào đi ra ngoài cho model, dữ liệu nào không. Phân biệt "local-first storage" với "AI inference trên cloud".
-- Cân nhắc local model (Ollama/LM Studio) như Reor/Khoj.
-- Giới hạn tool permission/outbound để không tái tạo lethal trifecta.
+- **Outcome:** user privacy-sensitive tin tưởng, không rời đi.
+- **Hành động:** ghi rõ dữ liệu nào đi ra ngoài; cân nhắc local model (Ollama/LM Studio); giới hạn tool permission/outbound.
+- **Metric thành công:** tỷ lệ user chọn "local model" hoặc bật chế độ giới hạn outbound; không có report vượt scope. => Mục tiêu 8-12 tuần. *(Với nhánh B đã chọn, local model là ưu tiên cao hơn để hạ chi phí hosting AI.)*
 
 ### Ưu tiên 3 - Trí nhớ hội thoại bền
-- Lưu transcript xuống workspace markdown (khớp triết lý local-first).
+- **Outcome:** user không mất ngữ cảnh hội thoại sau restart.
+- **Hành động:** lưu transcript xuống workspace markdown (khớp triết lý local-first).
+- **Metric thành công:** 100% hội thoại khôi phục được sau restart; transcript là file đọc được. => Mục tiêu 4-6 tuần.
 
 ### Ưu tiên 4 - Chọn một câu chuyện chính
-- Chọn "daily work companion (local-first)" làm trục; debt và AI chat là feature bổ trợ, không phải trục.
-- Nếu giữ debt mạnh, mở rộng sang group/settlement.
+- **Outcome:** positioning rõ ràng, không bị kẹp giữa "note app" và "finance".
+- **Hành động:** lấy "daily work companion (local-first)" làm trục; debt/AI chat là bổ trợ; nếu giữ debt mạnh, mở rộng group/settlement.
+- **Metric thành công:** không có đối thoại mơ hồ giữa các trục; content/landing nói một câu chuyện. => Liên tục.
 
 ### Ưu tiên 5 - Thêm tín hiệu PMF có thể đo
-- Theo dõi retention hằng ngày; định nghĩa magic moment (mở daily report đúng giờ + bắt đầu chat).
-- Thêm pricing nhẹ (dù free) để đo willingness-to-pay. **Có pricing giúp phân đoạn và đo intent, không nhất thiết thu tiền ngay.**
+- **Outcome:** đo được retention và intent (không chỉ số cài đặt).
+- **Hành động:** theo dõi retention hằng ngày; định nghĩa magic moment (mở daily report đúng giờ + chat); thêm pricing nhẹ.
+- **Metric thành công:** WAU theo north-star tăng; có dữ liệu willingness-to-pay. => Mục tiêu 12 tuần.
 
 ### Ưu tiên 6 - Tận dụng làn sóng Notion
-- Content: "Work Boost vs Notion", "Tại sao nên rời Notion (offline, AI agent, privacy)". Topic đang hot, đúng người đang tìm chỗ mới.
+- **Outcome:** thu hút đúng người đang tìm chỗ rời Notion.
+- **Hành động:** content "Work Boost vs Notion", "Tại sao nên rời Notion (offline, AI agent, privacy)".
+- **Metric thành công:** traffic + conversion từ content (install/request). => Khi đã có sản phẩm ổn định.
 
 ---
 
-## 9. Rủi ro & câu hỏi mở
+## 12. Rủi ro & câu hỏi mở
 
 - **Rủi ro lớn nhất:** mâu thuẫn local-first vs cloud AI. Nếu không giải quyết, mất chính phân khúc đang dựa vào.
 - **Rủi ro:** TAM lớn nhưng SOM nhỏ - đừng dùng số thị trường hàng tỷ USD để biện minh.
-- **Câu hỏi mở:** Người dùng có thực sự quay lại hằng ngày không? Debt tracking có cần cùng workspace với note không? Có cần local model không?
+- **Câu hỏi mở:** Người dùng có thực sự quay lại hằng ngày không? Debt tracking có cần cùng workspace với note không? Có cần local model không? *(Business Goals đã chốt nhánh B - thu phí nhẹ.)*
 - **Cạnh tranh trực tiếp đáng lo nhất:** Obsidian (triết lý giống, hệ sinh thái plugin lớn) và OpenClaw (đa kênh, proactive).
 
 ---
 
-## 10. Tóm tắt một câu
+## 13. Tóm tắt một câu
 
-**Work Boost = "công việc của tôi tự báo cáo lại cho tôi mỗi ngày, ở đúng nơi tôi làm việc (Slack/Telegram), trên dữ liệu Markdown tôi làm chủ" - khác với hubble.md (notepad thụ động) và các bot reactive nhờ trí nhớ bền + báo cáo đáng tin + chủ động đẩy. Ba việc cần làm trước: (1) báo cáo đáng tin, (2) giải quyết mâu thuẫn cloud-AI/local-first, (3) trí nhớ hội thoại bền.**
+**Work Boost = "công việc của tôi tự báo cáo lại cho tôi mỗi ngày, ở đúng nơi tôi làm việc (Slack/Telegram), trên dữ liệu Markdown tôi làm chủ" - khác với hubble.md (notepad thụ động) và các bot reactive nhờ trí nhớ bền + báo cáo đáng tin + chủ động đẩy.**
+
+**Chiến lược (một câu):** Ta chọn trục **"daily work companion (local-first, proactive reporting)"** - từ chối "Notion mới" (note-taking), "app finance" (debt), và "chatbot đa năng". Ba việc làm trước: (1) báo cáo đáng tin, (2) giải quyết mâu thuẫn cloud-AI/local-first, (3) trí nhớ hội thoại bền.
+
+**Business Goals đã chốt:** nhánh B - thu phí nhẹ (thêm pricing nhẹ để đo intent, ưu tiên local model để hạ chi phí AI).
 
 ---
 
@@ -229,4 +305,5 @@ Nếu user vẫn phải tự viết báo cáo hoặc bỏ qua báo cáo, chưa P
 - **User validation (quote trực tiếp):** Hacker News Algolia API (query "Notion offline", "local-first privacy", "AI notes summary", "Splitwise friends split") - comment-level; GitHub API (search/issues "daily summary"). Quote giữ nguyên từ HN. Vượt chặn bằng `warp-cli connect`.
 - **Phân tích code:** `extensions/scheduler/daily-job.ts`, `packages/brain/src/sessions.ts`, `packages/data-provider/src/database.ts`, `packages/brain/src/tools/debt.ts`.
 - **Nguồn gốc:** hubble.md README + CONTEXT.md; câu chuyện gốc của user (bot Slack cho báo cáo mỗi sáng).
-- **Bias cần lưu ý:** SplitPilot (đối thủ Splitwise), Vellum/ClawTank/Finny (tự quảng cáo sản phẩm của họ). Reddit/X chưa scrape trực tiếp (chặn bot).
+- **Khung strategy:** Marty Cagan (SVPG) - vision vs strategy, 4-step, principles, empowered teams; Roman Pichler - 4 strategic choices, hierarchy vision/strategy/roadmap/backlog, outcome-based roadmap; Mind the Product (Ian David, Nacho Bassino) - diagnosis/insight/strategy drivers, one-pager, co-creation.
+- **Bias cần lưu ý:** SplitPilot (đối thủ Splitwise), Vellum/ClawTank/Finny (tự quảng cáo sản phẩm của họ). Reddit/X chưa scrape trực tiếp (chặn bot). Framework từ Cagan/Pichler là trung lập; template từ userpilot/prodpad/clickup mang bias vendor.
